@@ -4,7 +4,7 @@ Single source of truth for where the project stands. Read it at the start of eve
 
 ## Current state
 
-- Branch: `develop` (pushed to origin). `.env.local` points at the Neon `develop` branch.
+- Branches: `develop`, `staging`, `main` all pushed and promoted (PRs #1 and #2 merged). Working branch: `develop`. `.env.local` points at the Neon `develop` branch.
 - Stack: TypeScript 6.0, Next.js 16 (App Router), React 19, Postgres, Prisma 7.10, pnpm 10
 - Features: `home` (folders plus empty `index.ts` and `types.ts`, no logic; `src/app/page.tsx` is a placeholder page so the build works)
 - Database: Neon (project `small-fog-37891095`, branch `production`), Postgres only. Prisma 7 + `@prisma/adapter-neon` (lazy `getPrisma()` singleton). Schema still has no models. `GET /api/health/db` returns `{"ok":true,"database":"neondb"}` against Neon.
@@ -20,10 +20,15 @@ Single source of truth for where the project stands. Read it at the start of eve
 
 - The staging password was pasted into the Claude chat, so it is in the session transcript. Consider rotating it in the Neon console (Roles) once setup is done. Hosting runtime for the app is not decided; The driver is the Neon adapter (your spec); the Neon skill suggested node-postgres for long-running Node/Vercel, but both work here.
 - The `neon-postgres` Claude Code plugin was installed at user scope (global) by `neon init`, not project scope.
-- CI `check` job verified on GitHub (run on `develop` passed). The `migrate` job has not run yet: it only runs after a merge to `staging`/`main`. GitHub Environments `staging` and `production` exist; I could not verify their `DATABASE_URL_UNPOOLED` secrets (no admin rights for the `gh` login).
+- Node 20 deprecation notice on the CI actions (`checkout@v4`, `setup-node@v4`, `pnpm/action-setup@v4`): forced to Node 24 by GitHub, works today. Bump action versions later.
+- `develop` lacks the two merge commits that GitHub created on `staging` and `main`. Harmless; pull `staging` into `develop` if it ever matters.
 - Feature-boundary lint rule verified: a temporary `@/features/home/db/foo` import was rejected, then removed.
 
 ## Log
+
+### 2026-11-20 - Promoted to staging and main
+- Set GitHub Environment secret `DATABASE_URL_UNPOOLED` on `staging` and `production` from the local env files (values never printed). Logged `gh` in as `vansteenbergenmatisse` (the earlier login had no repo access).
+- PR #1 develop to staging merged: CI `check` 33s and `migrate` 16s passed. PR #2 staging to main merged: `check` 23s and `migrate` 17s passed. `prisma migrate deploy` ran with the real secret on both; there are no migrations yet. I did not capture its final output line, only that the job succeeded.
 
 ### 2026-11-20 - Develop branch live, pushed
 - Neon `develop` branch (`br-steep-shadow-bbk1ch83`) exists. Saved production URLs to `.env.production` (gitignored), then pointed `.env.local` at develop via `neon checkout develop` + `neon env pull`, so local work no longer touches production data.
