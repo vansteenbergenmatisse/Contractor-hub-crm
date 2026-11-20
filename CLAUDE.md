@@ -4,7 +4,7 @@ CRM for contractors. Remote: https://github.com/vansteenbergenmatisse/Contractor
 
 **Start every session by reading `PROGRESS.md`** (current state, next up, blockers). It is the source of truth for where the project stands.
 
-Stack (decided): TypeScript, Next.js (App Router), Postgres, Prisma. Package manager: pnpm, the only one. Never use npm or yarn; never commit another lockfile.
+Stack (decided): TypeScript, Next.js (App Router), Postgres on Neon, Prisma 7 with the `pg` driver adapter. Package manager: pnpm, the only one. Never use npm or yarn; never commit another lockfile.
 
 ## Commands
 
@@ -18,7 +18,16 @@ Stack (decided): TypeScript, Next.js (App Router), Postgres, Prisma. Package man
 | All checks | `pnpm check` (lint, typecheck, test, build in order) |
 | Prisma | `pnpm db:validate`, `pnpm db:generate` |
 
-TypeScript is pinned to 6.0.x because `typescript-eslint` does not support 7.x yet. Prisma CLI and client are pinned to the same version. Do not bump either without running `pnpm check`. The database URL lives in `.env` (gitignored); `.env.example` shows the shape.
+TypeScript is pinned to 6.0.x because `typescript-eslint` does not support 7.x yet. Prisma CLI and client are pinned to the same version. Do not bump either without running `pnpm check`. 
+## Database (Neon)
+
+- Neon project `small-fog-37891095` (org `org-dark-paper-44469290`), branch `production`, services: Postgres only. Declared in `neon.ts`. Use `pnpm dlx neon@latest` for the CLI (no global install).
+- Env vars live in `.env.local` (gitignored, written by Neon; refresh with `neon env pull`). `.env.example` shows the shape. Never print or commit real URLs.
+- `DATABASE_URL` is the pooled URL, used by the app. `DATABASE_URL_UNPOOLED` is the direct URL, used by Prisma migrations (`prisma.config.ts` loads `.env.local` itself).
+- The Prisma client is `prisma` from `@/shared/lib/prisma`. Only a feature's `db/` files import it. Do not create another client.
+- Generated client goes to `src/generated/prisma` (gitignored). It is built by `postinstall`; run `pnpm db:generate` after schema changes.
+- Health check: `GET /api/health/db` runs `SELECT current_database()`. Use it to verify the connection.
+- Test a migration on a Neon branch of production before applying it to production. Do not run `neon deploy`, migrations or branch changes without approval.
 
 ## Rules
 

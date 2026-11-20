@@ -7,21 +7,30 @@ Single source of truth for where the project stands. Read it at the start of eve
 - Branch: `develop`
 - Stack: TypeScript 6.0, Next.js 16 (App Router), React 19, Postgres, Prisma 7.10, pnpm 10
 - Features: `home` (folders plus empty `index.ts` and `types.ts`, no logic; `src/app/page.tsx` is a placeholder page so the build works)
-- Prisma: schema has generator and datasource only, no models. Not connected to a database.
+- Database: Neon (project `small-fog-37891095`, branch `production`), Postgres only. Prisma 7 + `@prisma/adapter-pg`/`pg`. Schema still has no models. `GET /api/health/db` returns `{"ok":true,"database":"neondb"}` against Neon.
 - Last verified checks (2026-11-20): `pnpm check` (lint, typecheck, test, build) passes, plus `db:validate` and `db:generate`. Tests: 3 passing (`tests/architecture/features.test.ts`).
 
 ## Next up
 
 1. Define the first `home` ticket (what the home screen shows).
-2. Set up a Postgres database and `.env` (needs a decision on where it runs).
+2. Decide how Neon branches map to `develop`, `staging` and `main` (today only the Neon `production` branch exists and `.env.local` points at it). Avoid developing against production data.
 3. Add feature tests under `tests/features/<feature>/` as `home` gets logic.
 
 ## Blockers / open questions
 
-- Where does Postgres run (local, Docker, hosted)? Not decided.
+- Neon branch strategy for develop/staging/main is not decided (see Next up). Hosting runtime for the app is not decided; `pg` was chosen as the driver for a long-running Node/Vercel runtime. Revisit if the app is hosted on an edge runtime.
+- The `neon-postgres` Claude Code plugin was installed at user scope (global) by `neon init`, not project scope.
+- `pg` logs an SSL-mode warning (`sslmode=require` is treated as `verify-full` today; semantics change in pg v9). Harmless now; revisit when upgrading pg.
 - Feature-boundary lint rule verified: a temporary `@/features/home/db/foo` import was rejected, then removed.
 
 ## Log
+
+### 2026-11-20 - Neon wired
+- Ran `neon init` (org `org-dark-paper-44469290`, project `small-fog-37891095`, branch `production`, postgres) via `npx neon@latest`; first attempt failed because the login lacked org access, retried after `neon login`. `neon config plan` and `neon deploy` reported no changes. `.env.local` pulled (5 vars, gitignored).
+- Added deps: `@neon/config`, `@neon/env` (from init), `@prisma/adapter-pg@7.10.1`, `pg`, `@types/pg`. Added `neon.ts`, `postinstall: prisma generate`.
+- Driver choice per the Neon skill: Prisma with the node-postgres adapter, pooled URL for the app, direct URL for migrations (`prisma.config.ts`).
+- Added `src/shared/lib/prisma.ts`, `src/shared/lib/db-health.ts`, `src/app/api/health/db/route.ts`.
+- Checks: `pnpm check` passes. Started the built app and `GET /` returned 200; `GET /api/health/db` returned 200 `{"ok":true,"database":"neondb"}`.
 
 ### 2026-11-20 - Test script and build scripts
 - Added `tests/architecture/features.test.ts`: every folder in `src/features/` must be kebab-case and contain `components/ api/ db/ hooks/ types.ts index.ts`. It failed on `home` (missing `types.ts`, `index.ts`), so both were added as empty exports.
