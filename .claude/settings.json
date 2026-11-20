@@ -1,0 +1,20 @@
+{
+  "enabledPlugins": {
+    "mattpocock-skills@mattpocock": true,
+    "loop-engineering@loop-engineering": true
+  },
+  "extraKnownMarketplaces": {
+    "mattpocock": {
+      "source": {
+        "source": "github",
+        "repo": "mattpocock/skills"
+      }
+    },
+    "loop-engineering": {
+      "source": {
+        "source": "github",
+        "repo": "cobusgreyling/loop-engineering"
+      }
+    }
+  }
+}
