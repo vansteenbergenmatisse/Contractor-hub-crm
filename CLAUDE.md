@@ -2,8 +2,23 @@
 
 CRM for contractors. Remote: https://github.com/vansteenbergenmatisse/Contractor-hub-crm
 
-Stack (decided): TypeScript, Next.js (App Router), Postgres, Prisma.
-Not yet initialized: no `package.json`, no dependencies, no schema. Package manager: pnpm (default for greenfield, confirm before first install). One package manager only.
+**Start every session by reading `PROGRESS.md`** (current state, next up, blockers). It is the source of truth for where the project stands.
+
+Stack (decided): TypeScript, Next.js (App Router), Postgres, Prisma. Package manager: pnpm, the only one. Never use npm or yarn; never commit another lockfile.
+
+## Commands
+
+| Task | Command |
+|---|---|
+| Dev server | `pnpm dev` |
+| Lint | `pnpm lint` (eslint, includes the feature-boundary import rule) |
+| Typecheck | `pnpm typecheck` (`tsc --noEmit`) |
+| Test | `pnpm test` (vitest, files in `tests/**/*.test.ts(x)`) |
+| Build | `pnpm build` (`next build`) |
+| All checks | `pnpm check` (lint, typecheck, test, build in order) |
+| Prisma | `pnpm db:validate`, `pnpm db:generate` |
+
+TypeScript is pinned to 6.0.x because `typescript-eslint` does not support 7.x yet. Prisma CLI and client are pinned to the same version. Do not bump either without running `pnpm check`. The database URL lives in `.env` (gitignored); `.env.example` shows the shape.
 
 ## Rules
 
@@ -52,7 +67,7 @@ Existing features: `home`.
 - Read the feature's folder and `index.ts` first. Change the smallest area that solves the ticket.
 - Do not refactor unrelated code in the same change.
 - Schema changes: edit `prisma/schema.prisma`, create a migration, never edit applied migrations. Ask before applying a migration or touching real data.
-- Do not install dependencies or edit lockfiles without approval.
+- Do not install dependencies or edit lockfiles without approval. Log any approved dependency change in `PROGRESS.md`.
 
 ## Git workflow
 
@@ -64,11 +79,13 @@ Existing features: `home`.
 
 ## Per-ticket loop
 
-1. Read the ticket and the owning feature folder.
+1. Read `PROGRESS.md`, the ticket and the owning feature folder.
 2. Write or update the test first, then the code (use the `mattpocock-skills:tdd` skill).
-3. Run lint, typecheck, tests and build. Commands will be defined here once `package.json` exists. Until then they are not defined.
-4. Update PROGRESS.md (what changed, test result, next step).
-5. Commit with the format above.
+3. Run `pnpm check`. Fix the code, not the tests, until it passes.
+4. Update `PROGRESS.md`: "Current state", "Next up", and a new "Log" entry (what changed, check result, next step). Record blockers there too.
+5. Commit with the format above. Then re-read "Next up" in `PROGRESS.md` before starting the next ticket.
+
+`PROGRESS.md` is also where you stop: if two rounds in a row make no progress, write why under "Blockers / open questions" and stop. Update it when a feature is added, when a decision is made, and when a check starts failing.
 
 ## Local tooling
 
