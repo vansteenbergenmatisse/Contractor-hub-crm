@@ -4,7 +4,7 @@ Single source of truth for where the project stands. Read it at the start of eve
 
 ## Current state
 
-- Branch: `develop`
+- Branch: `develop` (pushed to origin). `.env.local` points at the Neon `develop` branch.
 - Stack: TypeScript 6.0, Next.js 16 (App Router), React 19, Postgres, Prisma 7.10, pnpm 10
 - Features: `home` (folders plus empty `index.ts` and `types.ts`, no logic; `src/app/page.tsx` is a placeholder page so the build works)
 - Database: Neon (project `small-fog-37891095`, branch `production`), Postgres only. Prisma 7 + `@prisma/adapter-neon` (lazy `getPrisma()` singleton). Schema still has no models. `GET /api/health/db` returns `{"ok":true,"database":"neondb"}` against Neon.
@@ -18,13 +18,17 @@ Single source of truth for where the project stands. Read it at the start of eve
 
 ## Blockers / open questions
 
-- Neon branch `develop` does not exist yet (`production` and `staging` do).
 - The staging password was pasted into the Claude chat, so it is in the session transcript. Consider rotating it in the Neon console (Roles) once setup is done. Hosting runtime for the app is not decided; The driver is the Neon adapter (your spec); the Neon skill suggested node-postgres for long-running Node/Vercel, but both work here.
 - The `neon-postgres` Claude Code plugin was installed at user scope (global) by `neon init`, not project scope.
-- CI workflow written but never run on GitHub. Needs GitHub Environments `staging` and `production` with secret `DATABASE_URL_UNPOOLED`, and the Neon `staging`/`develop` branches to exist.
+- CI `check` job verified on GitHub (run on `develop` passed). The `migrate` job has not run yet: it only runs after a merge to `staging`/`main`. GitHub Environments `staging` and `production` exist; I could not verify their `DATABASE_URL_UNPOOLED` secrets (no admin rights for the `gh` login).
 - Feature-boundary lint rule verified: a temporary `@/features/home/db/foo` import was rejected, then removed.
 
 ## Log
+
+### 2026-11-20 - Develop branch live, pushed
+- Neon `develop` branch (`br-steep-shadow-bbk1ch83`) exists. Saved production URLs to `.env.production` (gitignored), then pointed `.env.local` at develop via `neon checkout develop` + `neon env pull`, so local work no longer touches production data.
+- Verified: `GET /api/health/db` returned 200 `{"ok":true,"database":"neondb"}` against develop; `prisma migrate status` reached it.
+- Pushed `develop` to origin. CI run on develop: success (40s).
 
 ### 2026-11-20 - Staging credentials saved
 - Neon branch `staging` (`br-bitter-voice-bbb8dn5q`, host `ep-broad-voice-bb2ds4xc`) now exists. Saved pooled and direct URLs to `.env.staging` (gitignored, mode 600). `prisma migrate status` reached it: connection works, no migrations applied yet.
