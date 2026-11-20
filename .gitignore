@@ -1,0 +1,14 @@
+# Python venv for Looper, recreate locally (see CLAUDE.md)
+.claude/skills/looper/.venv/
+__pycache__/
+.DS_Store
+node_modules/
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+src/generated/
+.neon

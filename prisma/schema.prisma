@@ -1,0 +1,9 @@
+// One schema file. Add a commented section per feature, e.g. "// ---- feature: home ----".
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
