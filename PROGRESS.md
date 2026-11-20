@@ -18,12 +18,16 @@ Single source of truth for where the project stands. Read it at the start of eve
 
 ## Blockers / open questions
 
-- Neon branches `staging` and `develop` do not exist yet (only `production`). Hosting runtime for the app is not decided; The driver is the Neon adapter (your spec); the Neon skill suggested node-postgres for long-running Node/Vercel, but both work here.
+- Neon branch `develop` does not exist yet (`production` and `staging` do).
+- The staging password was pasted into the Claude chat, so it is in the session transcript. Consider rotating it in the Neon console (Roles) once setup is done. Hosting runtime for the app is not decided; The driver is the Neon adapter (your spec); the Neon skill suggested node-postgres for long-running Node/Vercel, but both work here.
 - The `neon-postgres` Claude Code plugin was installed at user scope (global) by `neon init`, not project scope.
 - CI workflow written but never run on GitHub. Needs GitHub Environments `staging` and `production` with secret `DATABASE_URL_UNPOOLED`, and the Neon `staging`/`develop` branches to exist.
 - Feature-boundary lint rule verified: a temporary `@/features/home/db/foo` import was rejected, then removed.
 
 ## Log
+
+### 2026-11-20 - Staging credentials saved
+- Neon branch `staging` (`br-bitter-voice-bbb8dn5q`, host `ep-broad-voice-bb2ds4xc`) now exists. Saved pooled and direct URLs to `.env.staging` (gitignored, mode 600). `prisma migrate status` reached it: connection works, no migrations applied yet.
 
 ### 2026-11-20 - Database layer per spec
 - Switched driver to `@prisma/adapter-neon` (removed `@prisma/adapter-pg`, `pg`); added `dotenv`, `tsx`. `prisma.config.ts` loads `.env.local` then `.env`; reads `DATABASE_URL_UNPOOLED` directly (not `env()`, which throws and would break `prisma generate` in postinstall/CI).

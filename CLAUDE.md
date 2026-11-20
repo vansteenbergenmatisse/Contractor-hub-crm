@@ -27,7 +27,7 @@ TypeScript is pinned to 6.0.x because `typescript-eslint` does not support 7.x y
 - The Prisma client comes from `getPrisma()` in `@/shared/lib/prisma` (lazy singleton, so the build needs no env). Only a feature's `db/` files call it. Do not create another client.
 - Generated client goes to `src/generated/prisma` (gitignored). It is built by `postinstall`; run `pnpm db:generate` after schema changes.
 - Health check: `GET /api/health/db` runs `SELECT current_database()`. Use it to verify the connection.
-- Environments (one Neon branch each): `main` → Neon `production`, `staging` → `staging`, `develop` → `develop`. Same env var names everywhere; values differ per branch. Only `production` exists in Neon today.
+- Environments (one Neon branch each): `main` → Neon `production`, `staging` → `staging`, `develop` → `develop`. Same env var names everywhere; values differ per branch. Neon `production` and `staging` exist; `develop` does not yet. Local files (all gitignored): `.env.local` = production (written by Neon), `.env.staging` = staging. To target staging: `set -a; . ./.env.staging; set +a; pnpm exec prisma <cmd>` (real env vars override the dotenv files). A `develop` file will follow the same pattern.
 - `prisma migrate dev` runs only against `develop`. CI (`.github/workflows/ci.yml`) runs `prisma migrate deploy` on merge to `staging` and `main`, using that environment's `DATABASE_URL_UNPOOLED` from GitHub Environments. Never run `migrate dev` or `db push` against staging or production.
 - Do not add `pgbouncer=true` or `connection_limit` to URLs. Pool size is set in the adapter (`src/shared/lib/prisma.ts`). Free-plan computes sleep after 5 minutes idle, so the first connection is slow (connect timeout is 10s).
 - Node 22.12+ (`.nvmrc`, `engines`).
