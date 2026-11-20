@@ -1,0 +1,4 @@
+# Python venv for Looper, recreate locally (see CLAUDE.md)
+.claude/skills/looper/.venv/
+__pycache__/
+.DS_Store
