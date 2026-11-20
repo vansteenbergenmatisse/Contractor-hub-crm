@@ -40,6 +40,20 @@ TypeScript is pinned to 6.0.x because `typescript-eslint` does not support 7.x y
 - After each ticket run all tests and update PROGRESS.md. Then commit.
 - If two rounds in a row make no progress stop and write why in PROGRESS.md.
 
+## Recording work (mandatory)
+
+Every change, edit or addition to the repo is recorded in `PROGRESS.md`, first as a plan and then as a result. This includes code, config, dependencies, schema, docs, CI, env-file conventions, new folders, deletions, and external changes (Neon, GitHub, Vercel, HighLevel).
+
+1. **Before acting:** add an entry under "In progress" in `PROGRESS.md` with the date, what you are going to do, which files or systems it touches, and why. Do this before the first edit, not after.
+2. **While working:** if the plan changes, edit the "In progress" entry to say so. Do not silently drift from it.
+3. **After acting:** move the entry to the top of "Log" and rewrite it as what actually happened: files changed, commands run, the check result (`pnpm check` output summary), anything that failed or was skipped. Say so plainly if something was not verified.
+4. **Same commit:** the `PROGRESS.md` update goes in the same commit as the change it describes. Update "Current state", "Next up" and "Blockers" when they are affected.
+5. **No secrets:** never write passwords, tokens or full connection strings in `PROGRESS.md`. Name the variable or file instead.
+6. **Not recorded means not done.** If a session ends mid-task, the "In progress" entry is what the next session resumes from.
+7. Long-form notes (runbooks, integration plans) go in `docs/<topic>.md` and are linked from `PROGRESS.md`.
+
+Also record decisions the user makes in chat (hosting, stack, scope) under "Current state" or "Log" as soon as they are made.
+
 ## Folder structure (feature-first, single app)
 
 ```
@@ -92,10 +106,10 @@ Existing features: `home`.
 
 ## Per-ticket loop
 
-1. Read `PROGRESS.md`, the ticket and the owning feature folder.
+1. Read `PROGRESS.md`, the ticket and the owning feature folder. Write the plan under "In progress" in `PROGRESS.md` (see "Recording work").
 2. Write or update the test first, then the code (use the `mattpocock-skills:tdd` skill).
 3. Run `pnpm check`. Fix the code, not the tests, until it passes.
-4. Update `PROGRESS.md`: "Current state", "Next up", and a new "Log" entry (what changed, check result, next step). Record blockers there too.
+4. Update `PROGRESS.md`: move the "In progress" entry to "Log" as what actually happened (what changed, check result, next step), and update "Current state", "Next up" and blockers.
 5. Commit with the format above. Then re-read "Next up" in `PROGRESS.md` before starting the next ticket.
 
 `PROGRESS.md` is also where you stop: if two rounds in a row make no progress, write why under "Blockers / open questions" and stop. Update it when a feature is added, when a decision is made, and when a check starts failing.

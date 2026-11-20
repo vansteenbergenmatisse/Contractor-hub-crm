@@ -11,6 +11,12 @@ Single source of truth for where the project stands. Read it at the start of eve
 - Database: Neon (project `small-fog-37891095`, branch `production`), Postgres only. Prisma 7 + `@prisma/adapter-neon` (lazy `getPrisma()` singleton). Schema still has no models. `GET /api/health/db` returns `{"ok":true,"database":"neondb"}` against Neon.
 - Last verified checks (2026-11-20): `pnpm check` (lint, typecheck, test, build) passes, plus `db:validate` and `db:generate`. Tests: 3 passing (`tests/architecture/features.test.ts`).
 
+## In progress
+
+Planned work is written here before it starts (date, what, files/systems touched, why) and moved to the Log when done. See "Recording work" in `CLAUDE.md`.
+
+- (nothing in progress)
+
 ## Next up
 
 1. Define the first `home` ticket (what the home screen shows).
@@ -27,6 +33,10 @@ Single source of truth for where the project stands. Read it at the start of eve
 - Feature-boundary lint rule verified: a temporary `@/features/home/db/foo` import was rejected, then removed.
 
 ## Log
+
+### 2026-11-20 - Recording rule added to CLAUDE.md
+- Plan: add a mandatory "Recording work" section to `CLAUDE.md` (plan before acting, result after, same commit, no secrets) and an "In progress" section to `PROGRESS.md`.
+- Done: both edited; per-ticket loop steps 1 and 4 updated to match. Docs only; no code touched, `pnpm check` not re-run. Not pushed.
 
 ### 2026-11-20 - Promoted to staging and main
 - Set GitHub Environment secret `DATABASE_URL_UNPOOLED` on `staging` and `production` from the local env files (values never printed). Logged `gh` in as `vansteenbergenmatisse` (the earlier login had no repo access).
