@@ -74,7 +74,8 @@ src/
 prisma/schema.prisma    Single schema, one section per feature (comment header per feature)
 tests/                  Mirrors src/ (tests/features/<feature>/...)
 .claude/                Project plugins, skills, commands (committed)
-PROGRESS.md             Running log of tickets, status, blockers
+PROGRESS.md             Running log: resume guide, current state, plans, blockers, history
+docs/                   Long-form notes and plans (e.g. docs/gohighlevel-integration.md)
 ```
 
 Existing features: `home`.
@@ -103,6 +104,7 @@ Existing features: `home`.
 - One commit per ticket, made after tests pass and PROGRESS.md is updated. Message format: `<type>(<feature>): <summary>` with type one of `feat`, `fix`, `refactor`, `test`, `docs`, `chore`. Example: `feat(home): add pipeline summary card`.
 - Stage files by name. Do not commit `.env*`, secrets or `.claude/skills/looper/.venv/`.
 - Do not push, force-push, merge or delete branches without explicit approval.
+- Hosting is Vercel. GitHub Actions CI (`.github/workflows/ci.yml`) must pass before merging.
 
 ## Per-ticket loop
 

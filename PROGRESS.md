@@ -1,83 +1,90 @@
 # PROGRESS
 
-Single source of truth for where the project stands. Read it at the start of every session and before every ticket. Update it after every ticket, before committing. Newest log entries first.
+Single source of truth for where the project stands. Read it at the start of every session and before every ticket. Plan work under "In progress" before starting, move it to the Log when done (see "Recording work" in `CLAUDE.md`). Newest log entries first.
+
+## Resume here (for a fresh session)
+
+1. Read `CLAUDE.md` (rules, commands, structure, git flow, Neon) and this file.
+2. Repo: https://github.com/vansteenbergenmatisse/Contractor-hub-crm. Local path: `ForgeForward/Contractors_CRM`. Work on `develop`; promote develop to staging to main by pull request.
+3. Run `pnpm install` then `pnpm check`. Local env: `.env.local` (Neon `develop`), plus `.env.staging` and `.env.production` for the other branches. All gitignored; never print or commit them.
+4. Accounts: GitHub CLI has two logins; the one that matters is `vansteenbergenmatisse` (admin on the repo). `git` pushes with its own stored credential. Neon CLI: `pnpm dlx neon@latest` (or `npx`), logged in with access to org `org-dark-paper-44469290`.
+5. Open items are under "Next up" and "Blockers" below. Long-form plans live in `docs/`.
+6. After a restart, Claude Code loads the project plugins (`mattpocock-skills`, `loop-engineering`, Looper) and the Neon plugin; `/setup-matt-pocock-skills` has not been run yet (interactive, pick local files).
 
 ## Current state
 
-- Branches: `develop`, `staging`, `main` all pushed and promoted (PRs #1 and #2 merged). Working branch: `develop`. `.env.local` points at the Neon `develop` branch.
-- Hosting: Vercel (decided 2026-11-20). CRM scope and design: to be provided by the user later.
-- Stack: TypeScript 6.0, Next.js 16 (App Router), React 19, Postgres, Prisma 7.10, pnpm 10
-- Features: `home` (folders plus empty `index.ts` and `types.ts`, no logic; `src/app/page.tsx` is a placeholder page so the build works)
-- Database: Neon (project `small-fog-37891095`, branch `production`), Postgres only. Prisma 7 + `@prisma/adapter-neon` (lazy `getPrisma()` singleton). Schema still has no models. `GET /api/health/db` returns `{"ok":true,"database":"neondb"}` against Neon.
-- Last verified checks (2026-11-20): `pnpm check` (lint, typecheck, test, build) passes, plus `db:validate` and `db:generate`. Tests: 3 passing (`tests/architecture/features.test.ts`).
+- Branches: `develop`, `staging`, `main` exist on GitHub. PRs #1 (develop to staging) and #2 (staging to main) merged; CI green on all three, including the `migrate` job. Working branch: `develop`.
+- Hosting: Vercel (decided 2026-11-20). Vercel project not created yet. CRM scope and design: to be provided by the user later.
+- Stack: TypeScript 6.0, Next.js 16 (App Router), React 19, Postgres on Neon, Prisma 7.10 with `@prisma/adapter-neon`, pnpm 10, Node 22.
+- Features: `home` only (folders plus empty `index.ts` and `types.ts`, no logic). `src/app/page.tsx` is a placeholder page.
+- Database: Neon project `small-fog-37891095` (org `org-dark-paper-44469290`), Free plan, Postgres, one Neon branch per environment: `production` (git main), `staging`, `develop`. Prisma schema has no models yet. Lazy `getPrisma()` in `src/shared/lib/prisma.ts`. `GET /api/health/db` returned 200 `{"ok":true,"database":"neondb"}` against production, staging-credentials check (`migrate status`) and develop.
+- CI: `.github/workflows/ci.yml`. `check` (lint, typecheck, test, build) on PRs and pushes; `migrate` (`prisma migrate deploy`) on push to staging and main, using GitHub Environment secret `DATABASE_URL_UNPOOLED` (set on `staging` and `production`).
+- Last verified (2026-11-20): `pnpm check` passes with and without env vars. 3 tests (`tests/architecture/features.test.ts`).
+- Project-scope tooling in `.claude/` (plugins in `settings.json`, Looper vendored in `.claude/skills/looper/`, see `VENDORED.md`).
 
 ## In progress
-
-Planned work is written here before it starts (date, what, files/systems touched, why) and moved to the Log when done. See "Recording work" in `CLAUDE.md`.
 
 - (nothing in progress)
 
 ## Next up
 
-1. Define the first `home` ticket (what the home screen shows).
-2. Decide how Neon branches map to `develop`, `staging` and `main` (today only the Neon `production` branch exists and `.env.local` points at it). Avoid developing against production data.
-3. Add feature tests under `tests/features/<feature>/` as `home` gets logic.
+1. Create the Vercel project; tell Claude the domains for develop, staging and main. Add the Neon env vars per environment in Vercel (values from the `.env.*` files; not through chat).
+2. User provides the CRM scope (what it manages first) and the design. Then: define the first `home` ticket and create feature folders and Prisma models.
+3. GoHighLevel integration: follow `docs/gohighlevel-integration.md` (needs user decisions and a Marketplace app first).
+4. Run `/setup-matt-pocock-skills` (after restarting Claude Code).
+5. Add feature tests under `tests/features/<feature>/` as features get logic.
 
 ## Blockers / open questions
 
-- GoHighLevel integration (planned): needs decisions on login model (own login vs embedded in HighLevel), a HighLevel Marketplace app (client id/secret, scopes, redirect URIs), and an auth library. See the chat summary of 2026-11-20; nothing built yet.
-- The staging password was pasted into the Claude chat, so it is in the session transcript. Consider rotating it in the Neon console (Roles) once setup is done. The driver is the Neon adapter (your spec); the Neon skill suggested node-postgres for long-running Node/Vercel, but both work here.
-- The `neon-postgres` Claude Code plugin was installed at user scope (global) by `neon init`, not project scope.
-- Node 20 deprecation notice on the CI actions (`checkout@v4`, `setup-node@v4`, `pnpm/action-setup@v4`): forced to Node 24 by GitHub, works today. Bump action versions later.
-- `develop` lacks the two merge commits that GitHub created on `staging` and `main`. Harmless; pull `staging` into `develop` if it ever matters.
-- Feature-boundary lint rule verified: a temporary `@/features/home/db/foo` import was rejected, then removed.
+- GoHighLevel: needs the login-model decision, auth library choice, and a HighLevel Marketplace app (client ID and secret, scopes, redirect URIs). Plan in `docs/gohighlevel-integration.md`. Several API details unverified.
+- The staging database password was pasted into the Claude chat, so it is in the session transcript. Rotate it in the Neon console (Roles), then refresh `.env.staging` and the GitHub `staging` secret.
+- The `neon-postgres` Claude Code plugin was installed at user scope (global) by `neon init`, not project scope. Decide whether to move it.
+- The driver is the Neon adapter per the user's spec; the Neon skill suggested node-postgres for long-running Node/Vercel. Both work; revisit if Vercel runtime behavior says otherwise.
+- CI actions (`checkout@v4`, `setup-node@v4`, `pnpm/action-setup@v4`) run on a deprecated Node 20 runtime that GitHub forces to Node 24. Works today; bump versions later.
+- `develop` lacks the two merge commits GitHub created on `staging` and `main`. Harmless; merge `staging` into `develop` if it ever matters.
 
 ## Log
 
+### 2026-11-20 - Full state saved for a context reset
+- Plan: persist everything needed to resume without chat history: write `docs/gohighlevel-integration.md`, rewrite this file (resume guide, accurate current state, cleaned blockers), commit the generated `AGENTS.md`.
+- Done: all three. Docs only; no code changed, `pnpm check` not re-run. `AGENTS.md` is generated by `next dev` (tells agents to read `node_modules/next/dist/docs/`); committed to keep the tree clean. Fixed stale lines in this file (Neon branch mapping was listed as undecided, one blocker line was garbled).
+
 ### 2026-11-20 - Recording rule added to CLAUDE.md
-- Plan: add a mandatory "Recording work" section to `CLAUDE.md` (plan before acting, result after, same commit, no secrets) and an "In progress" section to `PROGRESS.md`.
-- Done: both edited; per-ticket loop steps 1 and 4 updated to match. Docs only; no code touched, `pnpm check` not re-run. Not pushed.
+- Added a mandatory "Recording work" section to `CLAUDE.md` (plan before acting, result after, same commit, no secrets) and an "In progress" section to this file; per-ticket loop steps 1 and 4 updated. Docs only.
+
+### 2026-11-20 - Vercel hosting and GoHighLevel plan noted
+- User decided hosting is Vercel. Researched HighLevel access (OAuth Marketplace app, agency vs location tokens, user context) and gave the user the phase-by-phase plan; nothing built.
 
 ### 2026-11-20 - Promoted to staging and main
 - Set GitHub Environment secret `DATABASE_URL_UNPOOLED` on `staging` and `production` from the local env files (values never printed). Logged `gh` in as `vansteenbergenmatisse` (the earlier login had no repo access).
-- PR #1 develop to staging merged: CI `check` 33s and `migrate` 16s passed. PR #2 staging to main merged: `check` 23s and `migrate` 17s passed. `prisma migrate deploy` ran with the real secret on both; there are no migrations yet. I did not capture its final output line, only that the job succeeded.
+- PR #1 develop to staging merged: CI `check` 33s and `migrate` 16s passed. PR #2 staging to main merged: `check` 23s and `migrate` 17s passed. `prisma migrate deploy` ran with the real secret on both; there are no migrations yet. Final output line of `migrate` not captured, only that the job succeeded.
 
 ### 2026-11-20 - Develop branch live, pushed
 - Neon `develop` branch (`br-steep-shadow-bbk1ch83`) exists. Saved production URLs to `.env.production` (gitignored), then pointed `.env.local` at develop via `neon checkout develop` + `neon env pull`, so local work no longer touches production data.
-- Verified: `GET /api/health/db` returned 200 `{"ok":true,"database":"neondb"}` against develop; `prisma migrate status` reached it.
-- Pushed `develop` to origin. CI run on develop: success (40s).
+- Verified: `GET /api/health/db` returned 200 against develop; `prisma migrate status` reached it. Pushed `develop`; CI on develop succeeded (40s).
 
 ### 2026-11-20 - Staging credentials saved
-- Neon branch `staging` (`br-bitter-voice-bbb8dn5q`, host `ep-broad-voice-bb2ds4xc`) now exists. Saved pooled and direct URLs to `.env.staging` (gitignored, mode 600). `prisma migrate status` reached it: connection works, no migrations applied yet.
+- Neon branch `staging` (`br-bitter-voice-bbb8dn5q`) created by the user. Saved pooled and direct URLs to `.env.staging` (gitignored, mode 600). `prisma migrate status` reached it: connection works, no migrations applied yet.
 
 ### 2026-11-20 - Database layer per spec
 - Switched driver to `@prisma/adapter-neon` (removed `@prisma/adapter-pg`, `pg`); added `dotenv`, `tsx`. `prisma.config.ts` loads `.env.local` then `.env`; reads `DATABASE_URL_UNPOOLED` directly (not `env()`, which throws and would break `prisma generate` in postinstall/CI).
 - `getPrisma()` is lazy: the first version built the client on import and `next build` failed without env vars. Fixed and verified.
 - Health query needed `::text` (Neon adapter cannot deserialize Postgres `name`).
-- `.env.example` now has empty values. Added `.nvmrc` (22), `engines`, and `.github/workflows/ci.yml`.
-- Checks: `pnpm check` passes with and without env vars. Live `GET /api/health/db` returned 200 `{"ok":true,"database":"neondb"}`.
+- `.env.example` has empty values. Added `.nvmrc` (22), `engines`, and `.github/workflows/ci.yml`.
+- Checks: `pnpm check` passes with and without env vars. Live `GET /api/health/db` returned 200.
 
 ### 2026-11-20 - Neon wired
-- Ran `neon init` (org `org-dark-paper-44469290`, project `small-fog-37891095`, branch `production`, postgres) via `npx neon@latest`; first attempt failed because the login lacked org access, retried after `neon login`. `neon config plan` and `neon deploy` reported no changes. `.env.local` pulled (5 vars, gitignored).
-- Added deps: `@neon/config`, `@neon/env` (from init), `@prisma/adapter-pg@7.10.1`, `pg`, `@types/pg`. Added `neon.ts`, `postinstall: prisma generate`.
-- Driver choice per the Neon skill: Prisma with the node-postgres adapter, pooled URL for the app, direct URL for migrations (`prisma.config.ts`).
-- Added `src/shared/lib/prisma.ts`, `src/shared/lib/db-health.ts`, `src/app/api/health/db/route.ts`.
-- Checks: `pnpm check` passes. Started the built app and `GET /` returned 200; `GET /api/health/db` returned 200 `{"ok":true,"database":"neondb"}`.
+- Ran `neon init` (org `org-dark-paper-44469290`, project `small-fog-37891095`, branch `production`, postgres) via `npx neon@latest`; the first attempt failed because the login lacked org access, retried after `neon login`. `neon config plan` and `neon deploy` reported no changes. `.env.local` pulled (gitignored).
+- Added `neon.ts`, deps `@neon/config`, `@neon/env`, `postinstall: prisma generate`, `src/shared/lib/prisma.ts`, `src/shared/lib/db-health.ts`, `src/app/api/health/db/route.ts`.
 
 ### 2026-11-20 - Test script and build scripts
 - Added `tests/architecture/features.test.ts`: every folder in `src/features/` must be kebab-case and contain `components/ api/ db/ hooks/ types.ts index.ts`. It failed on `home` (missing `types.ts`, `index.ts`), so both were added as empty exports.
-- Removed `--passWithNoTests` from the `test` script.
-- Approved build scripts for `prisma`, `@prisma/engines`, `esbuild` via `pnpm.onlyBuiltDependencies` in `package.json` (read all three scripts first; official installers). `pnpm ignored-builds` now reports none.
-- Checks: `pnpm check` passes; 3 tests.
+- Removed `--passWithNoTests`. Approved build scripts for `prisma`, `@prisma/engines`, `esbuild` via `pnpm.onlyBuiltDependencies` (read all three scripts first).
 
 ### 2026-11-20 - App initialized
-- Added pnpm project: Next.js, React, Prisma, ESLint, Vitest, TypeScript. Configs: `tsconfig.json`, `next.config.ts`, `eslint.config.mjs`, `vitest.config.ts`, `prisma.config.ts`.
-- Pinned TypeScript to 6.0.3 (typescript-eslint does not support 7.x) and the Prisma CLI to 7.10.1 (matching the client; `latest` resolved to an 8.0 release candidate).
-- Defined commands in `CLAUDE.md`; added `pnpm check`.
-- Checks: lint, typecheck, test, build, db:validate all pass.
+- Added pnpm project: Next.js, React, Prisma, ESLint, Vitest, TypeScript. Configs: `tsconfig.json`, `next.config.ts`, `eslint.config.mjs` (includes the feature-boundary `no-restricted-imports` rule, verified with a temporary violating import), `vitest.config.ts`, `prisma.config.ts`.
+- Pinned TypeScript to 6.0.3 (typescript-eslint does not support 7.x) and the Prisma CLI to 7.10.1 (matching the client; `latest` resolved to an 8.0 release candidate). Defined commands in `CLAUDE.md`; added `pnpm check`.
 
 ### 2026-11-20 - Repo foundation
-- Created repo with `main`, `develop`, `staging`; pushed to GitHub.
-- Installed project-scope plugins `mattpocock-skills`, `loop-engineering`; vendored Looper into `.claude/skills/looper/`.
-- Chose feature-first single-app structure; wrote `CLAUDE.md` and `src/features/CLAUDE.md`.
-- Tests: n/a (no code yet).
+- Created repo with `main`, `develop`, `staging`; pushed to GitHub. Installed project-scope plugins `mattpocock-skills`, `loop-engineering`; vendored Looper into `.claude/skills/looper/`.
+- Chose the feature-first single-app structure; wrote `CLAUDE.md` and `src/features/CLAUDE.md`.
