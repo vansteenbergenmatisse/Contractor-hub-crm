@@ -7,7 +7,7 @@ Single source of truth for where the project stands. Read it at the start of eve
 - Branch: `develop`
 - Stack: TypeScript 6.0, Next.js 16 (App Router), React 19, Postgres, Prisma 7.10, pnpm 10
 - Features: `home` (folders plus empty `index.ts` and `types.ts`, no logic; `src/app/page.tsx` is a placeholder page so the build works)
-- Database: Neon (project `small-fog-37891095`, branch `production`), Postgres only. Prisma 7 + `@prisma/adapter-pg`/`pg`. Schema still has no models. `GET /api/health/db` returns `{"ok":true,"database":"neondb"}` against Neon.
+- Database: Neon (project `small-fog-37891095`, branch `production`), Postgres only. Prisma 7 + `@prisma/adapter-neon` (lazy `getPrisma()` singleton). Schema still has no models. `GET /api/health/db` returns `{"ok":true,"database":"neondb"}` against Neon.
 - Last verified checks (2026-11-20): `pnpm check` (lint, typecheck, test, build) passes, plus `db:validate` and `db:generate`. Tests: 3 passing (`tests/architecture/features.test.ts`).
 
 ## Next up
@@ -18,12 +18,19 @@ Single source of truth for where the project stands. Read it at the start of eve
 
 ## Blockers / open questions
 
-- Neon branch strategy for develop/staging/main is not decided (see Next up). Hosting runtime for the app is not decided; `pg` was chosen as the driver for a long-running Node/Vercel runtime. Revisit if the app is hosted on an edge runtime.
+- Neon branches `staging` and `develop` do not exist yet (only `production`). Hosting runtime for the app is not decided; The driver is the Neon adapter (your spec); the Neon skill suggested node-postgres for long-running Node/Vercel, but both work here.
 - The `neon-postgres` Claude Code plugin was installed at user scope (global) by `neon init`, not project scope.
-- `pg` logs an SSL-mode warning (`sslmode=require` is treated as `verify-full` today; semantics change in pg v9). Harmless now; revisit when upgrading pg.
+- CI workflow written but never run on GitHub. Needs GitHub Environments `staging` and `production` with secret `DATABASE_URL_UNPOOLED`, and the Neon `staging`/`develop` branches to exist.
 - Feature-boundary lint rule verified: a temporary `@/features/home/db/foo` import was rejected, then removed.
 
 ## Log
+
+### 2026-11-20 - Database layer per spec
+- Switched driver to `@prisma/adapter-neon` (removed `@prisma/adapter-pg`, `pg`); added `dotenv`, `tsx`. `prisma.config.ts` loads `.env.local` then `.env`; reads `DATABASE_URL_UNPOOLED` directly (not `env()`, which throws and would break `prisma generate` in postinstall/CI).
+- `getPrisma()` is lazy: the first version built the client on import and `next build` failed without env vars. Fixed and verified.
+- Health query needed `::text` (Neon adapter cannot deserialize Postgres `name`).
+- `.env.example` now has empty values. Added `.nvmrc` (22), `engines`, and `.github/workflows/ci.yml`.
+- Checks: `pnpm check` passes with and without env vars. Live `GET /api/health/db` returned 200 `{"ok":true,"database":"neondb"}`.
 
 ### 2026-11-20 - Neon wired
 - Ran `neon init` (org `org-dark-paper-44469290`, project `small-fog-37891095`, branch `production`, postgres) via `npx neon@latest`; first attempt failed because the login lacked org access, retried after `neon login`. `neon config plan` and `neon deploy` reported no changes. `.env.local` pulled (5 vars, gitignored).

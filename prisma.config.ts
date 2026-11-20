@@ -1,16 +1,15 @@
+import { config } from "dotenv";
 import { defineConfig } from "prisma/config";
 
-// Prisma CLI does not read .env.local. Neon writes the URLs there, so load it here.
-try {
-  process.loadEnvFile(".env.local");
-} catch {
-  // No .env.local (CI/production): rely on real environment variables.
-}
+// Neon writes .env.local; .env is the fallback. Real environment variables (CI) always win.
+config({ path: [".env.local", ".env"], quiet: true });
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
   datasource: {
-    // Migrations need the direct (unpooled) connection; the app uses the pooled DATABASE_URL.
-    url: process.env.DATABASE_URL_UNPOOLED ?? process.env.DATABASE_URL ?? "",
+    // Prisma CLI only (migrate, db push, studio): the direct, unpooled connection.
+    // Not env(): that throws when unset, which would break `prisma generate` (postinstall, CI)
+    // where no database is needed. Migrate commands fail on the empty URL.
+    url: process.env.DATABASE_URL_UNPOOLED ?? "",
   },
 });

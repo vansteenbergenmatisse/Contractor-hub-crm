@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [develop, staging, main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # lint, typecheck, test, build. No database or secrets needed.
+      - run: pnpm check
+
+  # Apply committed migrations on merge to staging and main (never on develop: use `prisma migrate dev` locally there).
+  # Secrets live in GitHub Environments `staging` and `production`; each holds that Neon branch's DATABASE_URL_UNPOOLED.
+  migrate:
+    needs: check
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/staging' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+    env:
+      DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Require the direct connection string
+        run: test -n "$DATABASE_URL_UNPOOLED" || (echo "DATABASE_URL_UNPOOLED is not set for this environment" && exit 1)
+      - run: pnpm exec prisma migrate deploy

@@ -4,7 +4,7 @@ CRM for contractors. Remote: https://github.com/vansteenbergenmatisse/Contractor
 
 **Start every session by reading `PROGRESS.md`** (current state, next up, blockers). It is the source of truth for where the project stands.
 
-Stack (decided): TypeScript, Next.js (App Router), Postgres on Neon, Prisma 7 with the `pg` driver adapter. Package manager: pnpm, the only one. Never use npm or yarn; never commit another lockfile.
+Stack (decided): TypeScript, Next.js (App Router), Postgres on Neon, Prisma 7 with the Neon driver adapter (`@prisma/adapter-neon`). Package manager: pnpm, the only one. Never use npm or yarn; never commit another lockfile.
 
 ## Commands
 
@@ -24,9 +24,13 @@ TypeScript is pinned to 6.0.x because `typescript-eslint` does not support 7.x y
 - Neon project `small-fog-37891095` (org `org-dark-paper-44469290`), branch `production`, services: Postgres only. Declared in `neon.ts`. Use `pnpm dlx neon@latest` for the CLI (no global install).
 - Env vars live in `.env.local` (gitignored, written by Neon; refresh with `neon env pull`). `.env.example` shows the shape. Never print or commit real URLs.
 - `DATABASE_URL` is the pooled URL, used by the app. `DATABASE_URL_UNPOOLED` is the direct URL, used by Prisma migrations (`prisma.config.ts` loads `.env.local` itself).
-- The Prisma client is `prisma` from `@/shared/lib/prisma`. Only a feature's `db/` files import it. Do not create another client.
+- The Prisma client comes from `getPrisma()` in `@/shared/lib/prisma` (lazy singleton, so the build needs no env). Only a feature's `db/` files call it. Do not create another client.
 - Generated client goes to `src/generated/prisma` (gitignored). It is built by `postinstall`; run `pnpm db:generate` after schema changes.
 - Health check: `GET /api/health/db` runs `SELECT current_database()`. Use it to verify the connection.
+- Environments (one Neon branch each): `main` → Neon `production`, `staging` → `staging`, `develop` → `develop`. Same env var names everywhere; values differ per branch. Only `production` exists in Neon today.
+- `prisma migrate dev` runs only against `develop`. CI (`.github/workflows/ci.yml`) runs `prisma migrate deploy` on merge to `staging` and `main`, using that environment's `DATABASE_URL_UNPOOLED` from GitHub Environments. Never run `migrate dev` or `db push` against staging or production.
+- Do not add `pgbouncer=true` or `connection_limit` to URLs. Pool size is set in the adapter (`src/shared/lib/prisma.ts`). Free-plan computes sleep after 5 minutes idle, so the first connection is slow (connect timeout is 10s).
+- Node 22.12+ (`.nvmrc`, `engines`).
 - Test a migration on a Neon branch of production before applying it to production. Do not run `neon deploy`, migrations or branch changes without approval.
 
 ## Rules
