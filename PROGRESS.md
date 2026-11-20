@@ -5,6 +5,7 @@ Single source of truth for where the project stands. Read it at the start of eve
 ## Current state
 
 - Branches: `develop`, `staging`, `main` all pushed and promoted (PRs #1 and #2 merged). Working branch: `develop`. `.env.local` points at the Neon `develop` branch.
+- Hosting: Vercel (decided 2026-11-20). CRM scope and design: to be provided by the user later.
 - Stack: TypeScript 6.0, Next.js 16 (App Router), React 19, Postgres, Prisma 7.10, pnpm 10
 - Features: `home` (folders plus empty `index.ts` and `types.ts`, no logic; `src/app/page.tsx` is a placeholder page so the build works)
 - Database: Neon (project `small-fog-37891095`, branch `production`), Postgres only. Prisma 7 + `@prisma/adapter-neon` (lazy `getPrisma()` singleton). Schema still has no models. `GET /api/health/db` returns `{"ok":true,"database":"neondb"}` against Neon.
@@ -18,7 +19,8 @@ Single source of truth for where the project stands. Read it at the start of eve
 
 ## Blockers / open questions
 
-- The staging password was pasted into the Claude chat, so it is in the session transcript. Consider rotating it in the Neon console (Roles) once setup is done. Hosting runtime for the app is not decided; The driver is the Neon adapter (your spec); the Neon skill suggested node-postgres for long-running Node/Vercel, but both work here.
+- GoHighLevel integration (planned): needs decisions on login model (own login vs embedded in HighLevel), a HighLevel Marketplace app (client id/secret, scopes, redirect URIs), and an auth library. See the chat summary of 2026-11-20; nothing built yet.
+- The staging password was pasted into the Claude chat, so it is in the session transcript. Consider rotating it in the Neon console (Roles) once setup is done. The driver is the Neon adapter (your spec); the Neon skill suggested node-postgres for long-running Node/Vercel, but both work here.
 - The `neon-postgres` Claude Code plugin was installed at user scope (global) by `neon init`, not project scope.
 - Node 20 deprecation notice on the CI actions (`checkout@v4`, `setup-node@v4`, `pnpm/action-setup@v4`): forced to Node 24 by GitHub, works today. Bump action versions later.
 - `develop` lacks the two merge commits that GitHub created on `staging` and `main`. Harmless; pull `staging` into `develop` if it ever matters.
