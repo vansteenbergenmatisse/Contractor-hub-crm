@@ -19,43 +19,45 @@ enum TenantStatus {
 }
 
 model Tenant {
-  id            String                  @id @default(cuid())
+  id            String                @id @default(cuid())
   name          String?
-  locationId    String                  @unique
+  locationId    String                @unique
   companyId     String?
-  status        TenantStatus            @default(connected)
+  status        TenantStatus          @default(connected)
   uninstalledAt DateTime?
-  createdAt     DateTime                @default(now())
-  updatedAt     DateTime                @updatedAt
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
   connection    HlLocationConnection?
   webhookEvents WebhookEvent[]
+  users         User[]
+  invites       Invite[]
 }
 
 // ---- feature: highlevel ----
 // Tokens are stored encrypted (AES-256-GCM, see src/shared/lib/encryption.ts). Never plaintext.
 
 model HlAgencyConnection {
-  id              String    @id @default(cuid())
-  companyId       String    @unique
+  id              String   @id @default(cuid())
+  companyId       String   @unique
   accessTokenEnc  String
   refreshTokenEnc String
   expiresAt       DateTime
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 model HlLocationConnection {
-  id              String    @id @default(cuid())
-  tenantId        String    @unique
-  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  locationId      String    @unique
+  id              String   @id @default(cuid())
+  tenantId        String   @unique
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  locationId      String   @unique
   accessTokenEnc  String
   // HighLevel's v3 location-token response includes a refresh token; if one is missing the
   // token service re-mints from the agency token.
   refreshTokenEnc String?
   expiresAt       DateTime
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 // One row per delivered webhook; webhookId makes processing idempotent.
@@ -77,4 +79,114 @@ model WebhookEvent {
   @@index([locationId])
   @@index([tenantId])
   @@index([receivedAt])
+}
+
+// ---- feature: auth ----
+// Better Auth tables (email and password, invite only) plus our invites. The model and field names
+// follow Better Auth's schema; five fields are renamed through `fields` in
+// src/features/auth/api/auth.ts so that none of them is named like a provider token (the
+// "token fields end in Enc" test): Session.sessionKey, Account.oauthAccess, oauthRefresh, oauthId
+// and their expiry columns. The Account columns stay empty (no social login). Better Auth keeps the
+// session key in clear in its table, as designed; the cookie carrying it is signed.
+
+enum UserRole {
+  owner
+  office
+  admin
+}
+
+model User {
+  id             String    @id
+  name           String
+  email          String    @unique
+  emailVerified  Boolean   @default(false)
+  image          String?
+  // Server-only (Better Auth `input: false`). Owner and office belong to one tenant; admin is
+  // Forge Forward staff and has none (checked in createInvitedUser).
+  role           UserRole  @default(owner)
+  tenantId       String?
+  tenant         Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  // "Turn off login": set by an admin, blocks sign-in and ends the sessions.
+  disabledAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @default(now()) @updatedAt
+  sessions       Session[]
+  accounts       Account[]
+  invitesCreated Invite[]
+
+  @@index([tenantId])
+}
+
+model Session {
+  id         String   @id
+  expiresAt  DateTime
+  sessionKey String   @unique
+  ipAddress  String?
+  userAgent  String?
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  oauthAccess           String?
+  oauthRefresh          String?
+  oauthId               String?
+  oauthAccessExpiresAt  DateTime?
+  oauthRefreshExpiresAt DateTime?
+  scope                 String?
+  // Password hash (scrypt, made by Better Auth). Never the password.
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  @@index([identifier])
+}
+
+// Better Auth rate limiting kept in the database (serverless instances share no memory).
+model RateLimit {
+  id          String @id
+  key         String @unique
+  count       Int
+  lastRequest BigInt
+}
+
+// One invite = one future user of one tenant. Only the SHA-256 of the single-use code is stored;
+// the code itself travels in the invite link and is never logged.
+model Invite {
+  id          String    @id @default(cuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // Lower-cased email, checked against the tenant's HighLevel users before the invite is created.
+  email       String
+  role        UserRole
+  hlUserId    String
+  codeHash    String    @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdById String?
+  createdBy   User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+
+  @@index([tenantId])
+  @@index([email])
 }

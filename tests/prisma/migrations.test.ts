@@ -52,16 +52,34 @@ describe("HighLevel install migration", () => {
 
 describe("schema and migrations agree", () => {
   it("the migration SQL equals what prisma generates from schema.prisma", () => {
-    // Valid while there is one migration (a first migration from an empty database). When a
-    // second migration is added, replace this with `migrate diff --from-migrations` in CI.
+    // Changed on 2026-11-21 when the second migration (auth tables) landed, as the previous
+    // version of this test said to do. `migrate diff --from-migrations` needs a shadow database,
+    // which CI does not have, so this compares the statements instead: every statement prisma
+    // generates from schema.prisma must appear in the migrations, and the migrations must hold no
+    // other statement. It holds while migrations only add objects (no ALTER of an existing
+    // table, no DROP, no data change); a migration that does more must be reviewed by hand and
+    // this test replaced by a shadow-database diff.
     const generated = execFileSync(
       "pnpm",
       ["exec", "prisma", "migrate", "diff", "--from-empty", "--to-schema", "prisma/schema.prisma", "--script"],
       { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
     );
-    const normalize = (text: string) => text.replace(/\r\n/g, "\n").trim();
-    expect(normalize(sql)).toBe(normalize(generated));
+    const statements = (text: string) =>
+      text
+        .replace(/\r\n/g, "\n")
+        .replace(/^--.*$/gm, "")
+        .split(/;\s*(?:\n|$)/)
+        .map((statement) => statement.replace(/\s+/g, " ").trim())
+        .filter(Boolean)
+        .sort();
+    expect(statements(sql)).toEqual(statements(generated));
   }, 30_000);
+
+  it("the migrations only add objects (the statement comparison above relies on it)", () => {
+    expect(sql).not.toMatch(/\bDROP\b/i);
+    expect(sql).not.toMatch(/\bALTER TABLE "\w+" (?!ADD CONSTRAINT)/);
+    expect(sql).not.toMatch(/^\s*(UPDATE|DELETE FROM|INSERT INTO)\b/im);
+  });
 
   it("every token field in the schema is stored encrypted (name ends in Enc)", () => {
     const schema = readFileSync(join(process.cwd(), "prisma", "schema.prisma"), "utf8");
