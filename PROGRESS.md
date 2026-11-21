@@ -14,7 +14,18 @@ Single source of truth for where the project stands. Read it at the start of eve
 ## Current state
 
 - Branches: `develop`, `staging`, `main` exist on GitHub. PRs #1 (develop to staging) and #2 (staging to main) merged; CI green on all three, including the `migrate` job. Working branch: `develop`.
-- Hosting: Vercel (decided 2026-11-20). Vercel project not created yet. CRM scope and design: to be provided by the user later.
+- Hosting: Vercel (decided 2026-11-20). Domains given by the user (2026-11-20): production `https://crm.forgeforward.io` (git `main`), staging `https://staging.crm.forgeforward.io` (git `staging`), develop `https://dev.crm.forgeforward.io` (git `develop`). Not verified by Claude: whether the Vercel project, the git-branch-to-domain mapping and the Neon env vars per environment are set up. CRM scope and design: to be provided by the user.
+- Build spec (2026-11-20): prompt `~/Downloads/greenlane-build-prompt (1).md` and design `~/Downloads/greenlane-dashboard.html` (GreenLane v2). Not yet copied into the repo (user has not answered that). Read the prompt before any ticket.
+- Decisions by the user (2026-11-20, dictated; wording below is Claude's reading):
+  - Rename feature `home` to `today`. Other features follow the prompt (auth, tenants, brand, inbox, pipeline, leads, and so on). Whether a separate `highlevel` feature is needed: open.
+  - Email sender: behind a small interface, with a log-only sender first.
+  - Settings write-back to HighLevel custom values: build it, ship it off by default.
+  - AI quote builder: NOT deferred, wanted. Built on OpenAI ("ChatGPT"); clients pay about 1 USD per quote built. Model, key, and how the 1 USD is charged: open.
+  - Test sub-account: JCR Landscaping. User may supply the HighLevel secrets; they go into Vercel, not chat.
+  - Commits: local, per ticket, always on `develop`.
+  - Everything is tested on staging; Claude tells the user what to test after each ticket.
+  - Verified per ticket means: tests written for every change, `pnpm check`, Playwright, and an independent verifier agent that checks the work stays within the rules. HighLevel calls in tests use recorded fixtures and mocks.
+  - Not yet answered: Vercel protection on staging and dev (still blocks them as of this date), backend-first build order, dependency approval per ticket, push approval.
 - Stack: TypeScript 6.0, Next.js 16 (App Router), React 19, Postgres on Neon, Prisma 7.10 with `@prisma/adapter-neon`, pnpm 10, Node 22.
 - Features: `home` only (folders plus empty `index.ts` and `types.ts`, no logic). `src/app/page.tsx` is a placeholder page.
 - Database: Neon project `small-fog-37891095` (org `org-dark-paper-44469290`), Free plan, Postgres, one Neon branch per environment: `production` (git main), `staging`, `develop`. Prisma schema has no models yet. Lazy `getPrisma()` in `src/shared/lib/prisma.ts`. `GET /api/health/db` returned 200 `{"ok":true,"database":"neondb"}` against production, staging-credentials check (`migrate status`) and develop.
@@ -28,7 +39,7 @@ Single source of truth for where the project stands. Read it at the start of eve
 
 ## Next up
 
-1. Create the Vercel project; tell Claude the domains for develop, staging and main. Add the Neon env vars per environment in Vercel (values from the `.env.*` files; not through chat).
+1. Vercel: domains are known (see "Current state"). Claude still has to verify each domain serves its branch and that `GET /api/health/db` returns 200 on all three; Neon env vars per environment in Vercel are set by the user (values from the `.env.*` files; not through chat).
 2. User provides the CRM scope (what it manages first) and the design. Then: define the first `home` ticket and create feature folders and Prisma models.
 3. GoHighLevel integration: follow `docs/gohighlevel-integration.md` (needs user decisions and a Marketplace app first).
 4. Run `/setup-matt-pocock-skills` (after restarting Claude Code).
@@ -44,6 +55,17 @@ Single source of truth for where the project stands. Read it at the start of eve
 - `develop` lacks the two merge commits GitHub created on `staging` and `main`. Harmless; merge `staging` into `develop` if it ever matters.
 
 ## Log
+
+### 2026-11-20 - Build spec copied into the repo, round-1 decisions recorded
+- Copied the prompt to `docs/greenlane/build-prompt.md` and the design to `docs/greenlane/greenlane-dashboard.html` (812 KB, fake sample data only). Scanned both for secret-looking values: none found (the prompt holds HighLevel app IDs and URLs, which are not secrets). Docs only; `pnpm check` not run. From here on read `docs/greenlane/build-prompt.md`, not `~/Downloads`.
+- Verified read-only: `crm.forgeforward.io` and its `/api/health/db` return 200. `staging.` and `dev.` return 302 "Protected by Vercel Authentication", so HighLevel cannot reach them yet. Vercel env vars: `DATABASE_URL` exists for Production, Preview/staging, Preview/develop (from the user's screenshot, not independently checked).
+- Decisions by the user (round 1, dictated; Claude's reading):
+  - Keep the `highlevel` feature (the only place that calls the API). JCR Landscaping is a real client and the only account; a dedicated test sub-account is allowed and is the safer choice, so JCR is touched only for a final check the user watches.
+  - AI quote builder is in scope. Usage is logged per quote, then sent to Stripe afterwards; a monthly aggregate is a maybe. Stripe API details are not yet checked.
+  - Commits: local on `develop`. Push only after asking the user each time.
+  - Build order: login first, then UI, then wiring the backend. Exact meaning to be confirmed in round 2.
+  - Dependencies: approved per ticket. Revision cap: 3 rounds per ticket, plus stop after 2 rounds with no progress.
+- Vercel protection: the user wants staging and dev unblocked. Per Vercel docs (read 2026-11-20): Settings, Deployment Protection, toggle Vercel Authentication off, or use Deployment Protection Exceptions to unprotect single domains. Unverified: whether a custom domain tied to a git branch counts as a production domain under Standard Protection.
 
 ### 2026-11-20 - Full state saved for a context reset
 - Plan: persist everything needed to resume without chat history: write `docs/gohighlevel-integration.md`, rewrite this file (resume guide, accurate current state, cleaned blockers), commit the generated `AGENTS.md`.
