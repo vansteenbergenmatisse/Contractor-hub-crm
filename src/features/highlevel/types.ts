@@ -45,3 +45,11 @@ export type OAuthStartConfig = {
   clientId: string;
   redirectUri: string;
 };
+
+export type WebhookEventInput = {
+  webhookId: string;
+  type: string;
+  locationId: string | null;
+  companyId: string | null;
+  payload: unknown;
+};

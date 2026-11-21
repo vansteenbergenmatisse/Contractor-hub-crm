@@ -41,3 +41,16 @@ Read by a research agent from marketplace.gohighlevel.com. None of the pages sho
 - The full `chooselocation` URL parameters beyond `state`. The build prompt lists `response_type`, `client_id`, `redirect_uri`, `scope`, `state`; this was not confirmed by the docs read.
 - Whether a refresh response always rotates the refresh token.
 - Any dated changelog for these endpoints.
+
+# HighLevel webhooks: facts read from the official docs (2026-11-21)
+
+Read by a research agent from marketplace.gohighlevel.com (WebhookIntegrationGuide, AppInstall, AppUninstall). No page shows a date. The Ed25519 public key below was also checked by Claude with `curl` and `grep` against the guide page: identical.
+
+- **Headers**: `X-GHL-Signature` = Ed25519, "Current, use this when present". `X-WH-Signature` = RSA-SHA256, "Legacy", deprecated 1 Sep 2026 (already past); the code ignores it.
+- **Encoding**: not stated in words; the guide's example does `Buffer.from(signature, 'base64')`, so base64.
+- **What is signed**: "We sign the webhook body with our private key." The example verifies `JSON.stringify(req.body)`, not the raw bytes, and the docs never say raw bytes. So the code tries the raw body first, then the re-serialized JSON, and accepts either.
+- **Public key (Ed25519, SPKI PEM, public)**: `MCowBQYDK2VwAyEAi2HR1srL4o18O8BRa7gVJY7G7bupbN3H9AwJrHCDiOg=` (base64 body between BEGIN and END PUBLIC KEY).
+- **INSTALL** (`type: "INSTALL"`): fields type, appId, companyId, locationId, userId, planId, trial, isWhitelabelCompany, whitelabelDetails, companyName. userId and companyId may be absent for installs via "future locations". An agency-level example has companyId and no locationId.
+- **UNINSTALL** (`type: "UNINSTALL"`): schema is only type, appId, companyId, locationId. Location level: appId + locationId. Agency level: appId + companyId. No `webhookId` and no `timestamp` in either schema.
+- **Retries**: any non-2xx or no response is retried up to 12 times with exponential backoff and jitter; stops on any 2xx. Timeout length not stated. The guide says to return 200 even on processing errors. A circuit breaker evaluates each URL about every 3 days (success rate below 90% with more than 10,000 webhooks flags it).
+- **webhookId**: the guide says "store webhook IDs to prevent duplicate processing" but INSTALL and UNINSTALL schemas have none, and uniqueness per event versus per delivery is not stated. **Replay protection**: not stated, no timestamp tolerance.

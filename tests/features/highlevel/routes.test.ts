@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { oauthCallbackRoute, oauthStartRoute } from "@/features/highlevel";
+import { oauthCallbackRoute, oauthStartRoute, webhookRoute } from "@/features/highlevel";
 
 const ENV = {
   GHL_APP_ID: "app-id-1",
@@ -54,5 +54,32 @@ describe("OAuth routes", () => {
     const response = await oauthCallbackRoute(callback);
     expect(response.status).toBe(400);
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("webhook route", () => {
+  const hook = (init: RequestInit = {}) =>
+    new Request("https://app.example.test/api/integrations/webhooks", { method: "POST", body: "{}", ...init });
+
+  it("answers 500 with no detail when env is missing", async () => {
+    for (const name of Object.keys(ENV)) vi.stubEnv(name, "");
+    const response = await webhookRoute(hook());
+    expect(response.status).toBe(500);
+    expect(await response.text()).toBe("Server is not configured.");
+  });
+
+  it("rejects an unsigned request with 401 and makes no outbound call", async () => {
+    for (const [name, value] of Object.entries(ENV)) vi.stubEnv(name, value);
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    const response = await webhookRoute(hook());
+    expect(response.status).toBe(401);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("rejects a request signed with the wrong key with 401", async () => {
+    for (const [name, value] of Object.entries(ENV)) vi.stubEnv(name, value);
+    const response = await webhookRoute(hook({ headers: { "x-ghl-signature": Buffer.alloc(64, 5).toString("base64") } }));
+    expect(response.status).toBe(401);
   });
 });

@@ -1,5 +1,5 @@
 import { getPrisma } from "@/shared/lib/prisma";
-import { aadFor, encrypt } from "@/shared/lib/encryption";
+import { aadFor, decrypt, encrypt } from "@/shared/lib/encryption";
 import type { SaveAgencyConnectionInput, SaveLocationConnectionInput } from "../types";
 
 // The only place the highlevel feature writes tokens. Every token is encrypted with an aad that
@@ -69,4 +69,37 @@ export async function saveLocationConnection(
     });
     return { tenantId: tenant.id };
   });
+}
+
+// Agency access token for minting location tokens. Null when there is none or it has under a minute
+// left; refreshing it belongs to the token service (ticket 5), not here.
+const AGENCY_TOKEN_MIN_LIFE_MS = 60 * 1000;
+
+export async function readAgencyAccessToken(
+  companyId: string,
+  encryptionKey: string,
+  now: Date,
+): Promise<string | null> {
+  const row = await getPrisma().hlAgencyConnection.findUnique({
+    where: { companyId },
+    select: { accessTokenEnc: true, expiresAt: true },
+  });
+  if (!row || row.expiresAt.getTime() - now.getTime() <= AGENCY_TOKEN_MIN_LIFE_MS) return null;
+  return decrypt(row.accessTokenEnc, encryptionKey, aadFor("HlAgencyConnection", companyId, "accessTokenEnc"));
+}
+
+// Uninstall of one location: its tokens go, the tenant stays as a record, marked uninstalled.
+export async function markLocationUninstalled(locationId: string, now: Date): Promise<void> {
+  await getPrisma().$transaction(async (tx) => {
+    await tx.hlLocationConnection.deleteMany({ where: { locationId } });
+    await tx.tenant.updateMany({
+      where: { locationId },
+      data: { status: "uninstalled", uninstalledAt: now },
+    });
+  });
+}
+
+// Uninstall at agency level: the agency token goes.
+export async function deleteAgencyConnection(companyId: string): Promise<void> {
+  await getPrisma().hlAgencyConnection.deleteMany({ where: { companyId } });
 }
