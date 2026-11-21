@@ -21,6 +21,20 @@ export type RefreshedToken = {
 
 export type InstalledLocation = { locationId: string; name: string | null };
 
+export type SearchUsersQuery = { companyId: string; locationId: string; query: string };
+
+// A HighLevel user as the invite check needs it (GET /users/search). roleType is "account" or
+// "agency" and role "admin" or "user" per the docs; null when HighLevel omits them.
+export type HighLevelUser = {
+  id: string;
+  email: string;
+  name: string | null;
+  deleted: boolean;
+  roleType: string | null;
+  role: string | null;
+  locationIds: string[];
+};
+
 export type HighLevelClientConfig = {
   appId: string;
   baseUrl: string;

@@ -30,6 +30,7 @@ export type {
   AgencyState,
   AgencyToken,
   HighLevelClientConfig,
+  HighLevelUser,
   InstalledLocation,
   LocationDecision,
   LocationState,
@@ -38,5 +39,6 @@ export type {
   RefreshedToken,
   SaveAgencyConnectionInput,
   SaveLocationConnectionInput,
+  SearchUsersQuery,
   WebhookEventInput,
 } from "./types";

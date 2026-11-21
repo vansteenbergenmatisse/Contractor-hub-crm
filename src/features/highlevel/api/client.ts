@@ -4,12 +4,15 @@ import type {
   InstalledLocation,
   LocationToken,
   RefreshedToken,
+  SearchUsersQuery,
+  HighLevelUser,
 } from "../types";
 
 // Endpoint facts: docs/greenlane/hl-api-notes.md. Every request sends a Version header.
 const API_VERSION = "v3";
 const PAGE_SIZE = 100; // documented maximum
 const MAX_PAGES = 50; // guard against a paging loop
+const USER_SEARCH_LIMIT = 25; // the docs' default page size; the invite check searches by exact email
 const REQUEST_TIMEOUT_MS = 10_000; // a stalled HighLevel must not hold the route open
 
 // Carries the HTTP status (null: no response) and nothing else: never a body, token or secret.
@@ -212,5 +215,43 @@ export function createHighLevelClient(config: HighLevelClientConfig) {
     };
   }
 
-  return { exchangeAgencyCode, listInstalledLocations, mintLocationToken, refreshToken };
+  // GET /users/search (scope users.readonly). Used by the invite check. The page lists agency and
+  // sub-account tokens; not yet seen on a real response (docs/greenlane/hl-api-notes.md). Unknown
+  // fields are ignored; an entry without a string id and email is dropped.
+  async function searchUsers(accessToken: string, input: SearchUsersQuery): Promise<HighLevelUser[]> {
+    const what = "user search";
+    const query = new URLSearchParams({
+      companyId: input.companyId,
+      locationId: input.locationId,
+      query: input.query,
+      limit: String(USER_SEARCH_LIMIT),
+    });
+    const json = await requestJson(what, `/users/search?${query.toString()}`, {
+      method: "GET",
+      headers: { authorization: `Bearer ${accessToken}`, version: API_VERSION },
+    });
+    if (!Array.isArray(json.users)) {
+      throw new Error(`HighLevel ${what} returned an unexpected response.`);
+    }
+    const users: HighLevelUser[] = [];
+    for (const raw of json.users as unknown[]) {
+      if (typeof raw !== "object" || raw === null) continue;
+      const item = raw as Record<string, unknown>;
+      if (!isNonEmptyString(item.id) || !isNonEmptyString(item.email)) continue;
+      const roles =
+        typeof item.roles === "object" && item.roles !== null ? (item.roles as Record<string, unknown>) : {};
+      users.push({
+        id: item.id,
+        email: item.email,
+        name: isNonEmptyString(item.name) ? item.name : null,
+        deleted: item.deleted === true,
+        roleType: isNonEmptyString(roles.type) ? roles.type : null,
+        role: isNonEmptyString(roles.role) ? roles.role : null,
+        locationIds: Array.isArray(roles.locationIds) ? roles.locationIds.filter(isNonEmptyString) : [],
+      });
+    }
+    return users;
+  }
+
+  return { exchangeAgencyCode, listInstalledLocations, mintLocationToken, refreshToken, searchUsers };
 }

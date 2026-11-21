@@ -21,6 +21,9 @@ export type OAuthCallbackDeps = {
   now: () => Date;
   // Same secret /start signs with.
   stateSecret: string;
+  // The admin user id of the current session. When given, a state must be bound to exactly this id
+  // and no session means 403; when absent, only an unbound state is accepted (fails closed).
+  currentAdminId?: (request: Request) => Promise<string | null>;
 };
 
 const NO_STORE = { "cache-control": "no-store" };
@@ -54,6 +57,19 @@ function fail(status: number, clearCookie: boolean, error?: unknown): Response {
 
 export async function handleOAuthCallback(request: Request, deps: OAuthCallbackDeps): Promise<Response> {
   const params = new URL(request.url).searchParams;
+  let adminId: string | undefined;
+  if (deps.currentAdminId) {
+    let id: string | null = null;
+    try {
+      id = await deps.currentAdminId(request);
+    } catch {
+      id = null;
+    }
+    if (typeof id !== "string" || id.length === 0) {
+      return new Response("Forbidden", { status: 403, headers: new Headers(NO_STORE) });
+    }
+    adminId = id;
+  }
   const state = params.get("state");
   const cookieState = readCookie(request, STATE_COOKIE);
   // The state must be one this server signed and not expired, and it must be the one in this
@@ -61,7 +77,7 @@ export async function handleOAuthCallback(request: Request, deps: OAuthCallbackD
   if (
     !state ||
     !cookieState ||
-    !isValidState(state, deps.stateSecret, deps.now()) ||
+    !isValidState(state, deps.stateSecret, deps.now(), adminId) ||
     !sameState(state, cookieState)
   ) {
     return fail(400, false);

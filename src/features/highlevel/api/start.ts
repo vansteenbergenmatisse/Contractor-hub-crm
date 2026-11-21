@@ -1,11 +1,14 @@
 import { OAUTH_SCOPES } from "./scopes";
-import { newState, stateCookie } from "./oauth-state";
+import { canBind, newState, stateCookie } from "./oauth-state";
 import type { OAuthStartConfig } from "../types";
 
 export type OAuthStartDeps = {
   config: OAuthStartConfig;
   // Only a Forge Forward admin may start an install. Any false or thrown result denies.
   isAdmin: (request: Request) => Promise<boolean>;
+  // The signed-in admin's user id. When given, it must be non-empty (else 403) and is bound into the
+  // state, so /callback accepts the state only for that admin's session.
+  getAdminId?: (request: Request) => Promise<string | null>;
   // Server secret the state is signed with (TOKEN_ENCRYPTION_KEY in production).
   stateSecret: string;
   now?: () => Date;
@@ -21,7 +24,19 @@ export async function handleOAuthStart(request: Request, deps: OAuthStartDeps): 
   if (!allowed) {
     return new Response("Forbidden", { status: 403, headers: { "cache-control": "no-store" } });
   }
-  const state = newState(deps.stateSecret, (deps.now ?? (() => new Date()))());
+  let adminId: string | undefined;
+  if (deps.getAdminId) {
+    try {
+      const id = await deps.getAdminId(request);
+      if (typeof id === "string" && canBind(id)) adminId = id;
+    } catch {
+      adminId = undefined;
+    }
+    if (adminId === undefined) {
+      return new Response("Forbidden", { status: 403, headers: { "cache-control": "no-store" } });
+    }
+  }
+  const state = newState(deps.stateSecret, (deps.now ?? (() => new Date()))(), adminId);
   const url = new URL("/oauth/chooselocation", deps.config.installBaseUrl);
   url.search = new URLSearchParams({
     response_type: "code",

@@ -54,3 +54,13 @@ Read by a research agent from marketplace.gohighlevel.com (WebhookIntegrationGui
 - **UNINSTALL** (`type: "UNINSTALL"`): schema is only type, appId, companyId, locationId. Location level: appId + locationId. Agency level: appId + companyId. No `webhookId` and no `timestamp` in either schema.
 - **Retries**: any non-2xx or no response is retried up to 12 times with exponential backoff and jitter; stops on any 2xx. Timeout length not stated. The guide says to return 200 even on processing errors. A circuit breaker evaluates each URL about every 3 days (success rate below 90% with more than 10,000 webhooks flags it).
 - **webhookId**: the guide says "store webhook IDs to prevent duplicate processing" but INSTALL and UNINSTALL schemas have none, and uniqueness per event versus per delivery is not stated. **Replay protection**: not stated, no timestamp tolerance.
+
+# HighLevel users: facts read from the official docs (2026-11-21, ticket 6)
+
+Read by a research agent from marketplace.gohighlevel.com/docs/ghl/users (search-users, users, filter-users-by-email). No page shows a date. Not yet seen on a real response.
+
+- **Search Users** (the call the invite check uses): `GET /users/search`, `Version: v3`, scope `users.readonly`, auth OAuth or Private Integration. The page lists token types "Agency Token" and "Sub-Account Token"; whether a location token alone is accepted is not spelled out, so confirm on staging (read only).
+- **Query**: `companyId` (required), `locationId`, `query` (name, email or phone term), `skip` (default 0), `limit` (default 25), `type`, `role`, `ids`, `sort`, `enabled2waySync`. No exact-email query parameter: the code searches with `query` and then compares the email itself.
+- **Response 200**: `users[]` and `count`. Per user: `id`, `name`, `firstName`, `lastName`, `email`, `phone`, `permissions` (flags), `scopes`, `roles` (`type` "account" or "agency", `role` "admin" or "user", `locationIds[]`, `restrictSubAccount`), `deleted`. Error statuses: not stated on the page.
+- **Filter Users by Email** (`POST`, body `companyId`, `emails`): agency token only. Not used.
+- `get-user-by-location` does not exist as a docs page (the research agent got an empty shell).
