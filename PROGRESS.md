@@ -57,6 +57,10 @@ Single source of truth for where the project stands. Read it at the start of eve
 
 ## Log
 
+### 2026-11-21 - Round-3 answers and build plan drafted
+- User answers: Vercel env vars are set for production and staging (user's statement; dev not confirmed; Claude cannot read Vercel). Invoice template: Claude picks a simple one, stored per tenant in our database, built after the invoice page works. Failed-send alerts go to a Slack channel, in the last phase (Slack not set up yet). Stripe: the plan is a monthly subscription of 397 (currency not stated) plus usage billing; the user says the discount and products already exist in Stripe test/staging. Claude has not checked Stripe.
+- Wrote the phased plan to `docs/greenlane/plan.md` (proposal, awaiting the user's go; no code changed, `pnpm check` not run).
+
 ### 2026-11-21 - Round-2 answers recorded, Vercel unblocked
 - User disabled Vercel Authentication. Verified with curl: `staging.` and `dev.` now return 200 on `/` and `/api/health/db` (`{"ok":true,"database":"neondb"}`), same as production. Docs only; no code changed, `pnpm check` not run.
 - OpenAI research (subagent, read from developers.openai.com, no page date shown): flagship models listed are gpt-6.2-astra ($8/$40 per 1M tokens in/out), gpt-6.2-sol ($2/$10), gpt-6.1-terra ($1/$5), gpt-6-luna ($0.10/$0.50). The docs say "for new projects, start with gpt-6.2-astra" for Structured Outputs and give no per-model strict-mode matrix or pinning advice. Final model choice is made in the quote-builder ticket after a measured test.
