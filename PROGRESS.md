@@ -64,6 +64,9 @@ Single source of truth for where the project stands. Read it at the start of eve
 
 ## Log
 
+### 2026-11-21 - Fix: `pnpm admin:create` failed with "Unknown file extension .css"
+- Cause: the script imported the auth feature's `index.ts`, which also exports the sign-in components; `AuthCard.tsx` imports `auth.css`, which `tsx` cannot load. Fix: `scripts/create-admin.ts` imports `createAuth`/`createInvitedUser` and `createLogEmailSender` from their own files (scripts are outside the feature-boundary lint rule). Checked: the script now reaches the email prompt (run with empty input, nothing written). Not verified: a full run that creates a user (needs the user's password at the hidden prompt). `pnpm check` not re-run for this one-file script change; typecheck was clean.
+
 ### 2026-11-21 - Ticket 8: brand from custom values
 - Setup first, at the user's request: auth values for local dev added to `.env.local` (gitignored); `pnpm admin:create` is left to the user (hidden password prompt).
 - API facts verified from HighLevel's OpenAPI file (`apps/locations.json`): `GET /locations/{locationId}/customValues`, scope `locations/customValues.readonly` (already in `scopes.ts`), `Version: 2021-07-28` (different from the `v3` of the other calls), response `{ customValues: [{ id, name, fieldKey, value, locationId }] }`, `fieldKey` like `{{ custom_values.main_color }}`. The docs site itself could not be read (JavaScript page).

@@ -32,7 +32,10 @@ function ask(question: string, hidden: boolean): Promise<string> {
 }
 
 async function main() {
-  const { createAuth, createInvitedUser, createLogEmailSender } = await import("../src/features/auth");
+  // Deep imports on purpose: the feature's index.ts also exports React components that import .css,
+  // which tsx cannot load.
+  const { createAuth, createInvitedUser } = await import("../src/features/auth/api/auth");
+  const { createLogEmailSender } = await import("../src/features/auth/api/email-sender");
   const { prismaAuthDatabase } = await import("../src/features/auth/db/auth-database");
   const { parseEnv } = await import("../src/shared/config");
 
