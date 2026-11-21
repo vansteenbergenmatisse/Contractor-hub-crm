@@ -30,28 +30,27 @@ Single source of truth for where the project stands. Read it at the start of eve
   - Context rule from the user: refresh the context about every 180,000 tokens. Claude cannot see the exact token count or run `/clear` itself. Practice: write plan and result to this file after every ticket and at every natural break, so the user can `/clear` and the next session resumes from "In progress".
 - Stack: TypeScript 6.0, Next.js 16 (App Router), React 19, Postgres on Neon, Prisma 7.10 with `@prisma/adapter-neon`, pnpm 10, Node 22.
 - Features: `today` only (renamed from `home` in ticket 1; folders plus empty `index.ts` and `types.ts`, no logic). `src/shared/config` has `parseEnv(group, source)` for env groups database, highlevel, auth. `src/app/page.tsx` is a placeholder page.
-- Database: Neon project `small-fog-37891095` (org `org-dark-paper-44469290`), Free plan, Postgres, one Neon branch per environment: `production` (git main), `staging`, `develop`. Prisma schema has no models yet. Lazy `getPrisma()` in `src/shared/lib/prisma.ts`. `GET /api/health/db` returned 200 `{"ok":true,"database":"neondb"}` against production, staging-credentials check (`migrate status`) and develop.
+- Database: Neon project `small-fog-37891095` (org `org-dark-paper-44469290`), Free plan, Postgres, one Neon branch per environment: `production` (git main), `staging`, `develop`. Prisma schema has the tenants and highlevel models (Tenant, HlAgencyConnection, HlLocationConnection, WebhookEvent) in a migration file that is NOT applied to any Neon branch. Lazy `getPrisma()` in `src/shared/lib/prisma.ts`. `GET /api/health/db` returned 200 `{"ok":true,"database":"neondb"}` against production, staging-credentials check (`migrate status`) and develop.
 - CI: `.github/workflows/ci.yml`. `check` (lint, typecheck, test, build) on PRs and pushes; `migrate` (`prisma migrate deploy`) on push to staging and main, using GitHub Environment secret `DATABASE_URL_UNPOOLED` (set on `staging` and `production`).
-- Last verified (2026-11-21, after ticket 1): `pnpm check` exits 0. 13 tests (`tests/architecture/features.test.ts`, `tests/shared/config/env.test.ts`).
+- Last verified (2026-11-21, after ticket 2): `pnpm check` exits 0. 69 tests (structure, env parsing, encryption, migration and schema).
 - Project-scope tooling in `.claude/` (plugins in `settings.json`, Looper vendored in `.claude/skills/looper/`, see `VENDORED.md`).
 
 ## In progress
 
-- 2026-11-21 - Ticket 2 (phase 1): token encryption and database models for the HighLevel install flow.
-  - Seams: A) `src/shared/lib/encryption.ts`: `encrypt(plaintext, key)` and `decrypt(payload, key)`, AES-256-GCM, key = base64 of 32 bytes; catches round trip, wrong key, tampered data, random IV, bad key length. B) `prisma/schema.prisma` plus a migration file: `pnpm db:validate` and a test that the migration SQL creates `Tenant`, `HlAgencyConnection`, `HlLocationConnection`, `WebhookEvent` with unique `locationId` and `webhookId`.
-  - Plan: tests first; generate the migration SQL offline with `prisma migrate diff` (no database contact, nothing applied); no dependency added (Node `crypto`). Migration is NOT applied to `develop`; that needs the user's approval. Better Auth tables come in ticket 6.
-  - Touches: `src/shared/lib/`, `prisma/schema.prisma`, `prisma/migrations/`, `tests/`, `PROGRESS.md`.
-  - Round 1 of 3 (three verifiers: checker APPROVE, test audit 5 gaps, security 4 medium). Fixing now: encryption tests (tag, IV, tamper per field, known-answer vector), strict key and base64 validation, required `aad` to bind a ciphertext to its tenant and column (no data stored yet, so the format change is free), `NEXT_PUBLIC_DATABASE_URL_UNPOOLED` guard, schema-versus-SQL drift test, `tenantId` link on `WebhookEvent`. Deferred and logged for the user: real-Postgres constraint tests (no harness), webhook payload retention, whether HighLevel `webhookId` is globally unique, key rotation approach.
+- (nothing in progress)
 
 ## Next up
 
 1. Vercel: done and verified 2026-11-21 (all three domains return 200 on `/` and `/api/health/db`). Still to do by the user before the install-flow ticket: paste `GHL_*`, `BETTER_AUTH_*`, `TOKEN_ENCRYPTION_KEY`, `APP_URL` into Vercel per environment (section 15 of `docs/greenlane/build-prompt.md`), create a test sub-account, and install the Test app from the agency.
-2. Ticket 2 (plan in `docs/greenlane/plan.md`): Prisma models `Tenant`, `HlAgencyConnection`, `HlLocationConnection`, `WebhookEvent`, plus AES-256-GCM token encryption. Migration created, applied to `develop` only after the user approves.
+2. Ticket 3 (plan in `docs/greenlane/plan.md`): `highlevel` feature. OAuth install routes `/api/integrations/oauth/start` and `/callback` using the endpoint facts recorded in `docs/greenlane/hl-api-notes.md`, fixtures, tests first. Needs no dependency (use fetch). Then ticket 4 (webhooks). Applying the ticket-2 migration to `develop` needs the user's approval and comes before any ticket that writes to the database at runtime.
 3. GoHighLevel integration: follow `docs/gohighlevel-integration.md` (needs user decisions and a Marketplace app first).
 4. Run `/setup-matt-pocock-skills` (after restarting Claude Code).
 5. Add feature tests under `tests/features/<feature>/` as features get logic.
 
 ## Blockers / open questions
+
+- Decisions needed from the user (raised by the ticket-2 security review, deliberately not decided by Claude): (1) webhook payload retention: `WebhookEvent.payload` can hold personal data; how long to keep it, and whether a tenant delete or uninstall must purge it (`tenantId` is `SET NULL` today, which orphans payloads). (2) Is HighLevel's `webhookId` globally unique, or should uniqueness include `locationId`? (3) Key rotation for `TOKEN_ENCRYPTION_KEY`: Claude's proposal is no previous-key slot for now; rotation means re-minting tokens (force reconnect), since HighLevel tokens are re-issuable. (4) Approval to apply the migration to `develop`.
+- Open, no decision needed yet: `HlLocationConnection.locationId` duplicates `Tenant.locationId` without a constraint; a CI step that fails when a `NEXT_PUBLIC_<secret>` is set; real-Postgres tests of unique and cascade constraints (no Postgres harness exists); the drift test is valid for one migration only (switch to `migrate diff --from-migrations` in CI when a second one lands); `encrypt` does not force callers to use `aadFor` (review rule for call sites).
 
 - GoHighLevel: needs the login-model decision, auth library choice, and a HighLevel Marketplace app (client ID and secret, scopes, redirect URIs). Plan in `docs/gohighlevel-integration.md`. Several API details unverified.
 - The staging database password was pasted into the Claude chat, so it is in the session transcript. Rotate it in the Neon console (Roles), then refresh `.env.staging` and the GitHub `staging` secret.
@@ -61,6 +60,13 @@ Single source of truth for where the project stands. Read it at the start of eve
 - `develop` lacks the two merge commits GitHub created on `staging` and `main`. Harmless; merge `staging` into `develop` if it ever matters.
 
 ## Log
+
+### 2026-11-21 - Ticket 2: token encryption and HighLevel install tables
+- Plan was in "In progress" (seams: encryption module; schema plus migration). Done: `src/shared/lib/encryption.ts` (AES-256-GCM, format `v1:iv:tag:ciphertext`, strict 32-byte base64 key, strict base64 parts, IV and tag length checks, required `aad` that binds a ciphertext to its tenant and column, `aadFor` builder, `isValidEncryptionKey`); `parseEnv("highlevel")` now rejects a malformed `TOKEN_ENCRYPTION_KEY` naming only the variable, and `DATABASE_URL_UNPOOLED` is a guarded secret name; models `Tenant`, `HlAgencyConnection`, `HlLocationConnection`, `WebhookEvent` (nullable `tenantId`, indexes) in `prisma/schema.prisma`; migration `20261121000000_highlevel_install_tables` generated offline with `prisma migrate diff`, NOT applied to any database. No dependency added.
+- Tests (written first, red then green): encryption (known-answer vector made with raw `node:crypto`, tamper per field, truncated tag, wrong IV length, swapped parts, key edge cases, 1000-IV uniqueness, cross-tenant and cross-column aad), env parsing, a migration test, a drift test (migration SQL equals what Prisma generates from the schema) and a token-field naming test.
+- Verification: `pnpm check` exit 0, 69 tests. Three independent verifiers (checker, test audit, security review) ran in 3 rounds. Round 1: checker APPROVE, test audit 5 gaps, security 4 medium; fixed all but four deferred items. Round 2 and round 3: all APPROVE, no blocking items. Deferred items are under "Blockers / open questions".
+- Not verified: the migration against a real Postgres; nothing was applied. Not run: Playwright (no UI). Staging: nothing deployed; nothing for the user to test.
+- Research for ticket 3 (HighLevel OAuth endpoints, read from the official docs) is saved in `docs/greenlane/hl-api-notes.md`.
 
 ### 2026-11-21 - Loop contract written
 - User feedback: the loop must keep going between tickets, verified by agents, with a recap and `compact-ultra` near the context limit. Added `loop-constraints.md` (16 binding rules from the user's decisions), `docs/greenlane/loop.md` (per-ticket loop: constraints, plan, red/green, `pnpm check`, three independent verifiers, record, commit, next; handover steps) and `.compact-ultra/` to `.gitignore`.

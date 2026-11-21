@@ -70,6 +70,45 @@ describe("parseEnv", () => {
     });
   });
 
+  describe("highlevel group", () => {
+    const highlevel = {
+      GHL_APP_ID: "app-id",
+      GHL_CLIENT_ID: "client-id",
+      GHL_CLIENT_SECRET: "client-secret",
+      GHL_APP_SHARED_SECRET: "shared-secret",
+      GHL_REDIRECT_URI: "https://app.example.test/api/integrations/oauth/callback",
+      GHL_API_BASE_URL: "https://api.example.test",
+      GHL_INSTALL_BASE_URL: "https://install.example.test",
+      TOKEN_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64"),
+    };
+
+    it("accepts a valid encryption key", () => {
+      expect(parseEnv("highlevel", highlevel)).toEqual(highlevel);
+    });
+
+    it("accepts a pasted key with a trailing newline and returns it trimmed", () => {
+      const padded = { ...highlevel, TOKEN_ENCRYPTION_KEY: `${highlevel.TOKEN_ENCRYPTION_KEY}\n` };
+      expect(parseEnv("highlevel", padded)).toEqual(highlevel);
+    });
+
+    it("fails at startup on a malformed encryption key, naming the variable only", () => {
+      let message = "";
+      try {
+        parseEnv("highlevel", { ...highlevel, TOKEN_ENCRYPTION_KEY: "not-a-valid-key" });
+      } catch (error) {
+        message = (error as Error).message;
+      }
+      expect(message).toContain("TOKEN_ENCRYPTION_KEY");
+      expect(message).not.toContain("not-a-valid-key");
+    });
+  });
+
+  it("rejects a NEXT_PUBLIC_ copy of the direct database URL", () => {
+    expect(() =>
+      parseEnv("auth", { ...auth, NEXT_PUBLIC_DATABASE_URL_UNPOOLED: "leaky-value" }),
+    ).toThrow(/NEXT_PUBLIC_DATABASE_URL_UNPOOLED/);
+  });
+
   it("allows a NEXT_PUBLIC_ name that is not a secret", () => {
     expect(parseEnv("auth", { ...auth, NEXT_PUBLIC_APP_URL: "https://app.example.test" })).toEqual(
       auth,

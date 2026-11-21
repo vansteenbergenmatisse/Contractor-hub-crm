@@ -7,3 +7,74 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+// ---- feature: tenants ----
+// One client company, linked to one HighLevel sub-account (location). Every row of tenant data
+// carries a tenantId; the tenant is resolved from the server session, never from the browser.
+
+enum TenantStatus {
+  connected
+  needs_reconnect
+  uninstalled
+}
+
+model Tenant {
+  id            String                  @id @default(cuid())
+  name          String?
+  locationId    String                  @unique
+  companyId     String?
+  status        TenantStatus            @default(connected)
+  uninstalledAt DateTime?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+  connection    HlLocationConnection?
+  webhookEvents WebhookEvent[]
+}
+
+// ---- feature: highlevel ----
+// Tokens are stored encrypted (AES-256-GCM, see src/shared/lib/encryption.ts). Never plaintext.
+
+model HlAgencyConnection {
+  id              String    @id @default(cuid())
+  companyId       String    @unique
+  accessTokenEnc  String
+  refreshTokenEnc String
+  expiresAt       DateTime
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model HlLocationConnection {
+  id              String    @id @default(cuid())
+  tenantId        String    @unique
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  locationId      String    @unique
+  accessTokenEnc  String
+  // HighLevel's v3 location-token response includes a refresh token; if one is missing the
+  // token service re-mints from the agency token.
+  refreshTokenEnc String?
+  expiresAt       DateTime
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// One row per delivered webhook; webhookId makes processing idempotent.
+// tenantId is resolved server-side from the verified payload (null for agency-level events).
+// The payload can hold personal data (contacts, messages): retention is an open decision, see
+// PROGRESS.md. receivedAt is indexed so a purge job can delete old rows.
+model WebhookEvent {
+  id          String    @id @default(cuid())
+  webhookId   String    @unique
+  type        String
+  tenantId    String?
+  tenant      Tenant?   @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  locationId  String?
+  companyId   String?
+  payload     Json
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+
+  @@index([locationId])
+  @@index([tenantId])
+  @@index([receivedAt])
+}

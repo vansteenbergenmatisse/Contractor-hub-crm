@@ -15,14 +15,35 @@ const KEY_PATTERN = /^[A-Za-z0-9+/]{43}=$/; // standard base64 of exactly 32 byt
 const BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/;
 const BAD_FORMAT = "Encrypted value has an unknown format.";
 
+export function isValidEncryptionKey(key: string): boolean {
+  return KEY_PATTERN.test(key) && Buffer.from(key, "base64").length === KEY_BYTES;
+}
+
 function toKeyBuffer(key: string): Buffer {
-  if (!KEY_PATTERN.test(key) || Buffer.from(key, "base64").length !== KEY_BYTES) {
+  if (!isValidEncryptionKey(key)) {
     throw new Error(`Encryption key must be ${KEY_BYTES} bytes, standard base64 encoded.`);
   }
   return Buffer.from(key, "base64");
 }
 
+function assertAad(aad: string): void {
+  if (!aad.trim() || !aad.isWellFormed()) {
+    throw new Error("aad must be a non-empty, well-formed string.");
+  }
+}
+
+// The one place the aad string is built: "<table>:<owner id>:<column>".
+export function aadFor(table: string, ownerId: string, column: string): string {
+  for (const part of [table, ownerId, column]) {
+    if (!part.trim() || part.includes(":") || !part.isWellFormed()) {
+      throw new Error("aad parts must be non-empty, well-formed and contain no colon.");
+    }
+  }
+  return `${table}:${ownerId}:${column}`;
+}
+
 export function encrypt(plaintext: string, key: string, aad: string): string {
+  assertAad(aad);
   const iv = randomBytes(IV_BYTES);
   const cipher = createCipheriv("aes-256-gcm", toKeyBuffer(key), iv, { authTagLength: TAG_BYTES });
   cipher.setAAD(Buffer.from(aad, "utf8"));
@@ -34,6 +55,7 @@ export function encrypt(plaintext: string, key: string, aad: string): string {
 }
 
 export function decrypt(payload: string, key: string, aad: string): string {
+  assertAad(aad);
   const parts = payload.split(":");
   if (parts.length !== 4 || parts[0] !== VERSION || !parts.slice(1).every((p) => BASE64_PATTERN.test(p))) {
     throw new Error(BAD_FORMAT);

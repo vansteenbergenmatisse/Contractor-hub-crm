@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { decrypt, encrypt } from "@/shared/lib/encryption";
+import { aadFor, decrypt, encrypt } from "@/shared/lib/encryption";
 
 const key = randomBytes(32).toString("base64");
 const otherKey = randomBytes(32).toString("base64");
@@ -120,6 +120,26 @@ describe("encryption (AES-256-GCM)", () => {
     }
     expect(message).toMatch(/32 bytes/);
     if (badKey) expect(message).not.toContain(badKey);
+  });
+
+  it.each(["", "   ", "\uD800"])("rejects an unusable aad %j on encrypt and decrypt", (badAad) => {
+    expect(() => encrypt("x", key, badAad)).toThrow(/aad/);
+    expect(() => decrypt(encrypt("x", key, aad), key, badAad)).toThrow(/aad/);
+  });
+
+  it("builds the aad from table, owner and column", () => {
+    expect(aadFor("HlLocationConnection", "tenant_1", "accessTokenEnc")).toBe(aad);
+  });
+
+  it.each([
+    ["an empty part", ["HlLocationConnection", "", "accessTokenEnc"]],
+    ["a colon inside a part", ["HlLocationConnection", "tenant:1", "accessTokenEnc"]],
+    ["a malformed string", ["HlLocationConnection", "\uD800", "accessTokenEnc"]],
+    ["a whitespace-only part", ["HlLocationConnection", "  ", "accessTokenEnc"]],
+    ["an empty table", ["", "tenant_1", "accessTokenEnc"]],
+    ["a colon in the column", ["HlLocationConnection", "tenant_1", "access:Token"]],
+  ])("refuses to build an aad with %s", (_name, [table, owner, column]) => {
+    expect(() => aadFor(table, owner, column)).toThrow(/aad/);
   });
 
   it("never puts the key or the plaintext in a decrypt error", () => {

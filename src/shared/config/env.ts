@@ -1,3 +1,5 @@
+import { isValidEncryptionKey } from "@/shared/lib/encryption";
+
 // Env names per group. A group is parsed only when something needs it, so `next build`
 // works with no env set. Names come from docs/greenlane/build-prompt.md section 15.
 const GROUPS = {
@@ -18,6 +20,7 @@ const GROUPS = {
 // Names that must never carry the NEXT_PUBLIC_ prefix (it would ship the value to the browser).
 const SECRET_NAMES = [
   "DATABASE_URL",
+  "DATABASE_URL_UNPOOLED",
   "GHL_CLIENT_SECRET",
   "GHL_APP_SHARED_SECRET",
   "TOKEN_ENCRYPTION_KEY",
@@ -42,6 +45,9 @@ export function parseEnv<G extends EnvGroup>(
   const missing = names.filter((name) => !source[name]?.trim());
   if (missing.length > 0) {
     throw new Error(`Missing environment variables for "${group}": ${missing.join(", ")}`);
+  }
+  if (group === "highlevel" && !isValidEncryptionKey((source.TOKEN_ENCRYPTION_KEY as string).trim())) {
+    throw new Error("Invalid environment variable: TOKEN_ENCRYPTION_KEY must be 32 bytes, standard base64.");
   }
   return Object.fromEntries(names.map((name) => [name, (source[name] as string).trim()])) as EnvValues<G>;
 }
