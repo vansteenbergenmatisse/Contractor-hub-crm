@@ -37,7 +37,10 @@ Single source of truth for where the project stands. Read it at the start of eve
 
 ## In progress
 
-- (nothing in progress)
+- 2026-11-21 - Ticket 2 (phase 1): token encryption and database models for the HighLevel install flow.
+  - Seams: A) `src/shared/lib/encryption.ts`: `encrypt(plaintext, key)` and `decrypt(payload, key)`, AES-256-GCM, key = base64 of 32 bytes; catches round trip, wrong key, tampered data, random IV, bad key length. B) `prisma/schema.prisma` plus a migration file: `pnpm db:validate` and a test that the migration SQL creates `Tenant`, `HlAgencyConnection`, `HlLocationConnection`, `WebhookEvent` with unique `locationId` and `webhookId`.
+  - Plan: tests first; generate the migration SQL offline with `prisma migrate diff` (no database contact, nothing applied); no dependency added (Node `crypto`). Migration is NOT applied to `develop`; that needs the user's approval. Better Auth tables come in ticket 6.
+  - Touches: `src/shared/lib/`, `prisma/schema.prisma`, `prisma/migrations/`, `tests/`, `PROGRESS.md`.
 
 ## Next up
 
