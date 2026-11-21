@@ -27,6 +27,17 @@ const SECRET_NAMES = [
   "BETTER_AUTH_SECRET",
 ] as const;
 
+// HighLevel endpoints must be https: tokens and the client secret travel to them.
+const HTTPS_URL_NAMES = ["GHL_API_BASE_URL", "GHL_INSTALL_BASE_URL", "GHL_REDIRECT_URI"] as const;
+
+function isHttpsUrl(value: string): boolean {
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export type EnvGroup = keyof typeof GROUPS;
 export type EnvValues<G extends EnvGroup> = Record<(typeof GROUPS)[G][number], string>;
 export type EnvSource = Record<string, string | undefined>;
@@ -48,6 +59,13 @@ export function parseEnv<G extends EnvGroup>(
   }
   if (group === "highlevel" && !isValidEncryptionKey((source.TOKEN_ENCRYPTION_KEY as string).trim())) {
     throw new Error("Invalid environment variable: TOKEN_ENCRYPTION_KEY must be 32 bytes, standard base64.");
+  }
+  if (group === "highlevel") {
+    for (const name of HTTPS_URL_NAMES) {
+      if (!isHttpsUrl((source[name] as string).trim())) {
+        throw new Error(`Invalid environment variable: ${name} must be an https URL.`);
+      }
+    }
   }
   return Object.fromEntries(names.map((name) => [name, (source[name] as string).trim()])) as EnvValues<G>;
 }

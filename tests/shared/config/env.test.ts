@@ -114,4 +114,38 @@ describe("parseEnv", () => {
       auth,
     );
   });
+
+  describe("HighLevel URLs", () => {
+    const base = {
+      GHL_APP_ID: "a",
+      GHL_CLIENT_ID: "b",
+      GHL_CLIENT_SECRET: "c",
+      GHL_APP_SHARED_SECRET: "d",
+      GHL_REDIRECT_URI: "https://app.example.test/cb",
+      GHL_API_BASE_URL: "https://api.example.test",
+      GHL_INSTALL_BASE_URL: "https://install.example.test",
+      TOKEN_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64"),
+    };
+
+    it.each([
+      ["GHL_API_BASE_URL", "http://api.example.test"],
+      ["GHL_API_BASE_URL", "not a url"],
+      ["GHL_INSTALL_BASE_URL", "http://install.example.test"],
+      ["GHL_INSTALL_BASE_URL", "javascript:alert(1)"],
+      ["GHL_REDIRECT_URI", "http://app.example.test/cb"],
+    ])("rejects %s = %s and names only the variable", (name, value) => {
+      let message = "";
+      try {
+        parseEnv("highlevel", { ...base, [name]: value });
+      } catch (error) {
+        message = (error as Error).message;
+      }
+      expect(message).toContain(name);
+      expect(message).not.toContain(value);
+    });
+
+    it("accepts https URLs", () => {
+      expect(parseEnv("highlevel", base).GHL_API_BASE_URL).toBe("https://api.example.test");
+    });
+  });
 });
