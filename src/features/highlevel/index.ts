@@ -9,6 +9,7 @@ export type { OAuthCallbackDeps } from "./api/callback";
 export {
   createWebhookRoute,
   getTokenService,
+  listTenantCustomValues,
   oauthCallbackRoute,
   oauthStartRoute,
   searchLocationUsers,
@@ -35,6 +36,7 @@ export {
 export { beginWebhookEvent, markWebhookProcessed } from "./db/webhook-events";
 export type {
   AgencyDecision,
+  CustomValue,
   AgencyState,
   AgencyToken,
   HighLevelClientConfig,
@@ -51,3 +53,4 @@ export type {
   WebhookEventInput,
 } from "./types";
 export { searchUsersWithRetry } from "./api/search-users";
+export { listCustomValuesWithRetry } from "./api/custom-values";

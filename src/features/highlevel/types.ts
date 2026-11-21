@@ -21,6 +21,9 @@ export type RefreshedToken = {
 
 export type InstalledLocation = { locationId: string; name: string | null };
 
+// One custom value of a sub-account: `key` is the part of fieldKey after "custom_values.".
+export type CustomValue = { key: string; value: string };
+
 export type SearchUsersQuery = { companyId: string; locationId: string; query: string };
 
 // A HighLevel user as the invite check needs it (GET /users/search). roleType is "account" or

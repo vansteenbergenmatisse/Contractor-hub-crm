@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { parseEnv, type EnvValues } from "@/shared/config";
 import { createHighLevelClient } from "./client";
 import { searchUsersWithRetry } from "./search-users";
-import type { HighLevelUser, SearchUsersQuery } from "../types";
+import { listCustomValuesWithRetry } from "./custom-values";
+import type { CustomValue, HighLevelUser, SearchUsersQuery } from "../types";
 import { createTokenService } from "./token-service";
 import { handleOAuthStart } from "./start";
 import { handleOAuthCallback } from "./callback";
@@ -78,6 +79,21 @@ export async function searchLocationUsers(
   const client = buildClient(env);
   const tokens = buildTokenService(env, client);
   return searchUsersWithRetry({ getLocationToken: tokens.getLocationToken, searchUsers: client.searchUsers }, tenantId, query);
+}
+
+// The brand source: the sub-account's custom values (scope locations/customValues.readonly).
+export async function listTenantCustomValues(tenantId: string): Promise<CustomValue[]> {
+  const env = parseEnv("highlevel");
+  const client = buildClient(env);
+  const tokens = buildTokenService(env, client);
+  return listCustomValuesWithRetry(
+    {
+      getLocationToken: tokens.getLocationToken,
+      readLocationId: async (id) => (await readLocationState(id, env.TOKEN_ENCRYPTION_KEY))?.locationId ?? null,
+      listCustomValues: client.listCustomValues,
+    },
+    tenantId,
+  );
 }
 
 export async function oauthStartRoute(request: Request, guard?: AdminGuard): Promise<Response> {

@@ -1,5 +1,6 @@
 import type {
   AgencyToken,
+  CustomValue,
   HighLevelClientConfig,
   InstalledLocation,
   LocationToken,
@@ -10,6 +11,7 @@ import type {
 
 // Endpoint facts: docs/greenlane/hl-api-notes.md. Every request sends a Version header.
 const API_VERSION = "v3";
+const CUSTOM_VALUES_API_VERSION = "2021-07-28"; // the custom values endpoints document this value
 const PAGE_SIZE = 100; // documented maximum
 const MAX_PAGES = 50; // guard against a paging loop
 const USER_SEARCH_LIMIT = 25; // the docs' default page size; the invite check searches by exact email
@@ -253,5 +255,29 @@ export function createHighLevelClient(config: HighLevelClientConfig) {
     return users;
   }
 
-  return { exchangeAgencyCode, listInstalledLocations, mintLocationToken, refreshToken, searchUsers };
+  // GET /locations/{locationId}/customValues (scope locations/customValues.readonly). Taken from
+  // HighLevel's OpenAPI file, not yet seen on a real response. This call documents Version
+  // 2021-07-28 (the others use v3). fieldKey looks like "{{ custom_values.main_color }}"; the key
+  // is the part after "custom_values.". Entries without a usable key or a string value are dropped.
+  async function listCustomValues(accessToken: string, locationId: string): Promise<CustomValue[]> {
+    const what = "custom values";
+    const json = await requestJson(what, `/locations/${encodeURIComponent(locationId)}/customValues`, {
+      method: "GET",
+      headers: { authorization: `Bearer ${accessToken}`, version: CUSTOM_VALUES_API_VERSION },
+    });
+    if (!Array.isArray(json.customValues)) {
+      throw new Error(`HighLevel ${what} returned an unexpected response.`);
+    }
+    const values: CustomValue[] = [];
+    for (const raw of json.customValues as unknown[]) {
+      if (typeof raw !== "object" || raw === null) continue;
+      const item = raw as Record<string, unknown>;
+      if (typeof item.fieldKey !== "string" || typeof item.value !== "string") continue;
+      const match = /^\{\{\s*custom_values\.([A-Za-z0-9_]+)\s*\}\}$/.exec(item.fieldKey.trim());
+      if (match) values.push({ key: match[1], value: item.value });
+    }
+    return values;
+  }
+
+  return { exchangeAgencyCode, listCustomValues, listInstalledLocations, mintLocationToken, refreshToken, searchUsers };
 }

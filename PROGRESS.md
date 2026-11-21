@@ -37,8 +37,8 @@ Single source of truth for where the project stands. Read it at the start of eve
 
 ## In progress
 
-### 2026-11-21 - Phase 2 shell (layout, tokens, Today page on mock data): plan
-- To be written at the start of the first Phase 2 ticket. Ticket 6 is finished (see Log); round 2 of its verifiers decides the push of `develop`.
+### 2026-11-21 - Ticket 9 (`/admin/clients`): plan
+- Admin-only page listing every tenant with Connected, Needs reconnect or Uninstalled; buttons Invite owner and Turn off login. Details are written here before work starts.
 
 ## Next up
 
@@ -63,6 +63,13 @@ Single source of truth for where the project stands. Read it at the start of eve
 - `develop` lacks the two merge commits GitHub created on `staging` and `main`. Harmless; merge `staging` into `develop` if it ever matters.
 
 ## Log
+
+### 2026-11-21 - Ticket 8: brand from custom values
+- Setup first, at the user's request: auth values for local dev added to `.env.local` (gitignored); `pnpm admin:create` is left to the user (hidden password prompt).
+- API facts verified from HighLevel's OpenAPI file (`apps/locations.json`): `GET /locations/{locationId}/customValues`, scope `locations/customValues.readonly` (already in `scopes.ts`), `Version: 2021-07-28` (different from the `v3` of the other calls), response `{ customValues: [{ id, name, fieldKey, value, locationId }] }`, `fieldKey` like `{{ custom_values.main_color }}`. The docs site itself could not be read (JavaScript page).
+- Built test-first: `listCustomValues` on the HighLevel client; `listCustomValuesWithRetry` and `listTenantCustomValues` (one refresh-and-retry on 401); new feature `brand` with `buildBrand` (14 colors, hex only so nothing but a color can reach a style attribute, `text_color` also sets `--normal-text-color`, main vs text-on-main under 4.5:1 drops `main_color` and names the key, https-only logo, favicon and background, videos refused as background), `createBrandService` (per-tenant cache, 5 minute TTL, `invalidate`, one fetch for simultaneous callers, a HighLevel failure returns the default colors and is not cached) and the root layout, which prints the variables on `<html>` and the favicon for a signed-in tenant user. 32 new tests.
+- `pnpm check` exit 0: 531 tests passed, 9 skipped (opt-in Postgres).
+- Not verified: the custom values call on a real response (no installed tenant yet); the page in a browser with a real brand; the logo in the UI (the shell does not exist yet, `next/image` remote patterns wait for real media hosts); `invalidate` is not wired to Settings or the `LocationUpdate` webhook yet (those do not exist); the cache is per server instance, so Vercel instances can show old colors for up to 5 minutes. No independent verifier agent was run for this ticket.
 
 ### 2026-11-21 - Ticket 6 (login), part 3: invites, guards, admin routes, pages
 - Built test-first: invite service (create, preview, accept; only the SHA-256 of a 256-bit code is stored; 72 hours; tenant must be connected and have a company id; email re-checked at accept; single use through one atomic UPDATE; released when user creation fails; removed when the email cannot be sent), its HTTP layer (admin only, same Origin and JSON only, fixed error bodies, rate limits per admin and per client address in Postgres, audit lines with ids only), session and tenancy guards (fail closed; tenant only from the session, another tenant answers 404, an admin has no tenant data), the real admin guard injected into `/api/integrations/oauth/start` and `/callback` (replaces `noAdminYet`; admin id bound into the signed state, closes ticket 3 gap b), `searchLocationUsers` with one refresh-and-retry on a 401, `scripts/create-admin.ts` (`pnpm admin:create`; hidden password prompt; prints the database host; needs `CONFIRM_HOST` when the database URL comes from the shell; refuses a second admin without `ALLOW_SECOND_ADMIN=1`; audit line), and four pages from the design: `/sign-in`, `/forgot-password`, `/reset-password`, `/invite/[code]`. The design CSS is copied unchanged into `src/app/globals.css`; `src/features/auth/components/auth.css` only removes the link underline.
