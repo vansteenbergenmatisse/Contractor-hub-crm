@@ -37,6 +37,23 @@ describe("buildBrand: colors", () => {
     expect(b.rejected).toEqual(expect.arrayContaining(["main_color", "sub_color"]));
   });
 
+  it.each(["#1", "#12", "#1234", "#12345", "#1234567", "#12345678", "#ggg", "#fff;", "#fff}", "#fff;x:y", "fff", "#", "##fff", "#ffff ff"])(
+    "refuses %s (only 3 or 6 hex digits are a color)",
+    (bad) => {
+      const b = buildBrand([v("sub_color", bad)]);
+      expect(b.cssVars).toEqual({});
+      expect(b.rejected).toEqual(["sub_color"]);
+    },
+  );
+
+  it("takes the first value when a key appears twice", () => {
+    expect(buildBrand([v("sub_color", "#111111"), v("sub_color", "#222222")]).cssVars["--sub-color"]).toBe("#111111");
+  });
+
+  it("does not set --normal-text-color when text_color is refused", () => {
+    expect(buildBrand([v("text_color", "nope")]).cssVars).toEqual({});
+  });
+
   it("trims whitespace and lower-cases a valid hex", () => {
     expect(buildBrand([v("main_color", "  #ABCDEF ")]).cssVars["--main-color"]).toBe("#abcdef");
   });
@@ -54,6 +71,14 @@ describe("buildBrand: contrast rule (main_color vs text_on_main_color >= 4.5)", 
     const b = buildBrand([v("main_color", "#777777"), v("text_on_main_color", "#888888")]);
     expect(b.cssVars["--main-color"]).toBeUndefined();
     expect(b.rejected).toContain("main_color");
+  });
+
+  it("accepts a ratio just over 4.5 and refuses one just under it (4.54 vs 4.48 on white)", () => {
+    const over = buildBrand([v("main_color", "#767676"), v("text_on_main_color", "#ffffff")]);
+    expect(over.cssVars["--main-color"]).toBe("#767676");
+    const under = buildBrand([v("main_color", "#777777"), v("text_on_main_color", "#ffffff")]);
+    expect(under.cssVars["--main-color"]).toBeUndefined();
+    expect(under.rejected).toEqual(["main_color"]);
   });
 
   it("does not check the rule when one of the two is missing", () => {

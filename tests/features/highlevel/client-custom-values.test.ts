@@ -62,6 +62,18 @@ describe("HighLevel client: listCustomValues", () => {
     ]);
   });
 
+  it.each([
+    "x{{ custom_values.a }}",
+    "{{ custom_values.a }}x",
+    "{{ custom_values.a-b }}",
+    "{{ custom_values.a.b }}",
+    "{{ other.a }}",
+    "{{ custom_values. }}",
+  ])("ignores a fieldKey that is not exactly one custom value: %s", async (fieldKey) => {
+    const fetch = vi.fn().mockResolvedValue(json({ customValues: [{ fieldKey, value: "v" }] }));
+    expect(await createHighLevelClient({ ...config, fetch }).listCustomValues("tok", "l")).toEqual([]);
+  });
+
   it("throws on an unexpected body and carries the status on an error, never the body", async () => {
     const bad = vi.fn().mockResolvedValue(json({ nope: true }));
     await expect(createHighLevelClient({ ...config, fetch: bad }).listCustomValues("tok", "l")).rejects.toThrow(/unexpected/);

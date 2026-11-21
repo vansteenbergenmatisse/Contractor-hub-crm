@@ -33,6 +33,29 @@ describe("brand service", () => {
     expect(fetchValues).toHaveBeenCalledTimes(2);
   });
 
+  it("treats exactly the ttl as expired", async () => {
+    const { service, fetchValues, advance } = setup();
+    await service.getBrand("t1");
+    advance(60_000);
+    await service.getBrand("t1");
+    expect(fetchValues).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not cache the result of a fetch that was in flight when invalidate ran", async () => {
+    let release: (v: typeof values) => void = () => {};
+    const fetchValues = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise<typeof values>((resolve) => (release = resolve)))
+      .mockResolvedValue([{ key: "main_color", value: "#abcdef" }]);
+    const { service } = setup(fetchValues);
+    const first = service.getBrand("t1");
+    service.invalidate("t1");
+    release(values);
+    await first;
+    expect((await service.getBrand("t1")).cssVars["--main-color"]).toBe("#abcdef");
+    expect(fetchValues).toHaveBeenCalledTimes(2);
+  });
+
   it("invalidate drops one tenant only", async () => {
     const { service, fetchValues } = setup();
     await service.getBrand("t1");

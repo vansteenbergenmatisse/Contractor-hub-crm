@@ -118,13 +118,44 @@ describe("handleSetTenantLogin", () => {
     const info = vi.spyOn(console, "info").mockImplementation(() => {});
     const { deps } = setup(admin);
     await handleSetTenantLogin(post({ disabled: true }), "T1", deps);
-    const line = String(info.mock.calls.at(-1)?.[0]);
-    expect(JSON.parse(line)).toMatchObject({ audit: "tenant_login_changed", by: "a1", tenantId: "T1", disabled: "true", affected: "2" });
-    expect(line).not.toContain("@");
+    const lines = info.mock.calls.map((call) => String(call[0]));
+    expect(lines.map((line) => JSON.parse(line).audit)).toEqual(["tenant_login_attempt", "tenant_login_changed"]);
+    expect(JSON.parse(lines[1])).toMatchObject({ by: "a1", tenantId: "T1", disabled: "true", affected: "2", failed: "0" });
+    for (const line of lines) expect(line).not.toMatch(/@|Tmp|email|name/i);
   });
 
   it("sets no-store on every answer", async () => {
     const { deps } = setup(owner);
     expect((await handleSetTenantLogin(post({ disabled: true }), "T1", deps)).headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("still writes the result audit line, with the failed count, after a partial failure", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { deps, setUserDisabled } = setup(admin, ["u1", "u2"]);
+    setUserDisabled.mockRejectedValueOnce(new Error("x"));
+    await handleSetTenantLogin(post({ disabled: true }), "T1", deps);
+    expect(JSON.parse(String(info.mock.calls.at(-1)?.[0]))).toMatchObject({ audit: "tenant_login_changed", affected: "1", failed: "1" });
+  });
+
+  it("writes the attempt line even when the user lookup throws", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    const { deps, listUserIds } = setup(admin);
+    listUserIds.mockRejectedValue(new Error("db down"));
+    await expect(handleSetTenantLogin(post({ disabled: true }), "T1", deps)).rejects.toThrow("db down");
+    expect(JSON.parse(String(info.mock.calls[0][0])).audit).toBe("tenant_login_attempt");
+  });
+
+  it("answers 200 with affected 0 for a tenant without users", async () => {
+    const { deps, setUserDisabled } = setup(admin, []);
+    const response = await handleSetTenantLogin(post({ disabled: true }), "T1", deps);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ affected: 0 });
+    expect(setUserDisabled).not.toHaveBeenCalled();
+  });
+
+  it("accepts a tenant id of exactly 64 characters", async () => {
+    const { deps } = setup(admin);
+    expect((await handleSetTenantLogin(post({ disabled: true }), "x".repeat(64), deps)).status).toBe(200);
   });
 });

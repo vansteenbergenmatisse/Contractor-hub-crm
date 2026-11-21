@@ -32,12 +32,12 @@ Single source of truth for where the project stands. Read it at the start of eve
 - Features: `today` (empty), `highlevel` (OAuth install routes, client, token store, signed webhook route, token service; `/start` and `/callback` take an injected admin guard) and `auth` (Better Auth, invites, guards, sign-in pages; ticket 6). `src/shared/config` has `parseEnv(group, source)` for env groups database, highlevel (https URLs enforced), auth. `src/app/page.tsx` is a placeholder page.
 - Database: Neon project `small-fog-37891095` (org `org-dark-paper-44469290`), Free plan, Postgres, one Neon branch per environment: `production` (git main), `staging`, `develop`. Prisma schema has the tenants and highlevel models (Tenant, HlAgencyConnection, HlLocationConnection, WebhookEvent) in a migration file that is NOT applied to any Neon branch. Lazy `getPrisma()` in `src/shared/lib/prisma.ts`. `GET /api/health/db` returned 200 `{"ok":true,"database":"neondb"}` against production, staging-credentials check (`migrate status`) and develop.
 - CI: `.github/workflows/ci.yml`. `check` (lint, typecheck, test, build) on PRs and pushes; `migrate` (`prisma migrate deploy`) on push to staging and main, using GitHub Environment secret `DATABASE_URL_UNPOOLED` (set on `staging` and `production`).
-- Last verified (2026-11-21, after ticket 9): `pnpm check` exit 0, 555 tests passed and 9 opt-in Postgres tests skipped. Features now also include `brand` (custom values to CSS variables, ticket 8) and `admin` (`/admin/clients`, ticket 9).
+- Last verified (2026-11-21, after ticket 9): `pnpm check` exit 0, 591 tests passed and 9 opt-in Postgres tests skipped. Updated after verifier round 1. Features now also include `brand` (custom values to CSS variables, ticket 8) and `admin` (`/admin/clients`, ticket 9).
 - Project-scope tooling in `.claude/` (plugins in `settings.json`, Looper vendored in `.claude/skills/looper/`, see `VENDORED.md`).
 
 ## In progress
 
-- Nothing is mid-edit. Independent verifiers (security, tests, scope) are reviewing tickets 8 and 9 (commits `ee623d5` onward); their findings go under Log.
+- Nothing is mid-edit. Round 1 of the independent verifiers on tickets 8 and 9 is logged below; a round 2 has not been run.
 
 ## Next up
 
@@ -62,6 +62,12 @@ Single source of truth for where the project stands. Read it at the start of eve
 - `develop` lacks the two merge commits GitHub created on `staging` and `main`. Harmless; merge `staging` into `develop` if it ever matters.
 
 ## Log
+
+### 2026-11-21 - Verifier round 1 on tickets 8 and 9 (three independent read-only agents) and the fixes
+- Agents: security reviewer, test engineer (27 mutants run in a copy of the repo), spec and CLAUDE.md checker (re-ran `pnpm check`: 555 passed at that time; checked the HighLevel endpoint, version and scope against HighLevel's OpenAPI file). No blocking defect, nothing rated Critical or High.
+- Fixed: (1) audit line is now written before any change (`tenant_login_attempt`) and the result line carries a `failed` count, so a crash or partial failure leaves a record; (2) brand cache race: a fetch that started before `invalidate` can no longer put its older result back; (3) six mutants survived in the tests, now killed by new tests: contrast boundary 4.54 vs 4.48, hex length and injection cases (1, 2, 4, 5, 7, 8 digits, `#fff;`), `fieldKey` anchoring, exact-TTL expiry, rate-limit limit and window values, invalidate during a fetch; (4) the missing route and page wiring test: `tests/app/admin-clients-wiring.test.ts` (route passes the URL tenant id, real guards, limiter and app origin; page answers 404 to signed-out, owner and office and loads no data); (5) the admin's real email address was in this file (committed, not pushed): replaced and the unpushed commit amended, no other file or commit contains it.
+- Accepted or open, not fixed: no real-Postgres test for `listTenantUserIds` and `listClients` (admin exclusion, tenant scoping, session deletion were only checked by hand in the browser run above); no component test for `ClientsTable` (needs a DOM test library, a new dependency, needs approval); `tenant-login` updates users one by one without a transaction (a retry with the same value is safe: it is idempotent); audit lines go to the log only, no durable audit table (needs a schema change, needs approval); the rate limit is per admin, not per tenant; brand failures are not cached (every render retries HighLevel while it is down); `logoUrl` and `backgroundImageUrl` are built but not rendered anywhere yet (re-review escaping when they are, especially CSS `url()`); no CSP, so a favicon host is not restricted. Plan-first rule: tickets 8 and 9 and the `admin:create` fix were planned in this file only in short form; the next tickets must write a real plan before the first edit.
+- `pnpm check` exit 0: 591 tests passed, 9 skipped.
 
 ### 2026-11-21 - Ticket 9: `/admin/clients`, plus the local admin
 - Admin the user's own Gmail address (kept out of the repo; name Matisse; password given by the user in chat, weak, develop only) created on Neon `develop` via `pnpm admin:create` driven through a pseudo-terminal (the script's prompts drop piped lines, so plain piping does not work). Signed in through Chrome DevTools: landed on `/`.

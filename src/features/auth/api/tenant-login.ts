@@ -25,6 +25,8 @@ export async function handleSetTenantLogin(
     return reply(400, { error: "invalid_request" });
   }
   const disabled = body.disabled;
+  // Written before any change, so a crash or timeout midway still leaves a record of the attempt.
+  audit("tenant_login_attempt", { by: admin, tenantId, disabled: String(disabled) });
   const userIds = await deps.listUserIds(tenantId);
   if (userIds === null) return reply(404, { error: "not_found" });
 
@@ -39,6 +41,12 @@ export async function handleSetTenantLogin(
       console.error("Tenant login change failed:", error instanceof Error ? error.name : "unknown error");
     }
   }
-  audit("tenant_login_changed", { by: admin, tenantId, disabled: String(disabled), affected: String(affected) });
+  audit("tenant_login_changed", {
+    by: admin,
+    tenantId,
+    disabled: String(disabled),
+    affected: String(affected),
+    failed: String(failed),
+  });
   return failed > 0 ? reply(500, { error: "partial", affected }) : reply(200, { affected });
 }

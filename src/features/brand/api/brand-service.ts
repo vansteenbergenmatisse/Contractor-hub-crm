@@ -11,11 +11,17 @@ export function createBrandService(deps: {
 }) {
   const cache = new Map<string, { brand: Brand; expiresAt: number }>();
   const inflight = new Map<string, Promise<Brand>>();
+  // Bumped by invalidate: a fetch that started before an invalidate must not put its (older) result
+  // back into the cache.
+  const generation = new Map<string, number>();
 
   async function load(tenantId: string): Promise<Brand> {
+    const started = generation.get(tenantId) ?? 0;
     try {
       const brand = buildBrand(await deps.fetchValues(tenantId));
-      cache.set(tenantId, { brand, expiresAt: deps.now() + deps.ttlMs });
+      if ((generation.get(tenantId) ?? 0) === started) {
+        cache.set(tenantId, { brand, expiresAt: deps.now() + deps.ttlMs });
+      }
       return brand;
     } catch {
       return EMPTY_BRAND;
@@ -33,6 +39,8 @@ export function createBrandService(deps: {
   }
 
   function invalidate(tenantId: string) {
+    generation.set(tenantId, (generation.get(tenantId) ?? 0) + 1);
+    inflight.delete(tenantId);
     cache.delete(tenantId);
   }
 
