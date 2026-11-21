@@ -13,6 +13,12 @@ export type LocationToken = {
   locationId: string;
 };
 
+export type RefreshedToken = {
+  accessToken: string;
+  refreshToken: string | null;
+  expiresInSeconds: number;
+};
+
 export type InstalledLocation = { locationId: string; name: string | null };
 
 export type HighLevelClientConfig = {
@@ -53,3 +59,31 @@ export type WebhookEventInput = {
   companyId: string | null;
   payload: unknown;
 };
+
+export type LocationState = {
+  tenantId: string;
+  locationId: string;
+  companyId: string | null;
+  status: "connected" | "needs_reconnect" | "uninstalled";
+  accessToken: string;
+  refreshToken: string | null;
+  expiresAt: Date;
+};
+
+export type AgencyState = {
+  companyId: string;
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: Date;
+};
+
+// What the token service decides while it holds the row lock. `refreshToken` left out means "keep the
+// stored one"; null clears it (a re-mint that came with no refresh token).
+export type LocationDecision =
+  | { kind: "keep" }
+  | { kind: "save"; accessToken: string; refreshToken?: string | null; expiresAt: Date }
+  | { kind: "reconnect" };
+
+export type AgencyDecision =
+  | { kind: "keep" }
+  | { kind: "save"; accessToken: string; refreshToken: string; expiresAt: Date };

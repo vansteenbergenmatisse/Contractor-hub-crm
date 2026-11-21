@@ -1,5 +1,10 @@
 import { verifyWebhookSignature } from "./webhook-signature";
-import type { LocationToken, SaveLocationConnectionInput, WebhookEventInput } from "../types";
+import type {
+  InstalledLocation,
+  LocationToken,
+  SaveLocationConnectionInput,
+  WebhookEventInput,
+} from "../types";
 
 export type WebhookDeps = {
   appId: string;
@@ -16,6 +21,14 @@ export type WebhookDeps = {
   };
   client: {
     mintLocationToken(agencyAccessToken: string, companyId: string, locationId: string): Promise<LocationToken>;
+  };
+  // Optional: when present, a signed INSTALL or UNINSTALL is confirmed against HighLevel's own list of
+  // installed locations before it acts (a replayed or very late event must not change anything). The
+  // route wiring always provides it; it is optional only so the handler can be tested without it.
+  reconcile?: {
+    listInstalledLocations(agencyAccessToken: string, companyId: string): Promise<InstalledLocation[]>;
+    // The company of a stored tenant, for an UNINSTALL whose payload has none.
+    readLocationCompanyId(locationId: string): Promise<string | null>;
   };
 };
 
@@ -68,8 +81,16 @@ export async function handleWebhook(request: Request, deps: WebhookDeps): Promis
 
     if (type === "INSTALL" && locationId && companyId) {
       const agencyToken = await deps.store.readAgencyAccessToken(companyId, now);
-      // Refreshing an expired agency token is the token service (ticket 5). Until then: retry later.
+      // The token service refreshes an expired agency token; with none at all, retry later.
       if (!agencyToken) throw new Error("No usable agency token.");
+      // A late retry of an old INSTALL, after the location was uninstalled, must not create a tenant.
+      // Not listed yet could also be HighLevel catching up: answer 500 so it retries.
+      if (deps.reconcile) {
+        const listed = await deps.reconcile.listInstalledLocations(agencyToken, companyId);
+        if (!listed.some((item) => item.locationId === locationId)) {
+          throw new Error("Location is not listed as installed.");
+        }
+      }
       const token = await deps.client.mintLocationToken(agencyToken, companyId, locationId);
       await deps.store.saveLocationConnection({
         locationId,
@@ -80,8 +101,11 @@ export async function handleWebhook(request: Request, deps: WebhookDeps): Promis
         expiresAt: new Date(now.getTime() + token.expiresInSeconds * 1000),
       });
     } else if (type === "UNINSTALL") {
-      if (locationId) await deps.store.markLocationUninstalled(locationId, now);
-      else if (companyId) await deps.store.deleteAgencyConnection(companyId);
+      if (locationId) {
+        if (!(await isStillInstalled(deps, locationId, companyId, now))) {
+          await deps.store.markLocationUninstalled(locationId, now);
+        }
+      } else if (companyId) await deps.store.deleteAgencyConnection(companyId);
     }
     await deps.store.markProcessed(webhookId, now);
     return reply(200);
@@ -90,4 +114,25 @@ export async function handleWebhook(request: Request, deps: WebhookDeps): Promis
     console.error("HighLevel webhook failed:", error instanceof Error ? error.name : "unknown error");
     return reply(500);
   }
+}
+
+// A replayed signed UNINSTALL (captured, sent again after a re-install) must not switch a live tenant
+// off. So the location is looked up in HighLevel's own list first. If it cannot be checked (company
+// unknown, no agency token because the agency uninstalled) the signed event is trusted. If HighLevel
+// fails while checking, this throws and the caller answers 500, so HighLevel retries.
+async function isStillInstalled(
+  deps: WebhookDeps,
+  locationId: string,
+  payloadCompanyId: string | null,
+  now: Date,
+): Promise<boolean> {
+  const { reconcile } = deps;
+  if (!reconcile) return false;
+  // The stored tenant's agency wins; the payload's is only a fallback for an unknown tenant.
+  const companyId = (await reconcile.readLocationCompanyId(locationId)) ?? payloadCompanyId;
+  if (!companyId) return false;
+  const agencyToken = await deps.store.readAgencyAccessToken(companyId, now);
+  if (!agencyToken) return false;
+  const listed = await reconcile.listInstalledLocations(agencyToken, companyId);
+  return listed.some((item) => item.locationId === locationId);
 }

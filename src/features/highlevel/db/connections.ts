@@ -103,3 +103,9 @@ export async function markLocationUninstalled(locationId: string, now: Date): Pr
 export async function deleteAgencyConnection(companyId: string): Promise<void> {
   await getPrisma().hlAgencyConnection.deleteMany({ where: { companyId } });
 }
+
+// The agency a stored tenant belongs to, or null when the tenant is unknown or has none.
+export async function readLocationCompanyId(locationId: string): Promise<string | null> {
+  const tenant = await getPrisma().tenant.findUnique({ where: { locationId }, select: { companyId: true } });
+  return tenant?.companyId ?? null;
+}
