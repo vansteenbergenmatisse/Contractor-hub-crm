@@ -57,6 +57,12 @@ Single source of truth for where the project stands. Read it at the start of eve
 
 ## Log
 
+### 2026-11-21 - JCR facts received
+- From the user (pasted, not verified by Claude): JCR Landscaping is a sub-account of the ForgeForward agency. Its only existing user is the client owner, role "Account - user" (not admin). The user's own email was added to JCR as Admin, so the invite check can match it. The JCR location ID, owner user ID and owner email were given in chat; they are not written here because they belong to a real client. Ask the user again or read them from the HighLevel install.
+- Rules from the user's pasted notes: staging never emails the JCR owner; test invites go to the user's own email first. Staging only reads from JCR: no texts, no contact changes. This matches the read-only safeguard below; the user has not yet confirmed it in their own words.
+- Test login plan (Claude's reading): the user's own email, as an HighLevel user of JCR, is the first owner on staging.
+- Docs only; `pnpm check` not run.
+
 ### 2026-11-21 - Commit cadence and JCR as the test account
 - User decisions: commit after every major step so the log explains each step (changed in `CLAUDE.md` "Git workflow"; commits stay local on `develop`, push only after asking). Dev env vars are not set; only staging and production, so work targets staging. JCR Landscaping (a real client) is the test sub-account, not the user's own email; the only setup is giving the Forge Forward agency authority over it. Not verified by Claude: whether JCR sits under the Forge Forward agency, and which JCR user is the first owner.
 - Safeguard proposed by Claude (not decided): until the user says otherwise, the code touching JCR only reads. No sends, no custom-value writes, no workflow publish.
