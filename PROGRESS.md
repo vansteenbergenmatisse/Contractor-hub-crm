@@ -25,7 +25,8 @@ Single source of truth for where the project stands. Read it at the start of eve
   - Commits: local, per ticket, always on `develop`.
   - Everything is tested on staging; Claude tells the user what to test after each ticket.
   - Verified per ticket means: tests written for every change, `pnpm check`, Playwright, and an independent verifier agent that checks the work stays within the rules. HighLevel calls in tests use recorded fixtures and mocks.
-  - Not yet answered: Vercel protection on staging and dev (still blocks them as of this date), backend-first build order, dependency approval per ticket, push approval.
+  - Round 2 (2026-11-21): phase 1 is the full HighLevel install flow (not hand-seeded tenants), then login, then the UI on mock data, then wiring. All three roles (owner, office, admin) exist from the start. First develop owner: the email the user gave in chat (kept out of the repo). Stripe: user has a test-mode account. Failed send: owner sees an error with a retry button and Forge Forward is alerted (channel undecided); escalation later. Invoice terms default 7 days. Mock data lives in one marked mock module and is replaced field by field.
+  - Context rule from the user: refresh the context about every 180,000 tokens. Claude cannot see the exact token count or run `/clear` itself. Practice: write plan and result to this file after every ticket and at every natural break, so the user can `/clear` and the next session resumes from "In progress".
 - Stack: TypeScript 6.0, Next.js 16 (App Router), React 19, Postgres on Neon, Prisma 7.10 with `@prisma/adapter-neon`, pnpm 10, Node 22.
 - Features: `home` only (folders plus empty `index.ts` and `types.ts`, no logic). `src/app/page.tsx` is a placeholder page.
 - Database: Neon project `small-fog-37891095` (org `org-dark-paper-44469290`), Free plan, Postgres, one Neon branch per environment: `production` (git main), `staging`, `develop`. Prisma schema has no models yet. Lazy `getPrisma()` in `src/shared/lib/prisma.ts`. `GET /api/health/db` returned 200 `{"ok":true,"database":"neondb"}` against production, staging-credentials check (`migrate status`) and develop.
@@ -39,7 +40,7 @@ Single source of truth for where the project stands. Read it at the start of eve
 
 ## Next up
 
-1. Vercel: domains are known (see "Current state"). Claude still has to verify each domain serves its branch and that `GET /api/health/db` returns 200 on all three; Neon env vars per environment in Vercel are set by the user (values from the `.env.*` files; not through chat).
+1. Vercel: done and verified 2026-11-21 (all three domains return 200 on `/` and `/api/health/db`). Still to do by the user before the install-flow ticket: paste `GHL_*`, `BETTER_AUTH_*`, `TOKEN_ENCRYPTION_KEY`, `APP_URL` into Vercel per environment (section 15 of `docs/greenlane/build-prompt.md`), create a test sub-account, and install the Test app from the agency.
 2. User provides the CRM scope (what it manages first) and the design. Then: define the first `home` ticket and create feature folders and Prisma models.
 3. GoHighLevel integration: follow `docs/gohighlevel-integration.md` (needs user decisions and a Marketplace app first).
 4. Run `/setup-matt-pocock-skills` (after restarting Claude Code).
@@ -55,6 +56,11 @@ Single source of truth for where the project stands. Read it at the start of eve
 - `develop` lacks the two merge commits GitHub created on `staging` and `main`. Harmless; merge `staging` into `develop` if it ever matters.
 
 ## Log
+
+### 2026-11-21 - Round-2 answers recorded, Vercel unblocked
+- User disabled Vercel Authentication. Verified with curl: `staging.` and `dev.` now return 200 on `/` and `/api/health/db` (`{"ok":true,"database":"neondb"}`), same as production. Docs only; no code changed, `pnpm check` not run.
+- OpenAI research (subagent, read from developers.openai.com, no page date shown): flagship models listed are gpt-6.2-astra ($8/$40 per 1M tokens in/out), gpt-6.2-sol ($2/$10), gpt-6.1-terra ($1/$5), gpt-6-luna ($0.10/$0.50). The docs say "for new projects, start with gpt-6.2-astra" for Structured Outputs and give no per-model strict-mode matrix or pinning advice. Final model choice is made in the quote-builder ticket after a measured test.
+- Open: invoice template scope (see chat), Forge Forward alert channel, which Stripe usage mechanism.
 
 ### 2026-11-20 - Build spec copied into the repo, round-1 decisions recorded
 - Copied the prompt to `docs/greenlane/build-prompt.md` and the design to `docs/greenlane/greenlane-dashboard.html` (812 KB, fake sample data only). Scanned both for secret-looking values: none found (the prompt holds HighLevel app IDs and URLs, which are not secrets). Docs only; `pnpm check` not run. From here on read `docs/greenlane/build-prompt.md`, not `~/Downloads`.
