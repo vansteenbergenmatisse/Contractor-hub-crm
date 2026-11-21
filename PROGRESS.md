@@ -28,10 +28,10 @@ Single source of truth for where the project stands. Read it at the start of eve
   - Round 2 (2026-11-21): phase 1 is the full HighLevel install flow (not hand-seeded tenants), then login, then the UI on mock data, then wiring. All three roles (owner, office, admin) exist from the start. First develop owner: the email the user gave in chat (kept out of the repo). Stripe: user has a test-mode account. Failed send: owner sees an error with a retry button and Forge Forward is alerted (channel undecided); escalation later. Invoice terms default 7 days. Mock data lives in one marked mock module and is replaced field by field.
   - Context rule from the user: refresh the context about every 180,000 tokens. Claude cannot see the exact token count or run `/clear` itself. Practice: write plan and result to this file after every ticket and at every natural break, so the user can `/clear` and the next session resumes from "In progress".
 - Stack: TypeScript 6.0, Next.js 16 (App Router), React 19, Postgres on Neon, Prisma 7.10 with `@prisma/adapter-neon`, pnpm 10, Node 22.
-- Features: `home` only (folders plus empty `index.ts` and `types.ts`, no logic). `src/app/page.tsx` is a placeholder page.
+- Features: `today` only (renamed from `home` in ticket 1; folders plus empty `index.ts` and `types.ts`, no logic). `src/shared/config` has `parseEnv(group, source)` for env groups database, highlevel, auth. `src/app/page.tsx` is a placeholder page.
 - Database: Neon project `small-fog-37891095` (org `org-dark-paper-44469290`), Free plan, Postgres, one Neon branch per environment: `production` (git main), `staging`, `develop`. Prisma schema has no models yet. Lazy `getPrisma()` in `src/shared/lib/prisma.ts`. `GET /api/health/db` returned 200 `{"ok":true,"database":"neondb"}` against production, staging-credentials check (`migrate status`) and develop.
 - CI: `.github/workflows/ci.yml`. `check` (lint, typecheck, test, build) on PRs and pushes; `migrate` (`prisma migrate deploy`) on push to staging and main, using GitHub Environment secret `DATABASE_URL_UNPOOLED` (set on `staging` and `production`).
-- Last verified (2026-11-20): `pnpm check` passes with and without env vars. 3 tests (`tests/architecture/features.test.ts`).
+- Last verified (2026-11-21, after ticket 1): `pnpm check` exits 0. 13 tests (`tests/architecture/features.test.ts`, `tests/shared/config/env.test.ts`).
 - Project-scope tooling in `.claude/` (plugins in `settings.json`, Looper vendored in `.claude/skills/looper/`, see `VENDORED.md`).
 
 ## In progress
@@ -41,7 +41,7 @@ Single source of truth for where the project stands. Read it at the start of eve
 ## Next up
 
 1. Vercel: done and verified 2026-11-21 (all three domains return 200 on `/` and `/api/health/db`). Still to do by the user before the install-flow ticket: paste `GHL_*`, `BETTER_AUTH_*`, `TOKEN_ENCRYPTION_KEY`, `APP_URL` into Vercel per environment (section 15 of `docs/greenlane/build-prompt.md`), create a test sub-account, and install the Test app from the agency.
-2. User provides the CRM scope (what it manages first) and the design. Then: define the first `home` ticket and create feature folders and Prisma models.
+2. Ticket 2 (plan in `docs/greenlane/plan.md`): Prisma models `Tenant`, `HlAgencyConnection`, `HlLocationConnection`, `WebhookEvent`, plus AES-256-GCM token encryption. Migration created, applied to `develop` only after the user approves.
 3. GoHighLevel integration: follow `docs/gohighlevel-integration.md` (needs user decisions and a Marketplace app first).
 4. Run `/setup-matt-pocock-skills` (after restarting Claude Code).
 5. Add feature tests under `tests/features/<feature>/` as features get logic.
@@ -56,6 +56,14 @@ Single source of truth for where the project stands. Read it at the start of eve
 - `develop` lacks the two merge commits GitHub created on `staging` and `main`. Harmless; merge `staging` into `develop` if it ever matters.
 
 ## Log
+
+### 2026-11-21 - Ticket 1: `home` renamed to `today`, env parsing added
+- User said "go", accepted the JCR read-only safeguard, and confirmed seams A (feature structure test) and B (`parseEnv`), and that seams following the plan are listed per ticket and treated as confirmed unless the user objects.
+- Done: `git mv src/features/home src/features/today` (comments, `CLAUDE.md` "Existing features" and the commit example, the comment in `prisma/schema.prisma`). Added `src/shared/config/{env,index}.ts`: `parseEnv(group, source = process.env)`, lazy; missing or blank names throw an error listing names only; any secret with a `NEXT_PUBLIC_` prefix throws (checked for all five secret names whatever the group); returned values are trimmed. No dependency added. `.env.example` lists the new names with empty values.
+- Tests (written first, red then green): `tests/shared/config/env.test.ts`, 10 tests. Seam A needed no new test: the rename has no real red step, the existing structure test passes before and after.
+- Checks: `pnpm check` exit 0 (lint, typecheck, 13 tests, build). The build ran with the local `.env.local` present, so "builds with no env" is by design (nothing reads env at import time) and not separately run.
+- Independent verifier agent: APPROVE. Acted on: stale `home` references, a cross-group `NEXT_PUBLIC_` test, trimming values. Left as is: untested empty-string `NEXT_PUBLIC_X` (rejected by design), `SECRET_NAMES` is a hand-kept list (client ID and URLs are not treated as secrets), missing-names test depends on the order of names in the group.
+- Not run: Playwright (no UI yet). Staging: nothing deployed from this change; nothing for the user to test yet.
 
 ### 2026-11-21 - JCR facts received
 - From the user (pasted, not verified by Claude): JCR Landscaping is a sub-account of the ForgeForward agency. Its only existing user is the client owner, role "Account - user" (not admin). The user's own email was added to JCR as Admin, so the invite check can match it. The JCR location ID, owner user ID and owner email were given in chat; they are not written here because they belong to a real client. Ask the user again or read them from the HighLevel install.

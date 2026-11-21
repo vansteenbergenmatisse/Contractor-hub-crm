@@ -78,7 +78,7 @@ PROGRESS.md             Running log: resume guide, current state, plans, blocker
 docs/                   Long-form notes and plans (e.g. docs/gohighlevel-integration.md)
 ```
 
-Existing features: `home`.
+Existing features: `today`.
 
 ## Adding code
 
@@ -101,7 +101,7 @@ Existing features: `home`.
 
 - Branches: `develop` (daily work), `staging` (pre-release), `main` (production). Work on `develop` or a short branch from it named `feat/<feature>-<short>` or `fix/<feature>-<short>`.
 - Promotion is `develop` → `staging` → `main` via pull request. Never commit straight to `staging` or `main`.
-- Commit after every major step (a schema change, a finished module with its tests, a finished page, a docs or config change), not only at the end of a ticket, so the log explains each step. Each commit passes `pnpm check` and updates `PROGRESS.md` in the same commit. The body says what changed and why. Message format: `<type>(<feature>): <summary>` with type one of `feat`, `fix`, `refactor`, `test`, `docs`, `chore`. Example: `feat(home): add pipeline summary card`.
+- Commit after every major step (a schema change, a finished module with its tests, a finished page, a docs or config change), not only at the end of a ticket, so the log explains each step. Each commit passes `pnpm check` and updates `PROGRESS.md` in the same commit. The body says what changed and why. Message format: `<type>(<feature>): <summary>` with type one of `feat`, `fix`, `refactor`, `test`, `docs`, `chore`. Example: `feat(today): add pipeline summary card`.
 - Stage files by name. Do not commit `.env*`, secrets or `.claude/skills/looper/.venv/`.
 - Do not push, force-push, merge or delete branches without explicit approval.
 - Hosting is Vercel. GitHub Actions CI (`.github/workflows/ci.yml`) must pass before merging.

@@ -1,4 +1,4 @@
-// One schema file. Add a commented section per feature, e.g. "// ---- feature: home ----".
+// One schema file. Add a commented section per feature, e.g. "// ---- feature: today ----".
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
