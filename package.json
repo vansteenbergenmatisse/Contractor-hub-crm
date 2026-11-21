@@ -11,6 +11,8 @@
     "test": "vitest run",
     "db:validate": "prisma validate",
     "db:generate": "prisma generate",
+    "admin:create": "tsx scripts/create-admin.ts",
+    "test:pg": "RUN_PG_TESTS=1 vitest run tests/features/auth/invites-db.pg.test.ts",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
     "postinstall": "prisma generate"
   },

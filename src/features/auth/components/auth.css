@@ -1,0 +1,4 @@
+/* Sign-in screens only. The design styles <button>; some screens use <a> for navigation, so remove
+   the default underline there. globals.css (the design) stays unchanged. */
+a.fd-btn { text-decoration: none; }
+a.fd-lforgot:not(:hover):not(:focus-visible) { text-decoration: none; }

@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { parseEnv, type EnvValues } from "@/shared/config";
 import { createHighLevelClient } from "./client";
+import { searchUsersWithRetry } from "./search-users";
+import type { HighLevelUser, SearchUsersQuery } from "../types";
 import { createTokenService } from "./token-service";
 import { handleOAuthStart } from "./start";
 import { handleOAuthCallback } from "./callback";
@@ -57,11 +59,28 @@ export function getTokenService() {
   return buildTokenService(parseEnv("highlevel"));
 }
 
-// Admin sign-in arrives with Better Auth (ticket 6). Until then nobody is an admin, so /start
-// is closed. Replace this guard in ticket 6; do not widen it before.
-const noAdminYet = async () => false;
+// The admin check is injected by the route file in src/app (it needs the auth feature, which
+// imports this one). Without a guard nobody is an admin: /start and /callback fail closed.
+export type AdminGuard = {
+  isAdmin: (request: Request) => Promise<boolean>;
+  adminId: (request: Request) => Promise<string | null>;
+};
 
-export async function oauthStartRoute(request: Request): Promise<Response> {
+const noAdmin = async () => false;
+
+// Users of one sub-account for the invite check. The tenant id comes from the server (the invite
+// service loads it from the database), never from request input. One refresh-and-retry on a 401.
+export async function searchLocationUsers(
+  tenantId: string,
+  query: SearchUsersQuery,
+): Promise<HighLevelUser[]> {
+  const env = parseEnv("highlevel");
+  const client = buildClient(env);
+  const tokens = buildTokenService(env, client);
+  return searchUsersWithRetry({ getLocationToken: tokens.getLocationToken, searchUsers: client.searchUsers }, tenantId, query);
+}
+
+export async function oauthStartRoute(request: Request, guard?: AdminGuard): Promise<Response> {
   let env;
   try {
     env = parseEnv("highlevel");
@@ -74,12 +93,13 @@ export async function oauthStartRoute(request: Request): Promise<Response> {
       clientId: env.GHL_CLIENT_ID,
       redirectUri: env.GHL_REDIRECT_URI,
     },
-    isAdmin: noAdminYet,
+    isAdmin: guard?.isAdmin ?? noAdmin,
+    getAdminId: guard?.adminId,
     stateSecret: env.TOKEN_ENCRYPTION_KEY,
   });
 }
 
-export async function oauthCallbackRoute(request: Request): Promise<Response> {
+export async function oauthCallbackRoute(request: Request, guard?: AdminGuard): Promise<Response> {
   let env;
   try {
     env = parseEnv("highlevel");
@@ -94,6 +114,7 @@ export async function oauthCallbackRoute(request: Request): Promise<Response> {
     },
     now: () => new Date(),
     stateSecret: env.TOKEN_ENCRYPTION_KEY,
+    currentAdminId: guard?.adminId,
   });
 }
 

@@ -1,13 +1,11 @@
 import { betterAuth } from "better-auth";
 import type { EmailSender } from "./email-sender";
 import { normalizeEmail } from "./invite-check";
-import { isRole, type Role } from "../types";
+import { isRole, MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, type Role } from "../types";
 
 // Better Auth, email and password only, invite only: the public sign-up endpoint is closed and a
 // user is created by `createInvitedUser` after an invite is accepted. The role, the tenant and the
 // off switch are server-only fields: `input: false` stops a user from setting them.
-const MIN_PASSWORD_LENGTH = 10;
-const MAX_PASSWORD_LENGTH = 128;
 const LONG_SESSION_SECONDS = 60 * 60 * 24 * 30;
 const RESET_TOKEN_SECONDS = 60 * 60;
 

@@ -1,0 +1,6 @@
+import { ForgotPasswordForm } from "@/features/auth";
+
+export const metadata = { title: "Reset your password" };
+export default function Page() {
+  return <ForgotPasswordForm />;
+}

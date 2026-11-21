@@ -6,7 +6,15 @@ export { handleOAuthStart } from "./api/start";
 export type { OAuthStartDeps } from "./api/start";
 export { handleOAuthCallback } from "./api/callback";
 export type { OAuthCallbackDeps } from "./api/callback";
-export { createWebhookRoute, getTokenService, oauthCallbackRoute, oauthStartRoute, webhookRoute } from "./api/routes";
+export {
+  createWebhookRoute,
+  getTokenService,
+  oauthCallbackRoute,
+  oauthStartRoute,
+  searchLocationUsers,
+  webhookRoute,
+} from "./api/routes";
+export type { AdminGuard } from "./api/routes";
 export { handleWebhook } from "./api/webhook";
 export type { WebhookDeps } from "./api/webhook";
 export { HIGHLEVEL_WEBHOOK_PUBLIC_KEY, verifyWebhookSignature } from "./api/webhook-signature";
@@ -42,3 +50,4 @@ export type {
   SearchUsersQuery,
   WebhookEventInput,
 } from "./types";
+export { searchUsersWithRetry } from "./api/search-users";

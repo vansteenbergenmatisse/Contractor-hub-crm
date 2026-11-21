@@ -1,5 +1,20 @@
 import { parseEnv } from "@/shared/config";
-import { createAuth, type Auth } from "./auth";
+import { searchLocationUsers } from "@/features/highlevel";
+import { createAuth, createInvitedUser, type Auth } from "./auth";
+import { createGuards } from "./guards";
+import { readSession } from "./session";
+import { checkInviteEligibility } from "./invite-check";
+import { createInviteService, newInviteCode } from "./invites";
+import { hitRateLimit } from "../db/rate-limit";
+import {
+  claimInvite,
+  deleteInvite,
+  emailTaken,
+  findInviteByCodeHash,
+  findTenantForInvite,
+  insertInvite,
+  releaseInvite,
+} from "../db/invites";
 import { createLogEmailSender } from "./email-sender";
 import { prismaAuthDatabase } from "../db/auth-database";
 
@@ -30,4 +45,52 @@ export async function authRoute(request: Request): Promise<Response> {
     return new Response("Server is not configured.", { status: 500, headers: { "cache-control": "no-store" } });
   }
   return auth.handler(request);
+}
+
+// Guards for the route files in src/app. The session is read lazily and any failure (missing env,
+// database down) means "not signed in".
+const sessionFromRequest = (request: Request) => readSession(getAuth(), request.headers);
+
+export function getGuards() {
+  return createGuards({ getSession: sessionFromRequest });
+}
+
+// Invites, built per call (cheap). The log-only sender means no real email goes out for now.
+export function getInviteService() {
+  const env = parseEnv("auth");
+  const auth = getAuth();
+  return createInviteService({
+    now: () => new Date(),
+    newCode: newInviteCode,
+    appUrl: env.APP_URL,
+    emailSender: createLogEmailSender(),
+    checkEligibility: (tenant, email) =>
+      checkInviteEligibility(
+        { email, companyId: tenant.companyId as string, locationId: tenant.locationId }, // createInvite refuses a tenant with no companyId
+        { searchUsers: (query) => searchLocationUsers(tenant.id, query) },
+      ),
+    createUser: (input) => createInvitedUser(auth, input),
+    store: { findTenant: findTenantForInvite, emailTaken, insertInvite, findInviteByCodeHash, claimInvite, releaseInvite, deleteInvite },
+  });
+}
+
+// For server pages: the signed-in user from the request headers (null when signed out).
+export async function currentUserFromHeaders(headers: Headers) {
+  return getGuards().currentUser(new Request("https://internal.invalid/", { headers }));
+}
+
+// Per-key limits for the invite endpoints: 20 a minute per client address (preview and accept),
+// 30 an hour per admin (create). Counted in Postgres so every serverless instance agrees.
+const LIMITS: Record<string, { limit: number; windowMs: number }> = {
+  "invite-create": { limit: 30, windowMs: 3600_000 },
+  "invite-preview": { limit: 20, windowMs: 60_000 },
+  "invite-accept": { limit: 20, windowMs: 60_000 },
+};
+
+export function getInviteLimiter() {
+  return (key: string) => {
+    const rule = LIMITS[key.split(":")[0]];
+    if (!rule) return Promise.resolve(false);
+    return hitRateLimit(key, rule.limit, rule.windowMs, new Date());
+  };
 }
