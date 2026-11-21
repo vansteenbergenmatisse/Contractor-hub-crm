@@ -13,7 +13,7 @@ export type RateLimiter = (key: string) => Promise<boolean>;
 type Guards = ReturnType<typeof createGuards>;
 
 const HEADERS = { "cache-control": "no-store", "content-type": "application/json" };
-const reply = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: HEADERS });
+export const reply = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: HEADERS });
 
 const STATUS: Partial<Record<InviteError["code"], number>> = {
   invalid_role: 400,
@@ -42,7 +42,7 @@ export function clientKey(request: Request): string {
   return clientKeyFromHeaders(request.headers);
 }
 
-async function allowed(limiter: RateLimiter, key: string): Promise<boolean> {
+export async function allowed(limiter: RateLimiter, key: string): Promise<boolean> {
   try {
     return await limiter(key);
   } catch {
@@ -51,15 +51,15 @@ async function allowed(limiter: RateLimiter, key: string): Promise<boolean> {
 }
 
 // One structured line per event. Never the code, the link, the password or the email.
-function audit(event: string, fields: Record<string, string> = {}): void {
+export function audit(event: string, fields: Record<string, string> = {}): void {
   console.info(JSON.stringify({ audit: event, ...fields }));
 }
 
-function sameOrigin(request: Request, appOrigin: string): boolean {
+export function sameOrigin(request: Request, appOrigin: string): boolean {
   return request.headers.get("origin") === appOrigin;
 }
 
-async function jsonBody(request: Request): Promise<Record<string, unknown> | "unsupported" | null> {
+export async function jsonBody(request: Request): Promise<Record<string, unknown> | "unsupported" | null> {
   if (!(request.headers.get("content-type") ?? "").toLowerCase().startsWith("application/json")) return "unsupported";
   try {
     const parsed: unknown = await request.json();

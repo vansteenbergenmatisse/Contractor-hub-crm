@@ -78,7 +78,7 @@ PROGRESS.md             Running log: resume guide, current state, plans, blocker
 docs/                   Long-form notes and plans (e.g. docs/gohighlevel-integration.md)
 ```
 
-Existing features: `today`, `highlevel`, `auth`, `brand`.
+Existing features: `today`, `highlevel`, `auth`, `brand`, `admin`.
 
 ## Adding code
 

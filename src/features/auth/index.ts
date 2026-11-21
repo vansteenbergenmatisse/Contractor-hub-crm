@@ -10,6 +10,8 @@ export type { Auth, CreateAuthOptions, InvitedUserInput } from "./api/auth";
 export { authRoute, getAuth, currentUserFromHeaders, getGuards, getInviteLimiter, getInviteService } from "./api/instance";
 export { createInviteService, hashInviteCode, InviteError, newInviteCode } from "./api/invites";
 export type { InviteErrorCode, InviteRecord, InviteRole, InviteServiceDeps, InviteTenant } from "./api/invites";
+export { handleSetTenantLogin } from "./api/tenant-login";
+export { listTenantUserIds } from "./db/tenant-users";
 export { createGuards, TenancyError } from "./api/guards";
 export { readSession } from "./api/session";
 export type { GuardDeps, SessionUser } from "./api/guards";

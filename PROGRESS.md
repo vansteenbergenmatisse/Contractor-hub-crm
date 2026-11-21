@@ -32,13 +32,12 @@ Single source of truth for where the project stands. Read it at the start of eve
 - Features: `today` (empty), `highlevel` (OAuth install routes, client, token store, signed webhook route, token service; `/start` and `/callback` take an injected admin guard) and `auth` (Better Auth, invites, guards, sign-in pages; ticket 6). `src/shared/config` has `parseEnv(group, source)` for env groups database, highlevel (https URLs enforced), auth. `src/app/page.tsx` is a placeholder page.
 - Database: Neon project `small-fog-37891095` (org `org-dark-paper-44469290`), Free plan, Postgres, one Neon branch per environment: `production` (git main), `staging`, `develop`. Prisma schema has the tenants and highlevel models (Tenant, HlAgencyConnection, HlLocationConnection, WebhookEvent) in a migration file that is NOT applied to any Neon branch. Lazy `getPrisma()` in `src/shared/lib/prisma.ts`. `GET /api/health/db` returned 200 `{"ok":true,"database":"neondb"}` against production, staging-credentials check (`migrate status`) and develop.
 - CI: `.github/workflows/ci.yml`. `check` (lint, typecheck, test, build) on PRs and pushes; `migrate` (`prisma migrate deploy`) on push to staging and main, using GitHub Environment secret `DATABASE_URL_UNPOOLED` (set on `staging` and `production`).
-- Last verified (2026-11-21, after ticket 6): `pnpm check` exit 0, 499 tests passed and 9 opt-in Postgres tests skipped; see the ticket 6 log entry.
+- Last verified (2026-11-21, after ticket 9): `pnpm check` exit 0, 555 tests passed and 9 opt-in Postgres tests skipped. Features now also include `brand` (custom values to CSS variables, ticket 8) and `admin` (`/admin/clients`, ticket 9).
 - Project-scope tooling in `.claude/` (plugins in `settings.json`, Looper vendored in `.claude/skills/looper/`, see `VENDORED.md`).
 
 ## In progress
 
-### 2026-11-21 - Ticket 9 (`/admin/clients`): plan
-- Admin-only page listing every tenant with Connected, Needs reconnect or Uninstalled; buttons Invite owner and Turn off login. Details are written here before work starts.
+- Nothing is mid-edit. Independent verifiers (security, tests, scope) are reviewing tickets 8 and 9 (commits `ee623d5` onward); their findings go under Log.
 
 ## Next up
 
@@ -63,6 +62,14 @@ Single source of truth for where the project stands. Read it at the start of eve
 - `develop` lacks the two merge commits GitHub created on `staging` and `main`. Harmless; merge `staging` into `develop` if it ever matters.
 
 ## Log
+
+### 2026-11-21 - Ticket 9: `/admin/clients`, plus the local admin
+- Admin the user's own Gmail address (kept out of the repo; name Matisse; password given by the user in chat, weak, develop only) created on Neon `develop` via `pnpm admin:create` driven through a pseudo-terminal (the script's prompts drop piped lines, so plain piping does not work). Signed in through Chrome DevTools: landed on `/`.
+- Decision by Claude (reversible, user said "do whatever you need"): "Turn off login" disables every non-admin user of that tenant and ends their sessions (existing `setUserDisabled`); "Turn on login" reverses it.
+- Built test-first: `handleSetTenantLogin` (admin only, same Origin, JSON only, rate limited per admin, partial failure answers 500 with a fixed body after trying every user, audit line with ids and counts only), `listTenantUserIds` (never returns admins), route `POST /api/admin/clients/[tenantId]/login`; new feature `admin` (`listClients`, `ClientsTable` with Invite owner and Turn off/on login, plain styling); page `/admin/clients` answers 404 to anyone but an admin. Helpers in `invite-routes.ts` got `export` (not re-exported from the feature index).
+- Browser end to end on `develop` with a throwaway tenant and owner (deleted afterwards; 0 tenants, 1 user left): page lists the tenant; Turn off login -> owner sign-in 401; Turn on login -> owner sign-in 200; two audit lines. This found a bug the unit tests missed: the rate limiter denies a key prefix that has no rule, so `tenant-login` always answered 429. Fixed (rule added in `instance.ts`) and `tests/features/auth/limiter-config.test.ts` now checks that every prefix a route uses has a rule.
+- `pnpm check` exit 0 (see Current state for the count). Signed-out `/admin/clients` answers 404 and the API answers 403.
+- Not verified: Invite owner (needs a tenant that is connected, with a real HighLevel user list); the page on a phone width; Vercel.
 
 ### 2026-11-21 - Fix: `pnpm admin:create` failed with "Unknown file extension .css"
 - Cause: the script imported the auth feature's `index.ts`, which also exports the sign-in components; `AuthCard.tsx` imports `auth.css`, which `tsx` cannot load. Fix: `scripts/create-admin.ts` imports `createAuth`/`createInvitedUser` and `createLogEmailSender` from their own files (scripts are outside the feature-boundary lint rule). Checked: the script now reaches the email prompt (run with empty input, nothing written). Not verified: a full run that creates a user (needs the user's password at the hidden prompt). `pnpm check` not re-run for this one-file script change; typecheck was clean.

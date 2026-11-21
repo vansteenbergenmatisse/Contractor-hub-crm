@@ -85,6 +85,7 @@ const LIMITS: Record<string, { limit: number; windowMs: number }> = {
   "invite-create": { limit: 30, windowMs: 3600_000 },
   "invite-preview": { limit: 20, windowMs: 60_000 },
   "invite-accept": { limit: 20, windowMs: 60_000 },
+  "tenant-login": { limit: 60, windowMs: 3600_000 },
 };
 
 export function getInviteLimiter() {
