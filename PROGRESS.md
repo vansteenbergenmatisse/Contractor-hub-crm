@@ -41,6 +41,7 @@ Single source of truth for where the project stands. Read it at the start of eve
   - Seams: A) `src/shared/lib/encryption.ts`: `encrypt(plaintext, key)` and `decrypt(payload, key)`, AES-256-GCM, key = base64 of 32 bytes; catches round trip, wrong key, tampered data, random IV, bad key length. B) `prisma/schema.prisma` plus a migration file: `pnpm db:validate` and a test that the migration SQL creates `Tenant`, `HlAgencyConnection`, `HlLocationConnection`, `WebhookEvent` with unique `locationId` and `webhookId`.
   - Plan: tests first; generate the migration SQL offline with `prisma migrate diff` (no database contact, nothing applied); no dependency added (Node `crypto`). Migration is NOT applied to `develop`; that needs the user's approval. Better Auth tables come in ticket 6.
   - Touches: `src/shared/lib/`, `prisma/schema.prisma`, `prisma/migrations/`, `tests/`, `PROGRESS.md`.
+  - Round 1 of 3 (three verifiers: checker APPROVE, test audit 5 gaps, security 4 medium). Fixing now: encryption tests (tag, IV, tamper per field, known-answer vector), strict key and base64 validation, required `aad` to bind a ciphertext to its tenant and column (no data stored yet, so the format change is free), `NEXT_PUBLIC_DATABASE_URL_UNPOOLED` guard, schema-versus-SQL drift test, `tenantId` link on `WebhookEvent`. Deferred and logged for the user: real-Postgres constraint tests (no harness), webhook payload retention, whether HighLevel `webhookId` is globally unique, key rotation approach.
 
 ## Next up
 
