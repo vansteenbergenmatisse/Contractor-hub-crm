@@ -12,3 +12,6 @@ next-env.d.ts
 !.env.example
 src/generated/
 .neon
+
+# Local context handovers (compact-ultra)
+.compact-ultra/

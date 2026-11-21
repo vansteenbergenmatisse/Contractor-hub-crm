@@ -9,7 +9,8 @@ Single source of truth for where the project stands. Read it at the start of eve
 3. Run `pnpm install` then `pnpm check`. Local env: `.env.local` (Neon `develop`), plus `.env.staging` and `.env.production` for the other branches. All gitignored; never print or commit them.
 4. Accounts: GitHub CLI has two logins; the one that matters is `vansteenbergenmatisse` (admin on the repo). `git` pushes with its own stored credential. Neon CLI: `pnpm dlx neon@latest` (or `npx`), logged in with access to org `org-dark-paper-44469290`.
 5. Open items are under "Next up" and "Blockers" below. Long-form plans live in `docs/`.
-6. After a restart, Claude Code loads the project plugins (`mattpocock-skills`, `loop-engineering`, Looper) and the Neon plugin; `/setup-matt-pocock-skills` has not been run yet (interactive, pick local files).
+6. The GreenLane build runs as a loop that does not wait for the user between tickets: read `loop-constraints.md`, `docs/greenlane/loop.md` (the per-ticket loop and the context handover), `docs/greenlane/plan.md` (tickets) and `docs/greenlane/build-prompt.md` (spec). Newest handover, if any: `.compact-ultra/handover-*.md` (local, gitignored).
+7. After a restart, Claude Code loads the project plugins (`mattpocock-skills`, `loop-engineering`, Looper) and the Neon plugin; `/setup-matt-pocock-skills` has not been run yet (interactive, pick local files).
 
 ## Current state
 
@@ -56,6 +57,10 @@ Single source of truth for where the project stands. Read it at the start of eve
 - `develop` lacks the two merge commits GitHub created on `staging` and `main`. Harmless; merge `staging` into `develop` if it ever matters.
 
 ## Log
+
+### 2026-11-21 - Loop contract written
+- User feedback: the loop must keep going between tickets, verified by agents, with a recap and `compact-ultra` near the context limit. Added `loop-constraints.md` (16 binding rules from the user's decisions), `docs/greenlane/loop.md` (per-ticket loop: constraints, plan, red/green, `pnpm check`, three independent verifiers, record, commit, next; handover steps) and `.compact-ultra/` to `.gitignore`.
+- Limits stated to the user: Claude cannot read an exact token count and cannot run `/clear` or `/compact`; the handover ends with the user running `/clear`. The loop also stops at rule 15 (dependency, applied migration, secret value, push, undecided question). Docs only; `pnpm check` not run.
 
 ### 2026-11-21 - Ticket 1: `home` renamed to `today`, env parsing added
 - User said "go", accepted the JCR read-only safeguard, and confirmed seams A (feature structure test) and B (`parseEnv`), and that seams following the plan are listed per ticket and treated as confirmed unless the user objects.
