@@ -57,6 +57,11 @@ Single source of truth for where the project stands. Read it at the start of eve
 
 ## Log
 
+### 2026-11-21 - Commit cadence and JCR as the test account
+- User decisions: commit after every major step so the log explains each step (changed in `CLAUDE.md` "Git workflow"; commits stay local on `develop`, push only after asking). Dev env vars are not set; only staging and production, so work targets staging. JCR Landscaping (a real client) is the test sub-account, not the user's own email; the only setup is giving the Forge Forward agency authority over it. Not verified by Claude: whether JCR sits under the Forge Forward agency, and which JCR user is the first owner.
+- Safeguard proposed by Claude (not decided): until the user says otherwise, the code touching JCR only reads. No sends, no custom-value writes, no workflow publish.
+- Docs only; `pnpm check` not run.
+
 ### 2026-11-21 - Round-3 answers and build plan drafted
 - User answers: Vercel env vars are set for production and staging (user's statement; dev not confirmed; Claude cannot read Vercel). Invoice template: Claude picks a simple one, stored per tenant in our database, built after the invoice page works. Failed-send alerts go to a Slack channel, in the last phase (Slack not set up yet). Stripe: the plan is a monthly subscription of 397 (currency not stated) plus usage billing; the user says the discount and products already exist in Stripe test/staging. Claude has not checked Stripe.
 - Wrote the phased plan to `docs/greenlane/plan.md` (proposal, awaiting the user's go; no code changed, `pnpm check` not run).
