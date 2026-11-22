@@ -1,8 +1,5 @@
-// Placeholder until the today page is built (Phase 2). The page feature replaces this body.
+import { TodayPage } from "@/features/today";
+
 export default function Page() {
-  return (
-    <section className="fd-phd fd-in" style={{ "--i": 0 } as React.CSSProperties}>
-      <h1 className="fd-pt">Today</h1>
-    </section>
-  );
+  return <TodayPage />;
 }
