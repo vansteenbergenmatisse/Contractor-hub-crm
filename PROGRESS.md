@@ -38,15 +38,16 @@ Single source of truth for where the project stands. Read it at the start of eve
 
 ## In progress
 
-- Nothing is mid-edit. Ticket 7 and its verifier round 1 are logged below; a round 2 has not been run.
+- Nothing is mid-edit. Tickets 7, 8 and 9 and their verifier round 1 are logged below; a round 2 has not been run. Next session: wait for the user's `/embed` test result and decisions (see Next up), or start Phase 2.
 
 ## Next up
 
-1. Vercel: done and verified 2026-11-21 (all three domains return 200 on `/` and `/api/health/db`). Still to do by the user before the install-flow ticket: paste `GHL_*`, `BETTER_AUTH_*`, `TOKEN_ENCRYPTION_KEY`, `APP_URL` into Vercel per environment (section 15 of `docs/greenlane/build-prompt.md`), create a test sub-account, and install the Test app from the agency.
-2. Ticket 6 is done and pushed (see Log). Ticket 7 notes: the decrypt format is NOT in the HighLevel docs (`docs/greenlane/hl-api-notes.md`, last section). Needs a decision with a sensible default: use `crypto-js` as documented (new dependency, the user must approve per loop-constraints rule 8) or `node:crypto` proven against one real payload captured on staging. Default proposal: write the decrypt behind a small function with a test using a payload built by `crypto-js` semantics, ask the user to approve `crypto-js`, and ask them to capture one real payload on staging. Next: ticket 7 `/embed` (needs `GHL_APP_SHARED_SECRET`, user-context decrypt, iframe cookie and CSP), ticket 8 brand from custom values, ticket 9 `/admin/clients`, then Phase 2 (UI on mock data). The first admin login still has to be created per environment with `pnpm admin:create`.
-3. GoHighLevel integration: follow `docs/gohighlevel-integration.md` (needs user decisions and a Marketplace app first).
-4. Run `/setup-matt-pocock-skills` (after restarting Claude Code).
-5. Add feature tests under `tests/features/<feature>/` as features get logic.
+1. Test `/embed` for real (user, on `develop`): in HighLevel add a custom page on the JCR sub-account pointing at `https://dev.crm.forgeforward.io/embed`, open it as a user who has an invite and an account, and report what it shows. This also captures the first real payload (format proof for `decryptUserContext`). An invite needs the app installed on JCR and the tenant `Connected` in `/admin/clients`.
+2. Decisions needed from the user (details in the ticket 7 verifier log entry): accept the payload replay risk (then write the `GHL_APP_SHARED_SECRET` rotation runbook); require `companyId` or not; the agency's white-label domain; end sessions of uninstalled tenants; staging needs its own `GHL_APP_ID` (the Test app id; it currently resolves to the live app id).
+3. Optional "Sign in with Google" button on `/sign-in` (only for invited users whose Google email matches an account): needs a Google Cloud OAuth client id and secret, put in Vercel and `.env.local` by the user.
+4. Phase 2 (UI on mock data, per `docs/greenlane/plan.md`): layout shell (side menu, phone top bar, tab bar), then the Today page. The brand variables are already printed on `<html>` for signed-in tenant users. Write a real plan under "In progress" before the first edit.
+5. Still open from before: `pnpm test:pg` is a manual gate; payload retention decision for `WebhookEvent`; the staging DB password rotation; wire `invalidate` of the brand cache to Settings and the `LocationUpdate` webhook when they exist; real Postgres test for `findEmbedCandidate`, `listTenantUserIds`, `listClients`; component tests need a DOM test library (a new dependency, needs approval).
+6. Promote `develop` to `staging` and `main` by pull request when the user says so (staging and production still run older code: `/sign-in` answers 404 there).
 
 ## Blockers / open questions
 
@@ -63,6 +64,10 @@ Single source of truth for where the project stands. Read it at the start of eve
 - `develop` lacks the two merge commits GitHub created on `staging` and `main`. Harmless; merge `staging` into `develop` if it ever matters.
 
 ## Log
+
+### 2026-11-21 - Push, deploy and first sign-in on dev
+- User approved: push `develop` and redeploy. Pushed 9 commits (`96a74c2..844b0f8`); CI green (`check`); Vercel Preview build for `develop` Ready; `https://dev.crm.forgeforward.io/embed` answers 200 and `/api/auth/sign-in/email` answers a normal 401 for bad credentials (before the redeploy it answered "Server is not configured"). The user signed in on `dev.crm.forgeforward.io` and saw the placeholder home page ("Contractor Hub CRM"), which is the expected result until the Today page exists. Vercel env for develop now has `BETTER_AUTH_SECRET`, `TOKEN_ENCRYPTION_KEY`, `GHL_CLIENT_SECRET`, `GHL_APP_SHARED_SECRET` (added by the user; names read, values not readable; staging `GHL_APP_ID` still the live app id).
+- Staging and production were not touched: they still run older code until the pull requests.
 
 ### 2026-11-21 - Verifier round 1 on ticket 7 (`/embed`) and the fixes
 - Agents (read-only, independent): a security reviewer and a test engineer (80 mutants run in a copy of the repo; a real dev server on a spare port for the header check). No Critical or High finding, no authentication bypass, no way to become another user or tenant without the shared secret, no CSRF hole found.
