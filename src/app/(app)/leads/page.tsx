@@ -1,8 +1,11 @@
-// Placeholder until the leads page is built (Phase 2). The page feature replaces this body.
+import { Suspense } from "react";
+import { LeadsPage } from "@/features/leads";
+
+// Thin page: the Leads feature does the work. Suspense is for useSearchParams (?add=1).
 export default function Page() {
   return (
-    <section className="fd-phd fd-in" style={{ "--i": 0 } as React.CSSProperties}>
-      <h1 className="fd-pt">Leads</h1>
-    </section>
+    <Suspense fallback={null}>
+      <LeadsPage />
+    </Suspense>
   );
 }
