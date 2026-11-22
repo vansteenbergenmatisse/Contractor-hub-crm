@@ -1,7 +1,9 @@
 import { parseEnv } from "@/shared/config";
-import { decryptUserContext, findEmbedCandidate, resolveEmbedUser } from "@/features/embed";
-import { searchLocationUsers } from "@/features/highlevel";
-import { createAuth, createInvitedUser, type Auth } from "./auth";
+import { decryptUserContext, findEmbedCandidate, findEmbedTenant, resolveEmbedAccess } from "@/features/embed";
+import { listTenantUsers, searchLocationUsers } from "@/features/highlevel";
+import { createAuth, createInvitedUser, setUserDisabled, type Auth } from "./auth";
+import { provisionGhlUser, type ProvisionDeps } from "./provision";
+import { randomBytes } from "node:crypto";
 import { createGuards } from "./guards";
 import { readSession } from "./session";
 import { checkInviteEligibility } from "./invite-check";
@@ -17,18 +19,85 @@ import {
   insertInvite,
   releaseInvite,
 } from "../db/invites";
-import { createLogEmailSender } from "./email-sender";
+import { createEmailSenderFromEnv, createLogEmailSender } from "./email-sender";
+import { findLink, findLinkByUserId, findUserByEmail, findUserById, insertLink, relinkUser, setLinkDeleted } from "../db/ghl-links";
 import { prismaAuthDatabase } from "../db/auth-database";
 
-// The /embed sign-in: decrypt HighLevel's user data with the shared secret and find the CRM user.
-// The HighLevel env is read here, per call, so local dev and the build need no HighLevel values.
-export async function resolveEmbedUserId(payload: string): Promise<string | null> {
+// The /embed sign-in: decrypt HighLevel's user data with the shared secret, find the CRM user, and,
+// when the sub-account is installed but the person has no account yet, check with HighLevel that
+// they belong to it and create the account on the spot (same mapping as the onboarding sync). The
+// HighLevel env is read here, per call, so local dev and the build need no HighLevel values.
+// Log lines carry step names, reason codes and key names only: no email, no ids, no payload.
+export async function resolveEmbedLogin(payload: string, options: { provision?: boolean } = {}): Promise<string | null | { reason: string }> {
+  let context;
   try {
-    const context = decryptUserContext(payload, parseEnv("highlevel").GHL_APP_SHARED_SECRET);
-    return await resolveEmbedUser(context, { findCandidate: findEmbedCandidate });
+    context = decryptUserContext(payload, parseEnv("highlevel").GHL_APP_SHARED_SECRET);
   } catch {
-    return null;
+    console.info(JSON.stringify({ audit: "embed_resolve", step: "decrypt", ok: false }));
+    return options.provision === false ? null : { reason: "decrypt_failed" };
   }
+  const present = Object.entries(context).filter(([, v]) => v !== undefined).map(([k]) => k).sort().join(",");
+  console.info(JSON.stringify({ audit: "embed_resolve", step: "decrypt", ok: true, fields: present }));
+  const access = await resolveEmbedAccess(context, { findCandidate: findEmbedCandidate, findTenant: findEmbedTenant });
+  if (access.kind === "user") return access.userId;
+  if (access.kind === "denied") {
+    console.info(JSON.stringify({ audit: "embed_resolve", step: "access", reason: access.reason }));
+    return options.provision === false ? null : { reason: access.reason };
+  }
+  if (options.provision === false) return null;
+  try {
+    // HighLevel is the source of truth for who belongs to the sub-account (and the payload's `type`
+    // is not reliable, see hl-api-notes.md).
+    const users = await listTenantUsers(access.tenantId);
+    const match = users.find((user) => !user.deleted && user.email.trim().toLowerCase() === context.email);
+    if (!match) return { reason: "not_in_location" };
+    const result = await provisionGhlUser(getProvisionDeps(), {
+      tenantId: access.tenantId,
+      ghlUserId: match.id,
+      email: context.email,
+      name: match.name,
+      ghlRole: match.role,
+      ghlRoleType: match.roleType,
+    });
+    console.info(JSON.stringify({ audit: "embed_resolve", step: "provision", outcome: result.outcome }));
+    return result.userId ?? { reason: result.outcome };
+  } catch (error) {
+    console.error("Embed provisioning failed:", error instanceof Error ? error.name : "unknown error");
+    return { reason: "provision_failed" };
+  }
+}
+
+// Kept for callers that want a plain id or null (no account is created).
+export async function resolveEmbedUserId(payload: string): Promise<string | null> {
+  const result = await resolveEmbedLogin(payload, { provision: false });
+  return typeof result === "string" ? result : null;
+}
+
+// What provisioning needs, bound to the real auth instance and the database.
+export function getProvisionDeps(): ProvisionDeps {
+  const auth = getAuth();
+  const env = parseEnv("auth");
+  return {
+    createUser: (input) => createInvitedUser(auth, input),
+    async updateUser(userId, patch) {
+      const context = await auth.$context;
+      await context.internalAdapter.updateUser(userId, patch as never);
+    },
+    setDisabled: (userId, disabled) => setUserDisabled(auth, userId, disabled),
+    async sendSetPassword(email) {
+      // Mail to the people of a real client is OFF until ONBOARDING_SEND_SET_PASSWORD is "true"
+      // (loop-constraints.md rules 12 and 13: no mail to the JCR owner). Accounts are created either way.
+      if (process.env.ONBOARDING_SEND_SET_PASSWORD?.trim() !== "true") {
+        console.info("Onboarding: set-password mail skipped (ONBOARDING_SEND_SET_PASSWORD is not true)");
+        return;
+      }
+      // The redirect must be on the Better Auth base URL, which is its only trusted origin.
+      await auth.api.requestPasswordReset({ body: { email, redirectTo: `${env.BETTER_AUTH_URL}/reset-password` } });
+    },
+    randomPassword: () => randomBytes(32).toString("base64url"),
+    store: { findLink, findLinkByUserId, relinkUser, insertLink, setLinkDeleted, findUserByEmail, findUserById },
+    now: () => new Date(),
+  };
 }
 
 // Built on first use, never at import: `next build` needs no env and no database.
@@ -42,8 +111,9 @@ export function getAuth(): Auth {
       database: prismaAuthDatabase(),
       secret: env.BETTER_AUTH_SECRET,
       baseURL: env.BETTER_AUTH_URL,
-      emailSender: createLogEmailSender(),
-      embedLogin: { resolveUserId: resolveEmbedUserId },
+      emailSender: createEmailSenderFromEnv(),
+      embedLogin: { resolveUserId: (payload) => resolveEmbedLogin(payload) },
+      isTenantBlocked: isTenantUninstalled,
     });
   }
   return instance;

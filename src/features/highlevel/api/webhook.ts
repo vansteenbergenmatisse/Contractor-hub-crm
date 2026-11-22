@@ -7,6 +7,17 @@ import type {
   WebhookEventInput,
 } from "../types";
 
+// Optional side effects after the core handling (tenant row and token). They never decide the
+// answer to HighLevel for user and location events: a failure is logged and the event is still
+// acknowledged, because the periodic sync repairs whatever a hook missed.
+export type WebhookHooks = {
+  // A location was installed and its token saved: create its CRM users. Errors are logged, not fatal.
+  onLocationConnected?(input: { tenantId: string; companyId: string; locationId: string; accessToken: string }): Promise<void>;
+  onLocationUpdate?(input: { locationId: string; name: string | null }): Promise<void>;
+  // UserCreate, UserUpdate or UserDelete in a sub-account: only a trigger; the hook re-reads the users.
+  onUserEvent?(input: { type: string; locationId: string }): Promise<void>;
+};
+
 export type WebhookDeps = {
   appId: string;
   publicKeyPem?: string; // tests only; production uses HighLevel's published key
@@ -23,6 +34,7 @@ export type WebhookDeps = {
   client: {
     mintLocationToken(agencyAccessToken: string, companyId: string, locationId: string): Promise<LocationToken>;
   };
+  hooks?: WebhookHooks;
   // Optional: when present, a signed INSTALL or UNINSTALL is confirmed against HighLevel's own list of
   // installed locations before it acts (a replayed or very late event must not change anything). The
   // route wiring always provides it; it is optional only so the handler can be tested without it.
@@ -66,7 +78,11 @@ export async function handleWebhook(request: Request, deps: WebhookDeps): Promis
   if (!type) return reply(400);
 
   // An event for another app (for example the live app on the test URL) is acknowledged and dropped.
-  if (payload.appId !== deps.appId) return reply(200);
+  // The location and user events carry no appId in HighLevel's schemas (read 2026-11-22), so for
+  // those four types a MISSING appId is accepted (a present, different one is still dropped). Their
+  // handling only re-reads data from HighLevel's API, so a stray event cannot change anything.
+  const APP_LESS = type === "LocationUpdate" || type === "UserCreate" || type === "UserUpdate" || type === "UserDelete";
+  if (payload.appId !== deps.appId && !(APP_LESS && payload.appId === undefined)) return reply(200);
 
   const locationId = text(payload.locationId);
   const companyId = text(payload.companyId);
@@ -93,7 +109,7 @@ export async function handleWebhook(request: Request, deps: WebhookDeps): Promis
         }
       }
       const token = await deps.client.mintLocationToken(agencyToken, companyId, locationId);
-      await deps.store.saveLocationConnection({
+      const saved = await deps.store.saveLocationConnection({
         locationId,
         companyId,
         name: null,
@@ -101,6 +117,9 @@ export async function handleWebhook(request: Request, deps: WebhookDeps): Promis
         refreshToken: token.refreshToken,
         expiresAt: new Date(now.getTime() + token.expiresInSeconds * 1000),
       });
+      await runHook("onLocationConnected", () =>
+        deps.hooks?.onLocationConnected?.({ tenantId: saved.tenantId, companyId, locationId, accessToken: token.accessToken }),
+      );
     } else if (type === "UNINSTALL") {
       if (locationId) {
         if (!(await isStillInstalled(deps, locationId, companyId, now))) {
@@ -108,12 +127,27 @@ export async function handleWebhook(request: Request, deps: WebhookDeps): Promis
         }
       } else if (companyId) await deps.store.deleteAgencyConnection(companyId);
     }
+    else if (type === "LocationUpdate") {
+      // The location's id is `id` in this event's schema.
+      const id = text(payload.id) ?? locationId;
+      if (id) await runHook("onLocationUpdate", () => deps.hooks?.onLocationUpdate?.({ locationId: id, name: text(payload.name) }));
+    } else if (type === "UserCreate" || type === "UserUpdate" || type === "UserDelete") {
+      if (locationId) await runHook("onUserEvent", () => deps.hooks?.onUserEvent?.({ type, locationId }));
+    }
     await deps.store.markProcessed(webhookId, now);
     return reply(200);
   } catch (error) {
     // Name, redacted message, status, redacted body and stack go to the server log only.
     logError("HighLevel webhook failed", error);
     return reply(500);
+  }
+}
+
+async function runHook(name: string, call: () => Promise<void> | undefined): Promise<void> {
+  try {
+    await call();
+  } catch (error) {
+    logError(`HighLevel webhook hook ${name} failed`, error);
   }
 }
 

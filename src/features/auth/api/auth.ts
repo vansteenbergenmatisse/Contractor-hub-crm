@@ -10,7 +10,8 @@ import { isRole, MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, type Role } from "../
 // One year, renewed once a day while the session is used (updateAge): a person logs in once at
 // onboarding and stays signed in. Browsers cap a cookie's lifetime at about 400 days.
 const LONG_SESSION_SECONDS = 60 * 60 * 24 * 365;
-const RESET_TOKEN_SECONDS = 60 * 60;
+// 24 hours: the same link is the "set your password" mail a new user gets.
+const RESET_TOKEN_SECONDS = 60 * 60 * 24;
 
 export type CreateAuthOptions = {
   // A Better Auth database adapter: the Prisma adapter in production, the memory adapter in tests.
@@ -20,6 +21,8 @@ export type CreateAuthOptions = {
   emailSender: EmailSender;
   // Sign-in from inside HighLevel (the /embed page). Left out, the endpoint does not exist.
   embedLogin?: EmbedLoginOptions;
+  // True when the user's tenant was uninstalled in HighLevel: no new session is created for them.
+  isTenantBlocked?: (tenantId: string) => Promise<boolean>;
 };
 
 export function createAuth(options: CreateAuthOptions) {
@@ -43,8 +46,8 @@ export function createAuth(options: CreateAuthOptions) {
         await options.emailSender.send({
           kind: "password_reset",
           to: user.email,
-          subject: "Reset your password",
-          text: `Open this link within an hour to choose a new password:\n${url}\n\nIf you did not ask for this, ignore this message.`,
+          subject: "Set your password",
+          text: `Open this link within 24 hours to choose your password:\n${url}\n\nIf you did not ask for this, ignore this message.`,
         });
       },
     },
@@ -79,8 +82,16 @@ export function createAuth(options: CreateAuthOptions) {
           // A turned-off user gets no new session.
           before: async (session, context) => {
             const found = await context?.context.internalAdapter.findUserById(session.userId);
-            const disabled = (found as { disabledAt?: Date | null } | null)?.disabledAt;
-            return disabled ? false : { data: session };
+            const user = found as { disabledAt?: Date | null; tenantId?: string | null } | null;
+            if (user?.disabledAt) return false;
+            if (user?.tenantId && options.isTenantBlocked) {
+              try {
+                if (await options.isTenantBlocked(user.tenantId)) return false;
+              } catch {
+                return false; // fail closed
+              }
+            }
+            return { data: session };
           },
         },
       },

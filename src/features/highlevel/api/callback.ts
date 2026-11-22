@@ -5,6 +5,7 @@ import type {
   AgencyToken,
   InstalledLocation,
   LocationToken,
+  OAuthCodeResult,
   SaveAgencyConnectionInput,
   SaveLocationConnectionInput,
 } from "../types";
@@ -15,11 +16,20 @@ export type OAuthCallbackDeps = {
     listInstalledLocations(agencyAccessToken: string, companyId: string): Promise<InstalledLocation[]>;
     mintLocationToken(agencyAccessToken: string, companyId: string, locationId: string): Promise<LocationToken>;
   };
+  // When present it is used instead of client.exchangeAgencyCode: it also accepts a Location token
+  // (a single sub-account install).
+  exchangeCode?(code: string): Promise<OAuthCodeResult>;
   store: {
     saveAgencyConnection(input: SaveAgencyConnectionInput): Promise<void>;
     saveLocationConnection(input: SaveLocationConnectionInput): Promise<{ tenantId: string }>;
   };
   now: () => Date;
+  // The onboarding sync (tenants, location tokens and CRM users). Without it the callback mints and
+  // saves a token per location itself and creates no users. The counts feed the response and the log.
+  onboard?: {
+    agencyLocations(input: { companyId: string; locations: InstalledLocation[] }): Promise<{ installed: number; failed: number }>;
+    singleLocation(input: { companyId: string | null; locationId: string; accessToken: string; refreshToken: string | null; expiresAt: Date }): Promise<{ installed: number; failed: number }>;
+  };
   // Same secret /start signs with.
   stateSecret: string;
   // The admin user id of the current session. When given, a state must be bound to exactly this id
@@ -89,7 +99,38 @@ export async function handleOAuthCallback(request: Request, deps: OAuthCallbackD
 
   let agency: AgencyToken;
   try {
-    agency = await deps.client.exchangeAgencyCode(code);
+    if (deps.exchangeCode) {
+      const result = await deps.exchangeCode(code);
+      if (result.kind === "location") {
+        // A single sub-account install: no agency token to list or mint with. Save this token and
+        // onboard that one location.
+        if (!deps.onboard) return fail(502, true, "location token without onboarding", new Error("No onboarding configured."));
+        let counts: { installed: number; failed: number };
+        try {
+          counts = await deps.onboard.singleLocation({
+            companyId: result.companyId,
+            locationId: result.locationId,
+            accessToken: result.accessToken,
+            refreshToken: result.refreshToken,
+            expiresAt: new Date(deps.now().getTime() + result.expiresInSeconds * 1000),
+          });
+        } catch (error) {
+          return fail(502, true, "onboard single location", error);
+        }
+        console.info(`HighLevel install: location token, installed=${counts.installed} failed=${counts.failed}`);
+        const headers = new Headers(NO_STORE);
+        headers.set("set-cookie", clearStateCookie());
+        return Response.json(counts, { status: counts.installed === 0 && counts.failed > 0 ? 502 : 200, headers });
+      }
+      agency = {
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+        expiresInSeconds: result.expiresInSeconds,
+        companyId: result.companyId,
+      };
+    } else {
+      agency = await deps.client.exchangeAgencyCode(code);
+    }
   } catch (error) {
     return fail(502, true, "token exchange", error);
   }
@@ -109,6 +150,19 @@ export async function handleOAuthCallback(request: Request, deps: OAuthCallbackD
     locations = await deps.client.listInstalledLocations(agency.accessToken, agency.companyId);
   } catch (error) {
     return fail(502, true, "list installed locations", error);
+  }
+
+  if (deps.onboard) {
+    let counts: { installed: number; failed: number };
+    try {
+      counts = await deps.onboard.agencyLocations({ companyId: agency.companyId, locations });
+    } catch (error) {
+      return fail(502, true, "onboarding sync", error);
+    }
+    console.info(`HighLevel install: company token, locations=${locations.length} installed=${counts.installed} failed=${counts.failed}`);
+    const headers = new Headers(NO_STORE);
+    headers.set("set-cookie", clearStateCookie());
+    return Response.json(counts, { status: counts.installed === 0 && counts.failed > 0 ? 502 : 200, headers });
   }
 
   // One at a time: stays far below the rate limit and keeps the failure count simple.

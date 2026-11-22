@@ -10,16 +10,18 @@ export { handleOAuthCallback } from "./api/callback";
 export type { OAuthCallbackDeps } from "./api/callback";
 export {
   createWebhookRoute,
+  getOnboardingApi,
   getTokenService,
   listTenantCustomValues,
+  listTenantUsers,
   oauthCallbackRoute,
   oauthStartRoute,
   searchLocationUsers,
   webhookRoute,
 } from "./api/routes";
-export type { AdminGuard } from "./api/routes";
+export type { AdminGuard, OnboardingApi } from "./api/routes";
 export { handleWebhook } from "./api/webhook";
-export type { WebhookDeps } from "./api/webhook";
+export type { WebhookDeps, WebhookHooks } from "./api/webhook";
 export { HIGHLEVEL_WEBHOOK_PUBLIC_KEY, verifyWebhookSignature } from "./api/webhook-signature";
 export {
   deleteAgencyConnection,
@@ -38,6 +40,7 @@ export {
 export { beginWebhookEvent, markWebhookProcessed } from "./db/webhook-events";
 export type {
   AgencyDecision,
+  AgencyLocation,
   CustomValue,
   AgencyState,
   AgencyToken,

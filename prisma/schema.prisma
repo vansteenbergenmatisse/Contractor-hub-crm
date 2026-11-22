@@ -190,3 +190,29 @@ model Invite {
   @@index([tenantId])
   @@index([email])
 }
+
+// ---- feature: onboarding ----
+// One row per HighLevel user we created or matched a CRM user for, so a sync can find, update and
+// deactivate the CRM user without touching the User table. `deletedAt` is set when HighLevel no
+// longer lists the user in that sub-account.
+model GhlUserLink {
+  id        String    @id @default(cuid())
+  tenantId  String
+  ghlUserId String
+  userId    String    @unique
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@unique([tenantId, ghlUserId])
+  @@index([tenantId])
+}
+
+// A sub-account that has no app installed. The sync alerts an admin about it at most once per
+// 24 hours, so a 10-minute sync does not send a mail every run.
+model MissingAppAlert {
+  locationId    String   @id
+  companyId     String
+  name          String?
+  firstSeenAt   DateTime @default(now())
+  lastAlertedAt DateTime
+}

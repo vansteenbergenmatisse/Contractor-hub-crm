@@ -108,3 +108,19 @@ export type LocationDecision =
 export type AgencyDecision =
   | { kind: "keep" }
   | { kind: "save"; accessToken: string; refreshToken: string; expiresAt: Date };
+
+// What a code exchange can return: an agency (Company) token, or, for a single sub-account install,
+// a Location token. Anything else is refused.
+export type OAuthCodeResult =
+  | { kind: "company"; accessToken: string; refreshToken: string; expiresInSeconds: number; companyId: string }
+  | {
+      kind: "location";
+      accessToken: string;
+      refreshToken: string | null;
+      expiresInSeconds: number;
+      locationId: string;
+      companyId: string | null;
+    };
+
+// A sub-account as the agency's location search lists it.
+export type AgencyLocation = { locationId: string; name: string | null; email: string | null };

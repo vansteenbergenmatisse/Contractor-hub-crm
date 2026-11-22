@@ -11,6 +11,17 @@ export type UserContext = {
   type?: string;
 };
 
+// The tenant of a sub-account, whether or not the user has an account yet.
+export type EmbedTenant = { tenantId: string; status: EmbedTenantStatus; companyId: string | null };
+
+// What the embed sign-in decides: an existing CRM user, a user to create on the spot (the caller must
+// still confirm with HighLevel that the person belongs to the sub-account), or a denial with a short
+// reason code for the log (never shown to the browser).
+export type EmbedAccess =
+  | { kind: "user"; userId: string }
+  | { kind: "provision"; tenantId: string }
+  | { kind: "denied"; reason: string };
+
 export type EmbedTenantStatus = "connected" | "needs_reconnect" | "uninstalled";
 
 // What the database knows about the CRM user that matches the payload.

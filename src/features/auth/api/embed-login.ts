@@ -18,8 +18,10 @@ const RATE_WINDOW_SECONDS = 60;
 const RATE_MAX_REQUESTS = 10; // proposal, not a measured number
 
 export type EmbedLoginOptions = {
-  // Returns the CRM user id for an encrypted payload, or null. Must not throw; a throw counts as null.
-  resolveUserId: (payload: string) => Promise<string | null>;
+  // Returns the CRM user id for an encrypted payload, null, or { reason } to say why nobody signs in
+  // (a short code for the log and the audit line, never shown to the browser). Must not throw; a
+  // throw counts as null.
+  resolveUserId: (payload: string) => Promise<string | null | { reason: string }>;
 };
 
 export function embedLoginPlugin(options: EmbedLoginOptions & { appOrigin: string }): BetterAuthPlugin {
@@ -47,12 +49,14 @@ export function embedLoginPlugin(options: EmbedLoginOptions & { appOrigin: strin
           audit("embed_login", { outcome: "denied", reason: "bad_request" });
           throw new APIError("BAD_REQUEST", { message: "Invalid request" });
         }
-        let userId: string | null = null;
+        let resolved: string | null | { reason: string } = null;
         try {
-          userId = await options.resolveUserId(payload);
+          resolved = await options.resolveUserId(payload);
         } catch {
-          userId = null;
+          resolved = null;
         }
+        if (resolved !== null && typeof resolved === "object") throw refuse(resolved.reason);
+        const userId = resolved;
         if (!userId) throw refuse("no_match");
         const user = await ctx.context.internalAdapter.findUserById(userId);
         if (!user) throw refuse("no_user");

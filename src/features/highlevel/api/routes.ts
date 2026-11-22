@@ -3,11 +3,12 @@ import { parseEnv, type EnvValues } from "@/shared/config";
 import { createHighLevelClient } from "./client";
 import { searchUsersWithRetry } from "./search-users";
 import { listCustomValuesWithRetry } from "./custom-values";
-import type { CustomValue, HighLevelUser, SearchUsersQuery } from "../types";
+import { listLocationUsersWithRetry } from "./location-users";
+import type { AgencyLocation, CustomValue, HighLevelUser, InstalledLocation, SaveLocationConnectionInput, SearchUsersQuery } from "../types";
 import { createTokenService } from "./token-service";
 import { handleOAuthStart } from "./start";
 import { resolveScopes } from "./scopes";
-import { handleOAuthCallback } from "./callback";
+import { handleOAuthCallback, type OAuthCallbackDeps } from "./callback";
 import { handleWebhook } from "./webhook";
 import {
   deleteAgencyConnection,
@@ -23,6 +24,8 @@ import {
   updateLocationLocked,
 } from "../db/token-store";
 import { beginWebhookEvent, markWebhookProcessed } from "../db/webhook-events";
+import { findTenantByLocation, listAgencyCompanyIds, listConnectedTenants, updateTenantName } from "../db/onboarding";
+import type { WebhookHooks } from "./webhook";
 
 // Wiring for the two OAuth routes in src/app. Env is read per request (lazy), so `next build`
 // needs none. A missing or malformed env answers 500 with no detail; the names are logged.
@@ -82,6 +85,67 @@ export async function searchLocationUsers(
   return searchUsersWithRetry({ getLocationToken: tokens.getLocationToken, searchUsers: client.searchUsers }, tenantId, query);
 }
 
+// Users of one sub-account as HighLevel lists them now (the source of truth for the CRM's users).
+export async function listTenantUsers(tenantId: string): Promise<HighLevelUser[]> {
+  const env = parseEnv("highlevel");
+  const client = buildClient(env);
+  const tokens = buildTokenService(env, client);
+  const state = await readLocationState(tenantId, env.TOKEN_ENCRYPTION_KEY);
+  if (!state) throw new Error("Tenant has no HighLevel connection.");
+  return listLocationUsersWithRetry(
+    { getLocationToken: tokens.getLocationToken, listLocationUsers: client.listLocationUsers },
+    tenantId,
+    state.companyId,
+    state.locationId,
+  );
+}
+
+// Everything the onboarding feature needs from HighLevel and the token store, in one object so that
+// feature never builds a client or touches a token. Throws when the highlevel env is incomplete.
+export type OnboardingApi = {
+  companyIds(): Promise<string[]>;
+  // Null when this agency has no usable token (uninstalled, or refresh refused).
+  agency(companyId: string): Promise<{ installed(): Promise<InstalledLocation[]>; locations(): Promise<AgencyLocation[]>; connect(locationId: string, name: string | null): Promise<{ tenantId: string; accessToken: string }> } | null>;
+  connectedTenants(companyId: string): Promise<Array<{ tenantId: string; locationId: string }>>;
+  findTenant(locationId: string): Promise<{ tenantId: string; companyId: string | null; status: string } | null>;
+  usersOfTenant(tenantId: string): Promise<HighLevelUser[]>;
+  usersWithToken(accessToken: string, companyId: string, locationId: string): Promise<HighLevelUser[]>;
+  renameTenant(locationId: string, name: string): Promise<boolean>;
+  // A Location token that arrived straight from the install (single sub-account install).
+  saveLocationToken(input: SaveLocationConnectionInput): Promise<{ tenantId: string }>;
+};
+
+export function getOnboardingApi(): OnboardingApi {
+  const env = parseEnv("highlevel");
+  const client = buildClient(env);
+  const tokens = buildTokenService(env, client);
+  return {
+    companyIds: listAgencyCompanyIds,
+    async agency(companyId) {
+      const token = await tokens.findAgencyToken(companyId);
+      if (!token) return null;
+      return {
+        installed: () => client.listInstalledLocations(token, companyId),
+        locations: () => client.listAgencyLocations(token, companyId),
+        async connect(locationId, name) {
+          const minted = await client.mintLocationToken(token, companyId, locationId);
+          const saved = await saveLocationConnection(
+            { locationId, companyId, name, accessToken: minted.accessToken, refreshToken: minted.refreshToken, expiresAt: new Date(Date.now() + minted.expiresInSeconds * 1000) },
+            env.TOKEN_ENCRYPTION_KEY,
+          );
+          return { tenantId: saved.tenantId, accessToken: minted.accessToken };
+        },
+      };
+    },
+    connectedTenants: listConnectedTenants,
+    findTenant: findTenantByLocation,
+    usersOfTenant: listTenantUsers,
+    usersWithToken: (accessToken, companyId, locationId) => client.listLocationUsers(accessToken, companyId, locationId),
+    renameTenant: updateTenantName,
+    saveLocationToken: (input) => saveLocationConnection(input, env.TOKEN_ENCRYPTION_KEY),
+  };
+}
+
 // The brand source: the sub-account's custom values (scope locations/customValues.readonly).
 export async function listTenantCustomValues(tenantId: string): Promise<CustomValue[]> {
   const env = parseEnv("highlevel");
@@ -118,15 +182,17 @@ export async function oauthStartRoute(request: Request, guard?: AdminGuard): Pro
   });
 }
 
-export async function oauthCallbackRoute(request: Request, guard?: AdminGuard): Promise<Response> {
+export async function oauthCallbackRoute(request: Request, guard?: AdminGuard, onboard?: OAuthCallbackDeps["onboard"]): Promise<Response> {
   let env;
   try {
     env = parseEnv("highlevel");
   } catch (error) {
     return notConfigured(error);
   }
+  const client = buildClient(env);
   return handleOAuthCallback(request, {
-    client: buildClient(env),
+    client,
+    exchangeCode: client.exchangeCode,
     store: {
       saveAgencyConnection: (input) => saveAgencyConnection(input, env.TOKEN_ENCRYPTION_KEY),
       saveLocationConnection: (input) => saveLocationConnection(input, env.TOKEN_ENCRYPTION_KEY),
@@ -134,17 +200,18 @@ export async function oauthCallbackRoute(request: Request, guard?: AdminGuard): 
     now: () => new Date(),
     stateSecret: env.TOKEN_ENCRYPTION_KEY,
     currentAdminId: guard?.adminId,
+    onboard,
   });
 }
 
 // publicKeyPem is for tests only; production uses HighLevel's published key.
-export function createWebhookRoute(options: { publicKeyPem?: string } = {}) {
-  return (request: Request) => handleWebhookRequest(request, options.publicKeyPem);
+export function createWebhookRoute(options: { publicKeyPem?: string; hooks?: WebhookHooks } = {}) {
+  return (request: Request) => handleWebhookRequest(request, options.publicKeyPem, options.hooks);
 }
 
 export const webhookRoute = createWebhookRoute();
 
-async function handleWebhookRequest(request: Request, publicKeyPem: string | undefined): Promise<Response> {
+async function handleWebhookRequest(request: Request, publicKeyPem: string | undefined, hooks?: WebhookHooks): Promise<Response> {
   let env;
   try {
     env = parseEnv("highlevel");
@@ -167,6 +234,7 @@ async function handleWebhookRequest(request: Request, publicKeyPem: string | und
       deleteAgencyConnection,
     },
     client,
+    hooks,
     reconcile: {
       listInstalledLocations: client.listInstalledLocations,
       readLocationCompanyId,

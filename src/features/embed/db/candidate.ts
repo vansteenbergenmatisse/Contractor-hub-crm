@@ -1,5 +1,5 @@
 import { getPrisma } from "@/shared/lib/prisma";
-import type { EmbedCandidate } from "../types";
+import type { EmbedCandidate, EmbedTenant } from "../types";
 
 // The CRM user with this email whose tenant is the HighLevel sub-account `locationId`.
 // Emails are stored lower case (see createInvitedUser).
@@ -10,4 +10,13 @@ export async function findEmbedCandidate(query: { email: string; locationId: str
   });
   if (!user || !user.tenant) return null;
   return { userId: user.id, role: user.role, disabledAt: user.disabledAt, tenant: user.tenant };
+}
+
+// The tenant of a HighLevel sub-account, or null when the app is not installed there.
+export async function findEmbedTenant(locationId: string): Promise<EmbedTenant | null> {
+  const tenant = await getPrisma().tenant.findUnique({
+    where: { locationId },
+    select: { id: true, status: true, companyId: true },
+  });
+  return tenant ? { tenantId: tenant.id, status: tenant.status, companyId: tenant.companyId } : null;
 }

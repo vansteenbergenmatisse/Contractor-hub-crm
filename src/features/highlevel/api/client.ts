@@ -1,9 +1,11 @@
 import type {
+  AgencyLocation,
   AgencyToken,
   CustomValue,
   HighLevelClientConfig,
   InstalledLocation,
   LocationToken,
+  OAuthCodeResult,
   RefreshedToken,
   SearchUsersQuery,
   HighLevelUser,
@@ -88,6 +90,50 @@ export function createHighLevelClient(config: HighLevelClientConfig) {
     return json as Record<string, unknown>;
   }
 
+  // The code exchange for the install flow. A bulk (agency) install answers userType "Company"; a
+  // single sub-account install may answer a Location token. Only key names and the userType reach
+  // the log, never values (no PII, no tokens).
+  async function exchangeCode(code: string): Promise<OAuthCodeResult> {
+    const what = "token exchange";
+    const body = new URLSearchParams({
+      client_id: config.clientId,
+      client_secret: config.clientSecret,
+      grant_type: "authorization_code",
+      code,
+      user_type: "Company",
+      redirect_uri: config.redirectUri,
+    });
+    const json = await requestJson(what, "/oauth/token", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded", version: API_VERSION },
+      body: body.toString(),
+    });
+    const userType = typeof json.userType === "string" ? json.userType : "";
+    console.info(`HighLevel token exchange: userType=${userType || "none"} fields=${Object.keys(json).sort().join(",")}`);
+    const expires = typeof json.expires_in === "string" && /^\d+$/.test(json.expires_in) ? Number(json.expires_in) : json.expires_in;
+    if (!isNonEmptyString(json.access_token) || !isPositiveInteger(expires)) {
+      throw new Error(`HighLevel ${what} returned an unexpected response (no usable access token or expiry).`);
+    }
+    const kind = userType.toLowerCase();
+    if (kind === "company" || (kind === "" && isNonEmptyString(json.companyId) && !isNonEmptyString(json.locationId))) {
+      if (!isNonEmptyString(json.companyId) || !isNonEmptyString(json.refresh_token)) {
+        throw new Error(`HighLevel ${what} returned an unexpected response (Company token without companyId or refresh token).`);
+      }
+      return { kind: "company", accessToken: json.access_token, refreshToken: json.refresh_token, expiresInSeconds: expires, companyId: json.companyId };
+    }
+    if (kind === "location" && isNonEmptyString(json.locationId)) {
+      return {
+        kind: "location",
+        accessToken: json.access_token,
+        refreshToken: isNonEmptyString(json.refresh_token) ? json.refresh_token : null,
+        expiresInSeconds: expires,
+        locationId: json.locationId,
+        companyId: isNonEmptyString(json.companyId) ? json.companyId : null,
+      };
+    }
+    throw new Error(`HighLevel ${what} returned an unexpected userType (${userType || "none"}).`);
+  }
+
   async function exchangeAgencyCode(code: string): Promise<AgencyToken> {
     const what = "token exchange";
     const body = new URLSearchParams({
@@ -153,7 +199,7 @@ export function createHighLevelClient(config: HighLevelClientConfig) {
     };
   }
 
-  async function listInstalledLocations(
+  async function listInstalledLocationsV3(
     agencyAccessToken: string,
     companyId: string,
   ): Promise<InstalledLocation[]> {
@@ -195,20 +241,108 @@ export function createHighLevelClient(config: HighLevelClientConfig) {
     throw new Error(`HighLevel ${what} returned too many pages.`);
   }
 
+  // HighLevel's OpenAPI file names /oauth/installedLocations (skip and limit, answer `locations`).
+  async function listInstalledLocationsLegacy(agencyAccessToken: string, companyId: string): Promise<InstalledLocation[]> {
+    const what = "installed locations";
+    const found = new Map<string, InstalledLocation>();
+    for (let page = 0; page < MAX_PAGES; page += 1) {
+      const query = new URLSearchParams({ companyId, appId: config.appId, isInstalled: "true", limit: String(PAGE_SIZE), skip: String(page * PAGE_SIZE) });
+      const json = await requestJson(what, `/oauth/installedLocations?${query.toString()}`, {
+        method: "GET",
+        headers: { authorization: `Bearer ${agencyAccessToken}`, version: CUSTOM_VALUES_API_VERSION },
+      });
+      if (!Array.isArray(json.locations)) throw new Error(`HighLevel ${what} returned an unexpected response.`);
+      for (const item of json.locations as Record<string, unknown>[]) {
+        const id = typeof item === "object" && item !== null ? (isNonEmptyString(item._id) ? item._id : isNonEmptyString(item.id) ? item.id : null) : null;
+        if (!id) throw new Error(`HighLevel ${what} returned an unexpected response.`);
+        if (item.isInstalled === false) continue;
+        if (!found.has(id)) found.set(id, { locationId: id, name: isNonEmptyString(item.name) ? item.name : null });
+      }
+      if (json.locations.length < PAGE_SIZE) return [...found.values()];
+    }
+    throw new Error(`HighLevel ${what} returned too many pages.`);
+  }
+
+  async function listInstalledLocations(agencyAccessToken: string, companyId: string): Promise<InstalledLocation[]> {
+    try {
+      return await listInstalledLocationsV3(agencyAccessToken, companyId);
+    } catch (error) {
+      if (error instanceof HighLevelHttpError && error.status === 404) return listInstalledLocationsLegacy(agencyAccessToken, companyId);
+      throw error;
+    }
+  }
+
+  // GET /locations/search (agency token, scope locations.readonly): every sub-account of the agency,
+  // installed or not. OpenAPI file: query companyId, skip, limit (default 10).
+  async function listAgencyLocations(agencyAccessToken: string, companyId: string): Promise<AgencyLocation[]> {
+    const what = "location search";
+    const found = new Map<string, AgencyLocation>();
+    for (let page = 0; page < MAX_PAGES; page += 1) {
+      const query = new URLSearchParams({ companyId, limit: String(PAGE_SIZE), skip: String(page * PAGE_SIZE) });
+      const json = await requestJson(what, `/locations/search?${query.toString()}`, {
+        method: "GET",
+        headers: { authorization: `Bearer ${agencyAccessToken}`, version: CUSTOM_VALUES_API_VERSION },
+      });
+      if (!Array.isArray(json.locations)) throw new Error(`HighLevel ${what} returned an unexpected response.`);
+      for (const item of json.locations as Record<string, unknown>[]) {
+        if (typeof item !== "object" || item === null || !isNonEmptyString(item.id)) continue;
+        if (!found.has(item.id)) {
+          found.set(item.id, {
+            locationId: item.id,
+            name: isNonEmptyString(item.name) ? item.name : null,
+            email: isNonEmptyString(item.email) ? item.email : null,
+          });
+        }
+      }
+      if (json.locations.length < PAGE_SIZE) return [...found.values()];
+    }
+    throw new Error(`HighLevel ${what} returned too many pages.`);
+  }
+
+  // The users of one sub-account. `GET /users/?locationId=` (Location-Access, users.readonly) per the
+  // OpenAPI file; if HighLevel answers 4xx for it, fall back to /users/search for that location.
+  async function listLocationUsers(accessToken: string, companyId: string | null, locationId: string): Promise<HighLevelUser[]> {
+    const what = "location users";
+    const headers = { authorization: `Bearer ${accessToken}`, version: CUSTOM_VALUES_API_VERSION };
+    let raw: unknown[];
+    try {
+      const json = await requestJson(what, `/users/?${new URLSearchParams({ locationId }).toString()}`, { method: "GET", headers });
+      if (!Array.isArray(json.users)) throw new Error(`HighLevel ${what} returned an unexpected response.`);
+      raw = json.users as unknown[];
+    } catch (error) {
+      if (!(error instanceof HighLevelHttpError) || error.status === null || error.status >= 500 || !companyId) throw error;
+      raw = [];
+      for (let page = 0; page < MAX_PAGES; page += 1) {
+        const json = await requestJson(what, `/users/search?${new URLSearchParams({ companyId, locationId, limit: String(PAGE_SIZE), skip: String(page * PAGE_SIZE) }).toString()}`, {
+          method: "GET",
+          headers: { authorization: `Bearer ${accessToken}`, version: API_VERSION },
+        });
+        if (!Array.isArray(json.users)) throw new Error(`HighLevel ${what} returned an unexpected response.`);
+        raw.push(...(json.users as unknown[]));
+        if (json.users.length < PAGE_SIZE) break;
+      }
+    }
+    return parseUsers(raw);
+  }
+
   async function mintLocationToken(
     agencyAccessToken: string,
     companyId: string,
     locationId: string,
   ): Promise<LocationToken> {
     const what = "location token";
-    const json = await requestJson(what, "/oauth/location-token", {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${agencyAccessToken}`,
-        "content-type": "application/x-www-form-urlencoded",
-        version: API_VERSION,
-      },
-      body: new URLSearchParams({ companyId, locationId }).toString(),
+    const form = new URLSearchParams({ companyId, locationId }).toString();
+    const call = (path: string, version: string) =>
+      requestJson(what, path, {
+        method: "POST",
+        headers: { authorization: `Bearer ${agencyAccessToken}`, "content-type": "application/x-www-form-urlencoded", version },
+        body: form,
+      });
+    // The v3 reference names /oauth/location-token; HighLevel's OpenAPI file names /oauth/locationToken
+    // (hl-api-notes.md, discrepancy 1). Try the first, fall back on a 404.
+    const json = await call("/oauth/location-token", API_VERSION).catch((error: unknown) => {
+      if (error instanceof HighLevelHttpError && error.status === 404) return call("/oauth/locationToken", CUSTOM_VALUES_API_VERSION);
+      throw error;
     });
     const hasRefresh = json.refresh_token !== undefined;
     if (
@@ -245,17 +379,24 @@ export function createHighLevelClient(config: HighLevelClientConfig) {
     if (!Array.isArray(json.users)) {
       throw new Error(`HighLevel ${what} returned an unexpected response.`);
     }
+    return parseUsers(json.users as unknown[]);
+  }
+
+  // Unknown fields are ignored; an entry without a string id and email is dropped. The name falls
+  // back to first and last name.
+  function parseUsers(list: unknown[]): HighLevelUser[] {
     const users: HighLevelUser[] = [];
-    for (const raw of json.users as unknown[]) {
+    for (const raw of list) {
       if (typeof raw !== "object" || raw === null) continue;
       const item = raw as Record<string, unknown>;
       if (!isNonEmptyString(item.id) || !isNonEmptyString(item.email)) continue;
       const roles =
         typeof item.roles === "object" && item.roles !== null ? (item.roles as Record<string, unknown>) : {};
+      const joined = [item.firstName, item.lastName].filter(isNonEmptyString).join(" ");
       users.push({
         id: item.id,
         email: item.email,
-        name: isNonEmptyString(item.name) ? item.name : null,
+        name: isNonEmptyString(item.name) ? item.name : joined || null,
         deleted: item.deleted === true,
         roleType: isNonEmptyString(roles.type) ? roles.type : null,
         role: isNonEmptyString(roles.role) ? roles.role : null,
@@ -289,5 +430,5 @@ export function createHighLevelClient(config: HighLevelClientConfig) {
     return values;
   }
 
-  return { exchangeAgencyCode, listCustomValues, listInstalledLocations, mintLocationToken, refreshToken, searchUsers };
+  return { exchangeAgencyCode, exchangeCode, listAgencyLocations, listCustomValues, listLocationUsers, listInstalledLocations, mintLocationToken, refreshToken, searchUsers };
 }
