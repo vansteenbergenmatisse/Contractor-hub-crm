@@ -1,0 +1,139 @@
+// Pure page logic for Automations. No fetch, no timers, no storage: the page is a window onto the
+// sub-account's HighLevel workflows, and in Phase 2 every change stays in local state.
+import { MOCK_BUSINESS } from "@/shared/mock/business";
+import { MOCK_FOLDERS } from "../mock";
+import type { Automation, Draft, FolderGroup, PageState, Who } from "../types";
+
+export const WHEN = ["A new lead comes in", "A lead waits an hour", "A lead stays quiet", "An estimate is booked", "A visit is done", "A quote is sent", "A quote is accepted", "A job is booked", "A job is marked done", "An invoice is sent", "A card moves to Check Back Later", "A card moves to Lost", "You start it", "Every 3 to 4 months", "A customer books on your booking link"] as const;
+export const WAIT = ["At once", "After 1 hour", "The day before", "24 hours and 1 hour before", "Day 2, 4, 7 and 14", "Day 2, 6, 12 and 25", "Day 3, 7 and 14", "Every 1 to 3 months", "The day after"] as const;
+export const STOP = ["It runs once", "You call or text back", "The customer replies", "The customer books or replies", "The visit is done or cancelled", "The customer accepts or the quote is lost", "The invoice is paid", "The customer asks to stop"] as const;
+
+export const NEW_TARGET = "new";
+export const MADE_BY_YOU = "Made by you";
+// The sample holds two new automations (the design's limit).
+export const MAX_NEW = 2;
+
+export function initialState(items: Automation[]): PageState {
+  return { items, edit: null, conf: null, last: null, err: "", test: false };
+}
+
+export const emptyDraft = (): Draft => ({ name: "", when: 0, wait: 0, msg: "", stop: 0 });
+
+export function draftOf(a: Automation): Draft {
+  return { name: a.name, when: a.when, wait: a.wait, msg: a.msg, stop: a.stop };
+}
+
+const patch = (items: Automation[], id: string, change: Partial<Automation>) =>
+  items.map((a) => (a.id === id ? { ...a, ...change } : a));
+
+// The switch. In HighLevel later: publish and draft. Here it flips local state.
+export function toggle(s: PageState, id: string): PageState {
+  const a = s.items.find((x) => x.id === id);
+  return a ? { ...s, items: patch(s.items, id, { on: !a.on }) } : s;
+}
+
+export function openEdit(s: PageState, id: string): PageState {
+  return { ...s, edit: id, conf: null, err: "", test: false };
+}
+
+export function openNew(s: PageState): PageState {
+  return { ...s, edit: NEW_TARGET, conf: null, err: "", test: false };
+}
+
+export function closeEdit(s: PageState): PageState {
+  return { ...s, edit: null, err: "", test: false };
+}
+
+export function askRemove(s: PageState, id: string): PageState {
+  return { ...s, conf: id };
+}
+
+export function keep(s: PageState): PageState {
+  return { ...s, conf: null };
+}
+
+export function remove(s: PageState, id: string): PageState {
+  return { ...s, items: patch(s.items, id, { gone: true }), conf: null, last: id, edit: s.edit === id ? null : s.edit };
+}
+
+export function undo(s: PageState): PageState {
+  return s.last ? { ...s, items: patch(s.items, s.last, { gone: false }), last: null } : s;
+}
+
+export function sendTest(s: PageState): PageState {
+  return { ...s, test: true };
+}
+
+const doesLine = (wait: number) => `Your text goes out: ${(WAIT[wait] ?? WAIT[0]).toLowerCase()}.`;
+
+// Save the editor. A name is required; the rest has a valid default.
+export function save(s: PageState, draft: Draft): PageState {
+  const name = draft.name.trim();
+  if (!name) return { ...s, err: "Give it a name." };
+  const fields = { name, when: draft.when, wait: draft.wait, stop: draft.stop, msg: draft.msg };
+  if (s.edit === NEW_TARGET) {
+    const made = s.items.filter((a) => a.mine).length;
+    if (made >= MAX_NEW) return { ...s, err: "This sample holds two new automations." };
+    const item: Automation = {
+      ...fields, id: `wf-new-${made + 1}`, folder: MADE_BY_YOU, does: doesLine(fields.wait), who: "auto", ran: -1,
+      on: true, gone: false, mine: true, changed: false,
+    };
+    return { ...s, items: [...s.items, item], edit: null, err: "", test: false };
+  }
+  const old = s.items.find((a) => a.id === s.edit);
+  if (!old) return { ...s, edit: null, err: "", test: false };
+  const does = old.mine || fields.wait !== old.wait ? doesLine(fields.wait) : old.does;
+  return { ...s, items: patch(s.items, old.id, { ...fields, does, changed: true }), edit: null, err: "", test: false };
+}
+
+export function live(items: Automation[]): Automation[] {
+  return items.filter((a) => !a.gone);
+}
+
+export function totals(items: Automation[]) {
+  const l = live(items);
+  const on = l.filter((a) => a.on).length;
+  return { on, off: l.length - on, all: l.length };
+}
+
+// Rows grouped by HighLevel workflow folder, in folder order, then "Made by you". Removed rows and
+// empty folders do not show.
+export function groupByFolder(items: Automation[]): FolderGroup[] {
+  const l = live(items);
+  const order: string[] = [...MOCK_FOLDERS, MADE_BY_YOU];
+  const extra = [...new Set(l.map((a) => a.folder))].filter((f) => !order.includes(f));
+  return [...order, ...extra]
+    .map((folder) => ({ folder, items: l.filter((a) => a.folder === folder) }))
+    .filter((g) => g.items.length > 0);
+}
+
+export function whoLabel(who: Who): string {
+  return who === "ok" ? "Waits for your OK" : who === "you" ? "You start it" : "Runs on its own";
+}
+
+// How often it ran this week, or why there is no count.
+export function runLabel(a: Automation): string {
+  if (!a.on) return "Off. Nothing goes out.";
+  if (a.changed) return "Changed by you just now";
+  if (a.ran < 0) return "New. Not run yet.";
+  if (a.who === "you") return "Not started yet";
+  return `Ran ${a.ran} ${a.ran === 1 ? "time" : "times"} this week`;
+}
+
+// The business details a text may use, all from MOCK_BUSINESS. Other {tokens} stay as they are.
+const BUSINESS_TOKENS: Record<string, string> = {
+  business: MOCK_BUSINESS.business_name,
+  owner: MOCK_BUSINESS.business_owner_name,
+  "main keyword": MOCK_BUSINESS.business_main_keyword,
+};
+
+export function fillBusiness(text: string): string {
+  return text.replace(/\{([^{}]+)\}/g, (all, key: string) => BUSINESS_TOKENS[key] ?? all);
+}
+
+// "Send me a test": the line shown on screen. Nothing is sent.
+export function testLine(msg: string): string {
+  const base = `Would text the business phone, ${MOCK_BUSINESS.business_phone_number}. Nothing is sent in this preview.`;
+  const text = fillBusiness(msg).trim();
+  return text ? `${base} The text reads: ${text}` : base;
+}
