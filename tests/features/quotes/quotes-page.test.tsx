@@ -8,16 +8,24 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
-// Shell context stub: the page only needs useShell and usePushed.
+// Shell context stub: the page needs useShell, usePushed and the business values.
+const current = vi.hoisted(() => ({ values: {} as Record<string, string> }));
 vi.mock("@/features/app-shell", () => ({
   useShell: () => ({ sendTimer: vi.fn(), askReason: vi.fn(), setPushed: vi.fn(), setAction: vi.fn() }),
   usePushed: () => {},
+  useBusinessValues: () => current.values,
   REASONS: ["Ask again later", "Said no", "Chose a competitor", "Not a fit", "Opted out"],
 }));
 
 import { QuoteSheet, QuotesPage, SEED_QUOTES, sheetBusiness } from "@/features/quotes";
-import { MOCK_BUSINESS } from "@/shared/mock/business";
 
+// Made-up business values.
+const VALUES = {
+  business_name: "Test Roofing Co", business_address: "1 Test Way, Testville", business_phone_number: "+1 (555) 010-0000",
+  business_email: "office@test-roofing.example", business_hours: "Mon - Fri: 8 - 5", business_website_url: "https://www.test-roofing.example",
+};
+const NONE = { business_name: "", business_address: "", business_phone_number: "", business_email: "", business_hours: "", business_website_url: "" };
+current.values = VALUES;
 const html = renderToStaticMarkup(<QuotesPage />);
 
 describe("QuotesPage markup", () => {
@@ -43,10 +51,19 @@ describe("QuotesPage markup", () => {
   it("has the empty state right before the list so CSS can show it", () => {
     expect(html).toMatch(/class="fx-emp">.*No quotes in this view\..*<\/div><div class="fd-lst">/);
   });
-  it("shows the business facts from the mock custom values on the sheet", () => {
-    expect(html).toContain(MOCK_BUSINESS.business_name);
-    expect(html).toContain(MOCK_BUSINESS.business_phone_number);
-    expect(html).toContain("northwayroofing.example");
+  it("shows the signed-in business's own facts on the sheet", () => {
+    expect(html).toContain(VALUES.business_name);
+    expect(html).toContain("+1 (555) 010-0000 · office@test-roofing.example");
+    expect(html).toContain("test-roofing.example · Mon - Fri: 8 - 5");
+    expect(html).toContain(VALUES.business_address);
+  });
+  it("shows nothing invented on the sheet when the business has no values", () => {
+    current.values = NONE;
+    const empty = renderToStaticMarkup(<QuotesPage />);
+    current.values = VALUES;
+    for (const bad of ["Northway", "Mike", "undefined", "null", "Test Roofing", "Summit St"]) expect(empty).not.toContain(bad);
+    expect(empty).not.toContain("> · <");
+    expect(empty).not.toMatch(/fd-dcs">\s*·/);
   });
   it("starts on the list, not on the sheet", () => {
     expect(html).toContain('class="fd-dv"');
@@ -55,7 +72,7 @@ describe("QuotesPage markup", () => {
 });
 
 describe("QuoteSheet", () => {
-  const base = { business: sheetBusiness(MOCK_BUSINESS), onShut() {}, onEdit() {}, onCancel() {}, onSave() {}, onUpload() {}, onRemoveFile() {}, onApprove() {} };
+  const base = { business: sheetBusiness(VALUES), onShut() {}, onEdit() {}, onCancel() {}, onSave() {}, onUpload() {}, onRemoveFile() {}, onApprove() {} };
   it("edit mode shows fields, Save and Cancel and hides the sheet", () => {
     const out = renderToStaticMarkup(<QuoteSheet {...base} quote={SEED_QUOTES[0]} editing />);
     expect(out).toContain('id="fd-qe-name"');

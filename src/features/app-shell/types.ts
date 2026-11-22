@@ -3,6 +3,8 @@ export type PageKey =
   | "today" | "inbox" | "calendar" | "pipeline" | "leads"
   | "quotes" | "invoices" | "payments" | "automations" | "settings";
 
+// Who the app is for, from the sub-account's custom values. Text fields are "" when HighLevel has no
+// value (never a made-up one); links are https URLs or null.
 export type Business = {
   name: string;
   init: string;
@@ -10,6 +12,22 @@ export type Business = {
   owner: string;
   ownerInit: string;
   first: string;
+  logoUrl: string | null;
+  keyword: string;
+  phone: string;
+  email: string;
+  address: string;
+  city: string;
+  state: string;
+  hours: string;
+  websiteUrl: string | null;
+  // The website without https and www, for links in texts ("example.com"), or "".
+  site: string;
+  cta: string;
+  bookingJobUrl: string | null;
+  bookingQuoteUrl: string | null;
+  googleProfileUrl: string | null;
+  googleReviewUrl: string | null;
 };
 
 // One row the search can find. `page` decides the group; `href` is where it opens.

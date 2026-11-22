@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { amountLabel, canApprove, canEdit, canUpload, checkEdit, formatMoney } from "../api/quotes";
+import { joinParts } from "@/shared/lib/join-parts";
 import type { SheetBusiness } from "../api/sheet-business";
 import type { EditDraft, Quote, QuoteLine } from "../types";
 import { StatusChip } from "./StatusChip";
@@ -86,10 +87,10 @@ export function QuoteSheet(p: QuoteSheetProps) {
           <div className="fd-dch">
             <span className="fd-logo" aria-hidden="true">{b.init}</span>
             <div>
-              <p className="fd-dcb">{b.name}</p>
-              <p className="fd-dcs">{b.addr}</p>
-              <p className="fd-dcs">{b.phone} · {b.email}</p>
-              <p className="fd-dcs">{b.site} · {b.hours}</p>
+              {b.name ? <p className="fd-dcb">{b.name}</p> : null}
+              {b.addr ? <p className="fd-dcs">{b.addr}</p> : null}
+              {joinParts([b.phone, b.email]) ? <p className="fd-dcs">{joinParts([b.phone, b.email])}</p> : null}
+              {joinParts([b.site, b.hours]) ? <p className="fd-dcs">{joinParts([b.site, b.hours])}</p> : null}
             </div>
           </div>
           <p className="fd-dcn"><span>Quote</span><StatusChip quote={q} /></p>

@@ -10,12 +10,15 @@ vi.mock("next/navigation", () => ({
 
 import { AppShell, buildBusiness } from "@/features/app-shell";
 import { CalendarPage } from "@/features/calendar";
-import { MOCK_BUSINESS } from "@/shared/mock/business";
 
 const NOW = new Date(2026, 10, 20, 10, 0);
-const business = buildBusiness({ name: "Sample Roofing", owner: "Pat Lee" });
-const render = (now?: Date, b?: { business_website_url: string; business_hours: string }) =>
-  renderToStaticMarkup(<AppShell business={business} searchRows={[]}><CalendarPage now={now} business={b} /></AppShell>);
+const business = buildBusiness({
+  name: "Sample Roofing", owner: "Pat Lee", hours: "Mon - Fri: 9 - 4",
+  websiteUrl: "https://www.sample-roofing.test", bookingJobUrl: "https://book.sample-roofing.test/job",
+});
+const bare = buildBusiness({});
+const render = (now?: Date, b?: { business_website_url: string; business_hours: string }, shell = business) =>
+  renderToStaticMarkup(<AppShell business={shell} searchRows={[]}><CalendarPage now={now} business={b} /></AppShell>);
 const html = render(NOW);
 
 describe("CalendarPage markup", () => {
@@ -41,12 +44,26 @@ describe("CalendarPage markup", () => {
   });
 
   it("takes the booking link and hours from the business, not from the code", () => {
-    expect(html).toContain("northwayroofing.example/book");
-    expect(html).toContain(MOCK_BUSINESS.business_hours);
+    expect(html).toContain("book.sample-roofing.test/job");
+    expect(html).toContain("Open Mon - Fri: 9 - 4.");
     const other = render(NOW, { business_website_url: "https://www.other.test", business_hours: "Daily: 8 - 5" });
     expect(other).toContain("other.test/book");
     expect(other).toContain("Daily: 8 - 5");
-    expect(other).not.toContain("northwayroofing");
+    expect(other).not.toContain("sample-roofing");
+  });
+
+  it("uses the website's /book page when the business has no booking link", () => {
+    const site = render(NOW, undefined, buildBusiness({ websiteUrl: "https://www.sample-roofing.test" }));
+    expect(site).toContain("sample-roofing.test/book");
+  });
+
+  it("shows no link, no copy button and no stray text when the business has nothing", () => {
+    const empty = render(NOW, undefined, bare);
+    expect(empty).toContain("gets a booking link. The job lands here");
+    expect(empty).not.toContain("Copy link");
+    expect(empty).not.toContain("/book");
+    expect(empty).not.toMatch(/Open \./);
+    for (const bad of ["Northway", "Mike", "undefined", "null"]) expect(empty).not.toContain(bad);
   });
 
   it("has labeled controls: view switch, week arrows, day buttons and the add sheet field", () => {

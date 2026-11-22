@@ -240,7 +240,7 @@ describe("sheet", () => {
       business_hours: "Mon", business_website_url: "https://www.sample.example/path",
     });
     expect(card).toEqual({ init: "SC", name: "Sample Co", addr: "1 A St", phone: "555", email: "a@b.example", site: "sample.example", hours: "Mon" });
-    expect(businessCard({ business_name: "Northway Roofing" }).init).toBe("NR");
+    expect(businessCard({ business_name: "Sample Roofing" }).init).toBe("SR");
   });
   it("makes initials", () => {
     expect(initialsOf("Hilliard Storage")).toBe("HS");

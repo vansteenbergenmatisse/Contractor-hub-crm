@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { MOCK_BUSINESS } from "@/shared/mock/business";
 import { bookingLink, buildView, calendarReducer, daySummary, initialState, MOCK_STOPS, siteOf, type CalendarAction } from "@/features/calendar";
 
 const NOW = new Date(2026, 10, 20, 10, 0); // Friday 10:00
 const start = () => initialState(MOCK_STOPS, NOW);
 const run = (...actions: CalendarAction[]) => actions.reduce(calendarReducer, start());
-const view = (s = start()) => buildView(s, NOW, MOCK_BUSINESS);
+const BIZ = { business_website_url: "https://www.example-roofing.test", business_hours: "Mon - Sat: 7 - 6" };
+const view = (s = start()) => buildView(s, NOW, BIZ);
 const id = (name: string) => MOCK_STOPS.find((s) => s.name === name)!.id;
 
 describe("day summary", () => {
@@ -52,8 +52,8 @@ describe("week view model", () => {
     expect(view().hideTenAm).toBe(true);
     expect(view(run({ type: "step", n: 1 })).now).toBeNull();
     expect(view(run({ type: "setView", view: "day" })).now).toBeNull();
-    expect(buildView(start(), new Date(2026, 10, 20, 20, 0), MOCK_BUSINESS).now).toBeNull();
-    expect(buildView(start(), new Date(2026, 10, 20, 12, 0), MOCK_BUSINESS).hideTenAm).toBe(false);
+    expect(buildView(start(), new Date(2026, 10, 20, 20, 0), BIZ).now).toBeNull();
+    expect(buildView(start(), new Date(2026, 10, 20, 12, 0), BIZ).hideTenAm).toBe(false);
   });
 
   it("has an empty state for a day with nothing booked", () => {
@@ -191,13 +191,26 @@ describe("stops you add", () => {
   });
 });
 
+describe("booking link choice", () => {
+  const base = { business_website_url: "https://www.acme.test", business_hours: "" };
+  it("prefers the real request-a-job link (shown without https)", () => {
+    expect(bookingLink({ ...base, bookingJobUrl: "https://book.acme.test/job?x=1" })).toBe("book.acme.test/job?x=1");
+  });
+  it("falls back to the website's /book page, else nothing", () => {
+    expect(bookingLink({ ...base, bookingJobUrl: null })).toBe("acme.test/book");
+    expect(bookingLink({ ...base, bookingJobUrl: "  " })).toBe("acme.test/book");
+    expect(bookingLink({ business_website_url: "", business_hours: "", bookingJobUrl: null })).toBe("");
+    expect(bookingLink({ business_website_url: "", business_hours: "" })).toBe("");
+  });
+});
+
 describe("booking link", () => {
   it("is built from the business website and hours, never hardcoded", () => {
     expect(siteOf("https://www.example-roofing.test/")).toBe("example-roofing.test");
     expect(bookingLink({ business_website_url: "https://www.acme.test", business_hours: "x" })).toBe("acme.test/book");
     const b = view().booking;
-    expect(b.link).toBe(`${siteOf(MOCK_BUSINESS.business_website_url)}/book`);
-    expect(b.hours).toBe(MOCK_BUSINESS.business_hours);
+    expect(b.link).toBe(`${siteOf(BIZ.business_website_url)}/book`);
+    expect(b.hours).toBe(BIZ.business_hours);
     expect(b.copyText).toBe("Copy link");
     expect(view(run({ type: "copyLink" })).booking.copyText).toBe("Copied");
   });

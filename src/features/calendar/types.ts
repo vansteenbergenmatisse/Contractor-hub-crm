@@ -73,5 +73,6 @@ export type CalendarAction =
   | { type: "submitAdd"; placement: Placement }
   | { type: "copyLink" };
 
-// What the page needs from the business: the website (for the booking link) and the hours.
-export type CalendarBusiness = { business_website_url: string; business_hours: string };
+// What the page needs from the business: its own booking link, the website (fallback for the link) and
+// the hours. Any of them may be "" (or null for the link) when the sub-account has no value.
+export type CalendarBusiness = { bookingJobUrl?: string | null; business_website_url: string; business_hours: string };

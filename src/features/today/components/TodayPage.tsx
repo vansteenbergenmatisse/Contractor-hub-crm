@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { PAGE_PATH, PageAction, type PageKey } from "@/features/app-shell";
 import { nextLabel, nextStop, nextTodo, numClass, openCount } from "../api/selectors";
 import { useToday } from "../hooks/useToday";
-import { INVOICES_TILE, JOBS_TILE, LEADS, MOCK_OWNER_FIRST, STOPS, TODOS } from "../mock";
+import { INVOICES_TILE, JOBS_TILE, LEADS, STOPS, TODOS } from "../mock";
 import { CalendarCard } from "./CalendarCard";
 import { Greeting } from "./Greeting";
 import { LeadsCard } from "./LeadsCard";
@@ -14,7 +14,7 @@ import { Tiles, type TileView } from "./Tiles";
 
 // The page content only. The shell adds the `fd-view` wrapper, the top bar and the tab bar.
 // Phase 2: mock data, state on screen only.
-export function TodayPage({ ownerFirst = MOCK_OWNER_FIRST }: { ownerFirst?: string }) {
+export function TodayPage({ ownerFirst }: { ownerFirst?: string }) {
   const router = useRouter();
   const today = useToday(TODOS);
   const { state } = today;

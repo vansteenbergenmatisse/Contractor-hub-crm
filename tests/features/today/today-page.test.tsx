@@ -23,7 +23,6 @@ vi.mock("@/features/app-shell", async (original) => ({
 import {
   CalendarCard, Greeting, initialState, LeadsCard, MoneyCards, NeedsCard, setFilter, setStatus, STOPS, TodayPage, TODOS,
 } from "@/features/today";
-import { MOCK_BUSINESS } from "@/shared/mock/business";
 
 const noop = () => {};
 const html = renderToStaticMarkup(<TodayPage ownerFirst="Pat" />);
@@ -76,9 +75,15 @@ describe("TodayPage markup", () => {
   });
 
   it("never hardcodes the sample business in its markup", () => {
-    expect(html).not.toContain(MOCK_BUSINESS.business_name);
-    expect(html).not.toContain(MOCK_BUSINESS.business_phone_number);
-    expect(html).not.toContain(MOCK_BUSINESS.business_email);
+    for (const sample of ["Northway", "Mike", "northwayroofing"]) expect(html).not.toContain(sample);
+  });
+
+  it("greets without a name when the owner's name is missing", () => {
+    for (const first of [undefined, "", "  "]) {
+      const bare = renderToStaticMarkup(<TodayPage ownerFirst={first} />);
+      expect(bare).toContain("Morning. <strong");
+      for (const bad of ["Mike", "undefined", "null", "Morning,"]) expect(bare).not.toContain(bad);
+    }
   });
 });
 

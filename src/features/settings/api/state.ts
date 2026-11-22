@@ -30,10 +30,14 @@ export type SettingsAction =
   | { type: "how"; index: number }
   | { type: "ask"; index: number };
 
-export function initialState(): SettingsState {
+// `values` is the sub-account's own custom values (key to value). When given it replaces the sample
+// values completely: a key the sub-account does not have shows an empty field. Without it the design's
+// sample values are used (tests and the design only).
+export function initialState(values?: CustomValues): SettingsState {
+  const start = values ?? MOCK_CUSTOM_VALUES;
   return {
-    values: { ...MOCK_CUSTOM_VALUES },
-    draft: { ...MOCK_CUSTOM_VALUES },
+    values: { ...start },
+    draft: { ...start },
     sw: [...MOCK_SWITCHES],
     ok: false,
     err: null,

@@ -7,8 +7,8 @@ type Facts = {
   business_hours: string; business_website_url: string;
 };
 
-// The business block at the top of the quote sheet. Facts come from the custom values (mock in Phase 2),
-// never from code. The site shows without https and www.
+// The business block at the top of the quote sheet. Facts come from the sub-account's custom values
+// ("" when missing), never from code. The site shows without https and www.
 export const sheetBusiness = (v: Facts): SheetBusiness => ({
   init: initialsOf(v.business_name),
   name: v.business_name,

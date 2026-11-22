@@ -4,7 +4,6 @@ import {
   openEdit, openNew, remove, runLabel, save, sendTest, testLine, toggle, totals, undo, whoLabel,
 } from "../../../src/features/automations/api/automations";
 import { mockAutomations } from "../../../src/features/automations/mock";
-import { MOCK_BUSINESS } from "@/shared/mock/business";
 
 const fresh = () => initialState(mockAutomations());
 const byName = (s: ReturnType<typeof fresh>, name: string) => s.items.find((a) => a.name === name)!;
@@ -166,17 +165,38 @@ describe("remove and undo", () => {
   });
 });
 
+// Made-up values only.
+const BIZ = {
+  business_name: "Test Roofing Co", business_owner_name: "Sam Tester", business_main_keyword: "Roofing",
+  business_phone_number: "+1 (555) 010-0000", review_url: "https://reviews.example/test",
+};
+const NONE = { business_name: "", business_owner_name: "", business_main_keyword: "", business_phone_number: "", review_url: "" };
+
 describe("send me a test", () => {
   it("shows the line on screen and sends nothing", () => {
     expect(sendTest(fresh()).test).toBe(true);
-    const line = testLine("Hi {first name}, {owner} from {business}.");
+    const line = testLine("Hi {first name}, {owner} from {business}.", BIZ);
     expect(line).toContain("Would text the business phone");
-    expect(line).toContain(MOCK_BUSINESS.business_phone_number);
-    expect(line).toContain(`${MOCK_BUSINESS.business_owner_name} from ${MOCK_BUSINESS.business_name}`);
+    expect(line).toContain(BIZ.business_phone_number);
+    expect(line).toContain(`${BIZ.business_owner_name} from ${BIZ.business_name}`);
     expect(line).toContain("{first name}");
     expect(line).toContain("Nothing is sent");
   });
-  it("fills business details only from MOCK_BUSINESS", () => {
-    expect(fillBusiness("{main keyword} {unknown}")).toBe(`${MOCK_BUSINESS.business_main_keyword} {unknown}`);
+  it("fills business details only from the business it is given", () => {
+    expect(fillBusiness("{main keyword} {unknown}", BIZ)).toBe("Roofing {unknown}");
+    expect(fillBusiness("Rate us: {review link}", BIZ)).toBe("Rate us: https://reviews.example/test");
+  });
+  it("with an empty business leaves nothing invented and no dangling punctuation", () => {
+    const texts = [
+      "Hi {first name}, this is {owner} from {business}. Thanks for reaching out. How can we help?",
+      "You are booked, {first name}. {business} comes {day} at {time}.",
+      "Hi {first name}, would you leave {business} a quick review? {review link}",
+      "{main keyword} help, {first name}",
+    ];
+    const out = [...texts.map((x) => fillBusiness(x, NONE)), testLine(texts[0], NONE)].join("\n");
+    for (const bad of ["Northway", "Mike", "undefined", "null", "  ", " ,", " ()", "this is  "]) expect(out).not.toContain(bad);
+    expect(fillBusiness(texts[0], NONE)).toBe("Hi {first name}, this is our team. Thanks for reaching out. How can we help?");
+    expect(fillBusiness(texts[1], NONE)).toBe("You are booked, {first name}. Our team comes {day} at {time}.");
+    expect(testLine("", NONE)).toBe("Would text the business phone. Nothing is sent in this preview.");
   });
 });

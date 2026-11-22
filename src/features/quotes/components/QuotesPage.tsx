@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { usePushed, useShell } from "@/features/app-shell";
-import { MOCK_BUSINESS } from "@/shared/mock/business";
+import { useBusinessValues, usePushed, useShell } from "@/features/app-shell";
 import { checkBuild, filterCounts, firstReadyId, sendRequest, totals, uploadName } from "../api/quotes";
 import { sheetBusiness } from "../api/sheet-business";
 import { useQuotes } from "../hooks/use-quotes";
@@ -17,13 +16,12 @@ const FILTERS: ReadonlyArray<{ key: QuoteFilter; label: string }> = [
   { key: "sent", label: "Sent" },
 ];
 
-const business = sheetBusiness(MOCK_BUSINESS);
-
 // Page content only. The shell supplies the fd-view wrapper. Local state against mock data: nothing is
 // sent, fetched or stored. "Approve and send" opens the shared 20 second timer and, at 0, only marks the
 // quote Sent on screen.
 export function QuotesPage() {
   const shell = useShell();
+  const business = sheetBusiness(useBusinessValues());
   const [state, dispatch] = useQuotes();
   const fileInput = useRef<HTMLInputElement>(null);
   const uploadFor = useRef<string | null>(null);

@@ -128,6 +128,12 @@ describe("buildBrand: images and text", () => {
       backgroundImageUrl: null,
       businessName: null,
       ownerName: null,
+      // Added 2026-11-22 (business details for every page): all null when there are no values.
+      profile: {
+        name: null, owner: null, phone: null, email: null, address: null, city: null, state: null, hours: null,
+        keyword: null, websiteUrl: null, universalCta: null, bookingJobUrl: null, bookingQuoteUrl: null,
+        googleProfileUrl: null, googleReviewUrl: null,
+      },
       rejected: [],
     });
   });

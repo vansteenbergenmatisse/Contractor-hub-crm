@@ -86,6 +86,44 @@ describe("SettingsPage markup", () => {
     expect(out).toMatch(/id="cv-main_color"[^>]*aria-invalid="true"|aria-invalid="true"[^>]*id="cv-main_color"/);
   });
 
+  it("shows the sub-account's real values, empty fields for keys it lacks, and its extra keys under their own key", () => {
+    // Made-up values only.
+    const real = {
+      business_name: "Test Roofing Co", business_phone_number: "+1 (555) 010-0000", main_color: "#112233",
+      business_address_city: "Testville", request_a_job_booking_link: "https://book.test.example/job", business_latitude: "10.5",
+    };
+    const out = renderToStaticMarkup(<SettingsPage initialValues={real} />);
+    expect(out).toContain('value="Test Roofing Co"');
+    expect(out).toContain('value="+1 (555) 010-0000"');
+    expect(out).toContain('value="#112233"');
+    // A key the sub-account lacks is empty, not the sample.
+    expect(out).toMatch(/id="cv-business_email"[^>]*value=""/);
+    expect(out).toMatch(/id="cv-sub_color"[^>]*value=""/);
+    expect(out).not.toContain("#0F2740");
+    expect(out).not.toContain("Get A Free Quote");
+    // Extra keys: listed under their key, with their value.
+    for (const k of ["business_address_city", "request_a_job_booking_link", "business_latitude"]) {
+      expect(out).toContain(`custom_values.${k}`);
+      expect(out).toContain(`id="cv-${k}"`);
+    }
+    expect(out).toContain('value="Testville"');
+    expect(out).toContain('value="https://book.test.example/job"');
+    expect(out).not.toContain("business_google_profile_url");
+  });
+
+  it("shows empty fields, never the sample business, when given no values", () => {
+    const out = renderToStaticMarkup(<SettingsPage initialValues={{}} />);
+    for (const k of [...ESSENTIAL_KEYS, ...COLOR_KEYS]) expect(out).toContain(`id="cv-${k}"`);
+    expect((out.match(/value="[^"]+"/g) ?? []).filter((v) => !/^value="(true|false)"/.test(v))).toEqual([]);
+    for (const bad of ["Northway", "Mike", "Columbus", "undefined"]) expect(out).not.toContain(bad);
+  });
+
+  it("finds an extra key with the search", () => {
+    const out = renderToStaticMarkup(<SettingsPage initialValues={{ business_address_city: "Testville", business_email: "a@b.example" }} initial={{ ...initialState({ business_address_city: "Testville", business_email: "a@b.example" }), q: "address_city", open: true }} />);
+    expect(out).toContain('id="cv-business_address_city"');
+    expect(out).not.toContain('id="cv-business_email"');
+  });
+
   it("never calls fetch and the feature source has no fetch", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
     const walk = (dir: string): string[] =>

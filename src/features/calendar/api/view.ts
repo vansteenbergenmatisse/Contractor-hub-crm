@@ -13,7 +13,14 @@ export const kindName = (k: StopKind): "Job" | "Estimate" => (k === "J" ? "Job" 
 export function siteOf(url: string): string {
   return url.split("//").pop()!.split("/")[0].replace("www.", "");
 }
-export const bookingLink = (business: CalendarBusiness): string => `${siteOf(business.business_website_url)}/book`;
+// The booking link shown (without https://): the sub-account's own "request a job" link, else the
+// website's /book page, else "" (nothing is made up).
+export function bookingLink(business: CalendarBusiness): string {
+  const own = business.bookingJobUrl?.trim();
+  if (own) return own.replace(/^https?:\/\//i, "");
+  const site = siteOf(business.business_website_url ?? "");
+  return site ? `${site}/book` : "";
+}
 
 export function daySummary(items: ReadonlyArray<{ kind: StopKind }>): string {
   if (!items.length) return "Nothing booked";

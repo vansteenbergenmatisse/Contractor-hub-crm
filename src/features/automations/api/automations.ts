@@ -1,6 +1,6 @@
 // Pure page logic for Automations. No fetch, no timers, no storage: the page is a window onto the
 // sub-account's HighLevel workflows, and in Phase 2 every change stays in local state.
-import { MOCK_BUSINESS } from "@/shared/mock/business";
+import { fillFacts } from "@/shared/lib/fill-facts";
 import { MOCK_FOLDERS } from "../mock";
 import type { Automation, Draft, FolderGroup, PageState, Who } from "../types";
 
@@ -120,20 +120,31 @@ export function runLabel(a: Automation): string {
   return `Ran ${a.ran} ${a.ran === 1 ? "time" : "times"} this week`;
 }
 
-// The business details a text may use, all from MOCK_BUSINESS. Other {tokens} stay as they are.
-const BUSINESS_TOKENS: Record<string, string> = {
-  business: MOCK_BUSINESS.business_name,
-  owner: MOCK_BUSINESS.business_owner_name,
-  "main keyword": MOCK_BUSINESS.business_main_keyword,
+// The business details a text may use, from the signed-in sub-account ("" when it has no value).
+// `review_url` is its Google review link. Other {tokens} stay as they are.
+export type AutomationBusiness = {
+  business_name: string;
+  business_owner_name: string;
+  business_main_keyword: string;
+  business_phone_number: string;
+  review_url: string;
 };
 
-export function fillBusiness(text: string): string {
-  return text.replace(/\{([^{}]+)\}/g, (all, key: string) => BUSINESS_TOKENS[key] ?? all);
+// A missing name reads "our team"; a missing keyword is left out; a missing review link keeps its token.
+export function fillBusiness(text: string, business: AutomationBusiness): string {
+  return fillFacts(text, {
+    businessToken: "business",
+    personToken: "owner",
+    business: business.business_name,
+    person: business.business_owner_name,
+    values: { "main keyword": business.business_main_keyword, ...(business.review_url ? { "review link": business.review_url } : {}) },
+  });
 }
 
 // "Send me a test": the line shown on screen. Nothing is sent.
-export function testLine(msg: string): string {
-  const base = `Would text the business phone, ${MOCK_BUSINESS.business_phone_number}. Nothing is sent in this preview.`;
-  const text = fillBusiness(msg).trim();
+export function testLine(msg: string, business: AutomationBusiness): string {
+  const phone = business.business_phone_number.trim();
+  const base = `Would text the business phone${phone ? `, ${phone}` : ""}. Nothing is sent in this preview.`;
+  const text = fillBusiness(msg, business).trim();
   return text ? `${base} The text reads: ${text}` : base;
 }

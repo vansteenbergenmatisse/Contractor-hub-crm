@@ -1,7 +1,7 @@
 // MOCK DATA (Phase 2). The design's sample workflow set, grouped by the HighLevel workflow folders.
 // Replaced in Phase 3 by the sub-account's real workflows (read through the HighLevel workflow API).
 // Never treat any value here as a real business fact. Business details in the texts are {tokens};
-// HighLevel fills them per customer, and the page resolves the business ones from MOCK_BUSINESS.
+// HighLevel fills them per customer, and the page resolves the business ones from the sub-account's custom values.
 import type { Automation, Who } from "./types";
 
 type Seed = [folder: string, name: string, when: number, wait: number, does: string, stop: number, who: Who, ran: number, msg: string];

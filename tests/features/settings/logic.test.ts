@@ -4,7 +4,8 @@ import {
   COLOR_KEYS, ESSENTIAL_KEYS, MOCK_CUSTOM_VALUES, contrast, filterSettings, initialState, settingsReducer, validateValues,
 } from "@/features/settings";
 
-const base = () => ({ ...MOCK_CUSTOM_VALUES });
+// The sample values hold no business identity, so a valid set needs a made-up name.
+const base = () => ({ ...MOCK_CUSTOM_VALUES, business_name: "Test Roofing Co" });
 
 describe("key names", () => {
   it("are exactly the 17 + 14 keys of the build prompt and the mock covers each", () => {
@@ -77,7 +78,7 @@ describe("validateValues", () => {
 
 describe("bad value on save", () => {
   it("opens the section that holds it and asks to focus its field", () => {
-    let s = initialState();
+    let s = initialState(base());
     s = settingsReducer(s, { type: "go", section: "conn" });
     s = settingsReducer(s, { type: "edit", key: "main_color", value: "#777777" });
     s = settingsReducer(s, { type: "edit", key: "text_on_main_color", value: "#FFFFFF" });
@@ -92,7 +93,7 @@ describe("bad value on save", () => {
   });
 
   it("opens Business details for a bad business value and re-opens collapsed colors for a color", () => {
-    let s = settingsReducer(initialState(), { type: "go", section: "colors" });
+    let s = settingsReducer(initialState(base()), { type: "go", section: "colors" });
     s = settingsReducer(s, { type: "toggleCols" });
     s = settingsReducer(s, { type: "edit", key: "business_name", value: "" });
     s = settingsReducer(s, { type: "save" });
@@ -106,7 +107,7 @@ describe("bad value on save", () => {
   });
 
   it("a good save stores the values and clears the error", () => {
-    let s = settingsReducer(initialState(), { type: "edit", key: "main_color", value: "#1B5E20" });
+    let s = settingsReducer(initialState(base()), { type: "edit", key: "main_color", value: "#1B5E20" });
     s = settingsReducer(s, { type: "save" });
     expect(s.ok).toBe(true);
     expect(s.err).toBeNull();
@@ -154,7 +155,7 @@ describe("settings search", () => {
 
 describe("two real switches", () => {
   it("toggle at once and independently", () => {
-    let s = initialState();
+    let s = initialState(base());
     const before = [...s.sw];
     s = settingsReducer(s, { type: "switch", index: 0 });
     expect(s.sw[0]).toBe(!before[0]);
@@ -166,7 +167,7 @@ describe("two real switches", () => {
 
 describe("section navigation", () => {
   it("opens a section, goes back, and searching clears nothing but shows all", () => {
-    let s = initialState();
+    let s = initialState(base());
     expect(s.open).toBe(false);
     s = settingsReducer(s, { type: "go", section: "choice" });
     expect(s).toMatchObject({ sec: "choice", open: true });

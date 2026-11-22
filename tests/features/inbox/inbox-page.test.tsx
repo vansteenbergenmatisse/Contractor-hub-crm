@@ -3,10 +3,23 @@ import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-const { setInboxCount, usePushed } = vi.hoisted(() => ({ setInboxCount: vi.fn(), usePushed: vi.fn() }));
-vi.mock("@/features/app-shell", () => ({ useShell: () => ({ setInboxCount }), usePushed }));
+const { setInboxCount, usePushed, current } = vi.hoisted(() => ({ setInboxCount: vi.fn(), usePushed: vi.fn(), current: { business: null as unknown } }));
+vi.mock("@/features/app-shell", async (orig) => {
+  const real = await orig<typeof import("@/features/app-shell")>();
+  return {
+    ...real,
+    useShell: () => ({ setInboxCount }),
+    usePushed,
+    useBusiness: () => current.business as import("@/features/app-shell").Business,
+    useBusinessValues: () => real.businessValues(current.business as import("@/features/app-shell").Business),
+  };
+});
 
+import { buildBusiness } from "@/features/app-shell";
 import { InboxPage } from "@/features/inbox";
+
+// Made-up business.
+current.business = buildBusiness({ name: "Test Roofing Co", owner: "Sam Tester", websiteUrl: "https://www.test-roofing.example", bookingJobUrl: "https://book.test-roofing.example/job" });
 
 const fetchSpy = vi.fn();
 vi.stubGlobal("fetch", fetchSpy);
@@ -60,10 +73,19 @@ describe("InboxPage markup", () => {
     for (const q of ["Call in 10 min", "Booking link", "Thanks"]) expect(html).toContain(`>${q}</button>`);
     expect(html).toContain("Mark done");
   });
-  it("takes business facts from the mock business, not from the component", () => {
-    expect(html).toContain("Northway Roofing");
+  it("takes business facts from the signed-in business, not from the component", () => {
+    expect(html).toContain("Test Roofing Co");
     const src = readFileSync(join(process.cwd(), "src/features/inbox/components/InboxPage.tsx"), "utf8");
     expect(src).not.toContain("Northway");
+  });
+  it("with an empty business shows no invented fact, no stray punctuation and no booking-link quick reply", () => {
+    current.business = buildBusiness({});
+    const empty = renderToStaticMarkup(<InboxPage />);
+    current.business = buildBusiness({ name: "Test Roofing Co", owner: "Sam Tester", websiteUrl: "https://www.test-roofing.example", bookingJobUrl: "https://book.test-roofing.example/job" });
+    for (const bad of ["Northway", "Mike", "undefined", "null", "{name}", "{first}", "{site}", "{booking link}", "Your business", ">Owner<"]) expect(empty).not.toContain(bad);
+    expect(empty).toContain("this is our team.");
+    expect(empty).not.toContain(">Booking link</button>");
+    expect(empty).toContain(">Thanks</button>");
   });
   it("lets the call button dial only when there is a number", () => {
     expect(html).toContain('href="tel:6145550134"');

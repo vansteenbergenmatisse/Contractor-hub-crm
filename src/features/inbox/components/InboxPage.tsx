@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { usePushed } from "@/features/app-shell";
-import { MOCK_BUSINESS } from "@/shared/mock/business";
+import { useBusiness, useBusinessValues, usePushed } from "@/features/app-shell";
 import { deliveryLabel, doneLabel, filterCounts, isVisible, replyLabel, rowSnippet, rowTime, summarize, visibleCount } from "../api/state";
-import { fillText, siteOf } from "../api/text";
+import { bookingLinkOf, fillText } from "../api/text";
 import { waitLabel, waitLevelClass } from "../api/wait";
 import { useInbox } from "../hooks/use-inbox";
 import { MOCK_CONVERSATIONS, MOCK_QUICK_REPLIES } from "../mock";
@@ -14,16 +13,19 @@ import { FilterBar } from "./FilterBar";
 import { ThreadBody } from "./ThreadBody";
 import { WaitSummary } from "./WaitSummary";
 
-// Sample business facts for texts. Mock until the custom values are wired (Phase 3).
-const BUSINESS: TextBusiness = {
-  name: MOCK_BUSINESS.business_name,
-  first: MOCK_BUSINESS.business_owner_name.split(" ")[0],
-  site: siteOf(MOCK_BUSINESS.business_website_url),
-};
-
 // The Inbox page content. The shell adds the page wrapper, the top bar and the tab bar.
 // Everything here changes local state only: nothing is sent, fetched or saved.
 export function InboxPage() {
+  const biz = useBusiness();
+  const values = useBusinessValues();
+  // The business's own facts for the sample texts. "" when the sub-account has no value.
+  const BUSINESS: TextBusiness = {
+    name: values.business_name,
+    first: values.business_owner_name.split(/\s+/)[0] ?? "",
+    site: biz.site,
+    bookingLink: bookingLinkOf(biz.bookingJobUrl, biz.site),
+  };
+  const quickReplies = MOCK_QUICK_REPLIES.filter((q) => BUSINESS.bookingLink || !q.text.includes("{booking link}"));
   const conversations = MOCK_CONVERSATIONS;
   const { state, dispatch } = useInbox(conversations);
   usePushed(state.open);
@@ -139,7 +141,7 @@ export function InboxPage() {
           </div>
           <footer className="fd-cmp">
             <div className="fd-qr" role="group" aria-label="Quick replies">
-              {MOCK_QUICK_REPLIES.map((q) => (
+              {quickReplies.map((q) => (
                 <button key={q.label} type="button" className="fd-qb" onClick={() => quick(q.text)}>{q.label}</button>
               ))}
             </div>

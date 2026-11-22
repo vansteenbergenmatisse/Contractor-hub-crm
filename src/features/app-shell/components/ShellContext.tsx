@@ -1,11 +1,14 @@
 "use client";
 
 import { createContext, useContext, useEffect, useId, type ReactNode } from "react";
-import type { ReasonRequest, SendTimerRequest } from "../types";
+import type { Business, ReasonRequest, SendTimerRequest } from "../types";
+import { businessValues } from "../api/business";
 
 // What the shell offers to a page: the action bar above the tab bar, "this screen is a pushed
 // detail" (no tab bar), and the two shared pop-ups (send timer, reason sheet).
 export type ShellApi = {
+  // The signed-in tenant's business details, from its custom values.
+  business: Business;
   setAction: (id: string, node: ReactNode | null) => void;
   setPushed: (id: string, pushed: boolean) => void;
   sendTimer: (request: SendTimerRequest) => void;
@@ -45,4 +48,14 @@ export function usePushed(pushed: boolean) {
     setPushed(id, pushed);
     return () => setPushed(id, false);
   }, [id, pushed, setPushed]);
+}
+
+// The business details of the signed-in tenant.
+export function useBusiness(): Business {
+  return useShell().business;
+}
+
+// The details under the custom-value key names (empty strings when missing), for sample texts.
+export function useBusinessValues() {
+  return businessValues(useShell().business);
 }

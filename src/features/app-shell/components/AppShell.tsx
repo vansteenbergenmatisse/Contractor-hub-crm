@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { usePathname, useRouter } from "next/navigation";
 import { MENU_GROUPS, PAGE_PATH, PAGE_TITLE, TAB_PAGES, pageFromPath } from "../nav";
 import type { Business, PageKey, ReasonRequest, SearchRow, SendTimerRequest } from "../types";
+import { BrandLogo } from "./BrandLogo";
 import { FeedbackSheet } from "./FeedbackSheet";
 import { Icon } from "./Icon";
 import { ReasonDialog } from "./ReasonDialog";
@@ -13,7 +14,7 @@ import { ShellContext, type ShellApi } from "./ShellContext";
 
 // The signed-in frame: side menu on a computer, top bar, floating tab bar and a menu drawer on a
 // phone, the page action bar, and the shared pop-ups. Pages render inside it as `children`.
-export function AppShell({ business, searchRows, children }: { business: Business; searchRows: readonly SearchRow[]; children: ReactNode }) {
+export function AppShell({ business, searchRows, initialInboxCount = 0, children }: { business: Business; searchRows: readonly SearchRow[]; initialInboxCount?: number; children: ReactNode }) {
   const router = useRouter();
   const page: PageKey = pageFromPath(usePathname() ?? "/");
   const [drawer, setDrawer] = useState(false);
@@ -24,7 +25,7 @@ export function AppShell({ business, searchRows, children }: { business: Busines
   const [send, setSend] = useState<{ id: number; request: SendTimerRequest } | null>(null);
   const sendCount = useRef(0);
   const [reason, setReason] = useState<ReasonRequest | null>(null);
-  const [inboxCount, setInboxCount] = useState(0);
+  const [inboxCount, setInboxCount] = useState(initialInboxCount);
   const [scrolled, setScrolled] = useState(false);
 
   // A new page starts with the menu and the feedback sheet closed (state adjusted while rendering).
@@ -52,6 +53,7 @@ export function AppShell({ business, searchRows, children }: { business: Busines
 
   const api = useMemo<ShellApi>(
     () => ({
+      business,
       setAction: (id, node) => setActions((a) => { const next = { ...a }; if (node === null) delete next[id]; else next[id] = node; return next; }),
       setPushed: (id, value) => setPushedState((p) => { if (!!p[id] === value) return p; const next = { ...p }; if (value) next[id] = true; else delete next[id]; return next; }),
       sendTimer: (request) => setSend({ id: (sendCount.current += 1), request }),
@@ -60,7 +62,7 @@ export function AppShell({ business, searchRows, children }: { business: Busines
       openFeedback: () => { setDrawer(false); setFeedback(true); },
       setInboxCount,
     }),
-    [],
+    [business],
   );
 
   const go = useCallback((key: PageKey) => {
@@ -92,7 +94,7 @@ export function AppShell({ business, searchRows, children }: { business: Busines
         <button type="button" className={`fd-scrim${drawer ? " is-open" : ""}`} aria-label="Close menu" onClick={() => setDrawer(false)} />
         <nav className={`fd-side${drawer ? " is-open" : ""}`} aria-label="Main menu">
           <div className="fd-brand">
-            <span className="fd-logo" aria-hidden="true"><span>{business.init}</span></span>
+            <BrandLogo url={business.logoUrl} initials={business.init} />
             <span className="fd-bt"><span className="fd-bname">{business.name}</span><span className="fd-bsub">{business.tag}</span></span>
             <button type="button" className="fd-x" aria-label="Close menu" onClick={() => setDrawer(false)}><Icon name="close" size={20} strokeWidth={2} /></button>
           </div>

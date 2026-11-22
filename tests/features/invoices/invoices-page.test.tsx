@@ -10,18 +10,28 @@ vi.mock("next/navigation", () => ({
 }));
 
 const calls = { pushed: [] as boolean[] };
+const current = vi.hoisted(() => ({ business: null as unknown }));
 vi.mock("@/features/app-shell", async () => {
   const actual = await vi.importActual<typeof import("@/features/app-shell")>("@/features/app-shell");
   return {
     ...actual,
     useShell: () => ({ setAction: vi.fn(), setPushed: vi.fn(), sendTimer: vi.fn(), askReason: vi.fn(), openSearch: vi.fn(), openFeedback: vi.fn(), setInboxCount: vi.fn() }),
     usePushed: (p: boolean) => { calls.pushed.push(p); },
+    useBusiness: () => current.business as import("@/features/app-shell").Business,
+    useBusinessValues: () => actual.businessValues(current.business as import("@/features/app-shell").Business),
     PageAction: ({ children }: { children: ReactNode }) => <div data-action>{children}</div>,
   };
 });
 
+import { buildBusiness } from "@/features/app-shell";
 import { InvoicesPage } from "@/features/invoices";
 
+// Made-up business.
+const made = () => buildBusiness({
+  name: "Test Roofing Co", phone: "+1 (555) 010-0000", email: "office@test-roofing.example", address: "1 Test Way, Testville",
+  hours: "Mon - Fri: 8 - 5", websiteUrl: "https://www.test-roofing.example",
+});
+current.business = made();
 const html = renderToStaticMarkup(<InvoicesPage />);
 
 describe("InvoicesPage markup", () => {
@@ -67,12 +77,22 @@ describe("InvoicesPage markup", () => {
   });
   it("shows the sheet with the business facts, a thank-you and the due term", () => {
     expect(html).toContain('aria-label="The invoice the customer gets"');
-    expect(html).toContain("Northway Roofing");
-    expect(html).toContain("1200 Summit St, Columbus, OH 43201");
-    expect(html).toContain("northwayroofing.example");
+    expect(html).toContain("Test Roofing Co");
+    expect(html).toContain("1 Test Way, Testville");
+    expect(html).toContain("+1 (555) 010-0000 · office@test-roofing.example");
+    expect(html).toContain("test-roofing.example · Mon - Fri: 8 - 5");
     expect(html).toContain("Due 7 days after you send it");
     expect(html).toContain("Pay online with the link in this message. Thank you for your business.");
     expect(html).toContain("Back to the list");
+  });
+  it("shows nothing invented on the sheet when the business has no values", () => {
+    current.business = buildBusiness({});
+    const empty = renderToStaticMarkup(<InvoicesPage />);
+    current.business = made();
+    for (const bad of ["Northway", "Mike", "undefined", "null", "Your business", "Test Roofing", "Summit St"]) expect(empty).not.toContain(bad);
+    expect(empty).not.toContain("> · <");
+    expect(empty).not.toMatch(/fd-dcs"><span class="fd-h"> · /);
+    expect(empty).toContain("Pay online with the link in this message.");
   });
   it("marks late invoices light red and over 7 days full red", () => {
     expect(html).toContain("fd-chip is-bad");

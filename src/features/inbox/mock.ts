@@ -1,6 +1,6 @@
 // MOCK DATA (Phase 2). Sample conversations from the design. Every name, number and text here is
 // made up. Replaced in Phase 3 by conversations from HighLevel. Business facts in the texts are
-// tokens ({name}, {first}, {site}) filled from the business record, never written in here.
+// tokens ({name}, {first}, {site}, {booking link}) filled from the business record, never written in here.
 import type { Conversation, QuickReply } from "./types";
 
 const day = (label: string) => ({ type: "day", label }) as const;
@@ -108,7 +108,7 @@ export const MOCK_CONVERSATIONS: readonly Conversation[] = [
 
 export const MOCK_QUICK_REPLIES: readonly QuickReply[] = [
   { label: "Call in 10 min", text: "I call you in 10 minutes." },
-  { label: "Booking link", text: "Here is the link to pick your job date: {site}/book" },
+  { label: "Booking link", text: "Here is the link to pick your job date: {booking link}" },
   { label: "Thanks", text: "Thanks, got it." },
 ];
 

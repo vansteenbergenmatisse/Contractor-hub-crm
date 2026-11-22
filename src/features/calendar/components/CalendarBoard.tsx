@@ -109,8 +109,8 @@ export function CalendarBoard({ now, business }: { now: Date; business: Calendar
       </p>
       <p className="fd-cbk">
         <Glyph name="cal" size={16} />
-        <span>A customer who accepts a quote gets a booking link: <b>{v.booking.link}</b>. The job lands here and the card moves to Job Scheduled. You get an alert. Open {v.booking.hours}.</span>
-        <button type="button" className="fd-btn is-plain" onClick={copyLink}>{v.booking.copyText}</button>
+        <span>A customer who accepts a quote gets a booking link{v.booking.link ? <>: <b>{v.booking.link}</b></> : null}. The job lands here and the card moves to Job Scheduled. You get an alert.{v.booking.hours ? ` Open ${v.booking.hours}.` : ""}</span>
+        {v.booking.link ? <button type="button" className="fd-btn is-plain" onClick={copyLink}>{v.booking.copyText}</button> : null}
       </p>
 
       <ConfirmDelete

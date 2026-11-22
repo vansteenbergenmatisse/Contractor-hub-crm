@@ -1,34 +1,31 @@
 import type { ReactNode } from "react";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { AppShell, buildBusiness, type SearchRow } from "@/features/app-shell";
+import { AppShell, type SearchRow } from "@/features/app-shell";
 import { currentUserFromHeaders } from "@/features/auth";
-import { getBrandService } from "@/features/brand";
+import { INBOX_WAITING_COUNT, searchRows as inboxRows } from "@/features/inbox";
+import { searchRows as invoiceRows } from "@/features/invoices";
+import { searchRows as leadRows } from "@/features/leads";
+import { searchRows as paymentRows } from "@/features/payments";
+import { searchRows as pipelineRows } from "@/features/pipeline";
+import { searchRows as quoteRows } from "@/features/quotes";
+import { loadBusiness } from "./business";
 
 export const dynamic = "force-dynamic";
 
+// Rows the search can find: the pages' sample rows (Phase 2, mock data; Phase 3 asks the backend).
+// The Today page's own list repeats the same people, so it is left out to avoid double results.
+const SEARCH_ROWS: readonly SearchRow[] = [...leadRows, ...pipelineRows, ...quoteRows, ...invoiceRows, ...paymentRows, ...inboxRows];
+
 // Every signed-in tenant page. Signed out goes to /sign-in; an admin has no tenant data and goes to
-// the admin page. The tenant comes from the session only. Business name and owner come from the
-// sub-account's custom values; an empty value shows a plain fallback, never a made-up name.
-async function loadBusiness(tenantId: string, fallbackOwner: string) {
-  try {
-    const brand = await getBrandService().getBrand(tenantId);
-    return buildBusiness({ name: brand.businessName, owner: brand.ownerName ?? fallbackOwner });
-  } catch {
-    return buildBusiness({ owner: fallbackOwner });
-  }
-}
-
-// Rows the search can find. Each page feature adds its own sample rows here (Phase 2, mock data).
-const SEARCH_ROWS: readonly SearchRow[] = [];
-
+// the admin page. The tenant comes from the session only.
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const user = await currentUserFromHeaders(await headers());
   if (!user) redirect("/sign-in");
   if (user.role === "admin" || !user.tenantId) redirect("/admin/clients");
   const business = await loadBusiness(user.tenantId, user.name);
   return (
-    <AppShell business={business} searchRows={SEARCH_ROWS}>
+    <AppShell business={business} searchRows={SEARCH_ROWS} initialInboxCount={INBOX_WAITING_COUNT}>
       {children}
     </AppShell>
   );

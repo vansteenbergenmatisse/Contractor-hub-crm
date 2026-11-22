@@ -10,14 +10,43 @@ vi.mock("next/navigation", () => ({
 }));
 
 // Shell context stub: the action bar renders inline so the test can see it.
+const current = vi.hoisted(() => ({ business: null as unknown }));
 vi.mock("@/features/app-shell", async (orig) => {
   const real = await orig<typeof import("@/features/app-shell")>();
-  return { ...real, PageAction: ({ children }: { children: React.ReactNode }) => <div data-action="">{children}</div>, usePushed: () => {} };
+  return {
+    ...real,
+    PageAction: ({ children }: { children: React.ReactNode }) => <div data-action="">{children}</div>,
+    usePushed: () => {},
+    useBusiness: () => current.business as import("@/features/app-shell").Business,
+  };
 });
 
+import { buildBusiness } from "@/features/app-shell";
 import { LeadsPage, searchRows } from "@/features/leads";
 
+// Made-up business.
+current.business = buildBusiness({ name: "Test Roofing Co", city: "Testville", state: "TS" });
 const html = renderToStaticMarkup(<LeadsPage />);
+
+describe("Sources panel service area", () => {
+  it("names the business's own city and state", () => {
+    expect(html).toContain("Service area: Testville, TS.");
+  });
+  it("leaves the service area out when the business has no city or state", () => {
+    current.business = buildBusiness({});
+    const empty = renderToStaticMarkup(<LeadsPage />);
+    current.business = buildBusiness({ name: "Test Roofing Co", city: "Testville", state: "TS" });
+    expect(empty).not.toContain("Service area");
+    expect(empty).toContain("leads of this week.</p>");
+    for (const bad of ["Northway", "undefined", "null"]) expect(empty).not.toContain(bad);
+  });
+  it("shows only the city when there is no state", () => {
+    current.business = buildBusiness({ city: "Testville" });
+    const city = renderToStaticMarkup(<LeadsPage />);
+    current.business = buildBusiness({ name: "Test Roofing Co", city: "Testville", state: "TS" });
+    expect(city).toContain("Service area: Testville.");
+  });
+});
 
 describe("LeadsPage markup", () => {
   it("renders content only, without the view wrapper", () => {
@@ -70,7 +99,7 @@ describe("LeadsPage markup", () => {
 
   it("shows the source panel with the week total and the service area from the business facts", () => {
     expect(html).toContain("Where your leads come from");
-    expect(html).toContain("The 13 leads of this week. Service area: Columbus, OH.");
+    expect(html).toContain("The 13 leads of this week. Service area: Testville, TS.");
     expect(html).toContain("Added by you");
     expect(html).toContain("--w:100%");
   });

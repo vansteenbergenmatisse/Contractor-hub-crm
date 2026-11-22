@@ -29,7 +29,7 @@ export type Conversation = {
   phone?: string;
   // "by text", "by email": where a reply goes.
   via: string;
-  // Newest message as the list shows it. May hold {name}, {first} and {site}.
+  // Newest message as the list shows it. May hold {name}, {first}, {site} and {booking link}.
   snippet: string;
   // True when the owner's or the system's message is the newest one (shows Delivered or Seen).
   lastIsOutgoing: boolean;
@@ -39,7 +39,8 @@ export type Conversation = {
 export type QuickReply = { label: string; text: string };
 
 // The business facts a sample text can use. Always from the business record, never hardcoded.
-export type TextBusiness = { name: string; first: string; site: string };
+// A missing fact is "". `bookingLink` is the link a text can share, "" when the business has none.
+export type TextBusiness = { name: string; first: string; site: string; bookingLink: string };
 
 export type InboxEvent = "" | "open" | "send" | "done" | "list" | "flt";
 

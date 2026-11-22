@@ -61,6 +61,19 @@ export const COLOR_GROUPS: ColorGroup[] = [
 
 export const ESSENTIAL_KEYS: string[] = ESSENTIAL_FIELDS.map((f) => f.key);
 export const COLOR_KEYS: string[] = COLOR_GROUPS.flatMap((g) => g.fields.map((f) => f.key));
+// Keys the sub-account has that the design does not list (for example business_address_city or
+// request_a_job_booking_link). They show under their own key in Business details; only values change.
+export function extraKeys(values: Record<string, string>): string[] {
+  const known = new Set([...ESSENTIAL_KEYS, ...COLOR_KEYS]);
+  return Object.keys(values).filter((k) => !known.has(k));
+}
+
+// A readable label made from the key itself ("business_address_city" gives "Business address city").
+export function labelOfKey(key: string): string {
+  const words = key.replace(/_/g, " ").trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
 export const LINK_KEYS: string[] = ["business_logo", "business_favicon_url", "business_main_background_video_or_image"];
 
 export const SECTIONS: { key: SectionKey; title: string; headingId: string }[] = [

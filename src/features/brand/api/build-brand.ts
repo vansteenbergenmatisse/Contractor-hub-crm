@@ -1,4 +1,4 @@
-import type { Brand, BrandValue } from "../types";
+import type { Brand, BrandValue, BusinessProfile } from "../types";
 
 // Folder 02_Branding of the sub-account's custom values (build prompt section 5). Font keys are
 // ignored. Each key maps to the CSS variable of the same name, underscores to dashes.
@@ -49,6 +49,38 @@ function httpsUrl(raw: string | undefined): string | null {
 
 const text = (raw: string | undefined) => (raw && raw.trim() ? raw.trim() : null);
 
+// Reads the first non-empty value among several key spellings. The real sub-accounts differ: JCR
+// Landscaping has business_address_city and business_address_state, the design's sample has
+// business_main_city and business_main_state_abbreviation.
+function first(byKey: Map<string, string>, ...keys: string[]): string | null {
+  for (const key of keys) {
+    const value = text(byKey.get(key));
+    if (value) return value;
+  }
+  return null;
+}
+
+function buildProfile(byKey: Map<string, string>): BusinessProfile {
+  const link = (...keys: string[]) => httpsUrl(first(byKey, ...keys) ?? undefined);
+  return {
+    name: first(byKey, "business_name"),
+    owner: first(byKey, "business_owner_name"),
+    phone: first(byKey, "business_phone_number"),
+    email: first(byKey, "business_email"),
+    address: first(byKey, "business_address", "business_full_address"),
+    city: first(byKey, "business_address_city", "business_main_city"),
+    state: first(byKey, "business_address_state", "business_main_state_abbreviation"),
+    hours: first(byKey, "business_hours"),
+    keyword: first(byKey, "business_main_keyword"),
+    websiteUrl: link("business_website_url"),
+    universalCta: first(byKey, "universal_cta"),
+    bookingJobUrl: link("request_a_job_booking_link"),
+    bookingQuoteUrl: link("request_a_quote_booking_link"),
+    googleProfileUrl: link("business_google_profile_url"),
+    googleReviewUrl: link("google_review_request_url"),
+  };
+}
+
 export function buildBrand(values: BrandValue[]): Brand {
   const byKey = new Map<string, string>();
   for (const { key, value } of values) if (!byKey.has(key)) byKey.set(key, value);
@@ -84,6 +116,7 @@ export function buildBrand(values: BrandValue[]): Brand {
     backgroundImageUrl: background && !VIDEO_EXTENSIONS.test(new URL(background).pathname) ? background : null,
     businessName: text(byKey.get("business_name")),
     ownerName: text(byKey.get("business_owner_name")),
+    profile: buildProfile(byKey),
     rejected,
   };
 }

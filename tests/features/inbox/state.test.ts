@@ -3,13 +3,14 @@ import {
   deliveryLabel, doneLabel, filterCounts, initialState, inboxReducer, isVisible, replyLabel, rowSnippet, rowTime,
   summarize, visibleCount, waitingCount,
 } from "../../../src/features/inbox/api/state";
-import { fillText, replyName, siteOf } from "../../../src/features/inbox/api/text";
+import { bookingLinkOf, fillText, replyName, siteOf } from "../../../src/features/inbox/api/text";
 import { toSearchRows } from "../../../src/features/inbox/api/search-rows";
 import { INBOX_WAITING_COUNT, MOCK_CONVERSATIONS as C } from "../../../src/features/inbox/mock";
 import { searchRows } from "@/features/inbox";
 import type { Conversation, InboxAction, InboxState } from "../../../src/features/inbox/types";
 
-const biz = { name: "Sample Roofing", first: "Pat", site: "sample.example" };
+const biz = { name: "Sample Roofing", first: "Pat", site: "sample.example", bookingLink: "sample.example/book" };
+const none = { name: "", first: "", site: "", bookingLink: "" };
 const run = (s: InboxState, ...actions: InboxAction[]) => actions.reduce(inboxReducer, s);
 const start = () => initialState(C);
 const byName = (n: string) => C.find((c) => c.name === n) as Conversation;
@@ -125,8 +126,21 @@ describe("mark done and flag for reply (undo)", () => {
 
 describe("labels", () => {
   it("fills the business facts in sample texts", () => {
-    expect(fillText("Hi, {name}. {first} calls. {site}/book", biz)).toBe("Hi, Sample Roofing. Pat calls. sample.example/book");
+    expect(fillText("Hi, {name}. {first} calls. {booking link}", biz)).toBe("Hi, Sample Roofing. Pat calls. sample.example/book");
     expect(rowSnippet(start(), byName("Ellen Novak"), biz)).toBe("System: Hi Ellen, thanks for your request. We got it. Pat calls you soon.");
+  });
+  it("never writes a made-up or empty fact into a text", () => {
+    const all = C.map((c) => [fillText(c.snippet, none), ...c.thread.map((m) => ("text" in m ? fillText(m.text, none) : ""))].join("\n")).join("\n");
+    for (const bad of ["Northway", "Mike", "undefined", "null", "{name}", "{first}", " ,", " ()", "  "]) expect(all).not.toContain(bad);
+    expect(fillText("Hi {name}, {first} from {name}", none)).toBe("Hi our team, our team");
+    expect(fillText("{first} calls you soon.", none)).toBe("Our team calls you soon.");
+    expect(fillText("Reminder: {first} from {name} visits.", none)).toBe("Reminder: our team visits.");
+    expect(fillText("Reminder: {first} from {name} visits.", { ...none, first: "Pat" })).toBe("Reminder: Pat visits.");
+  });
+  it("picks the booking link: the real one, else the website's /book, else nothing", () => {
+    expect(bookingLinkOf("https://book.example/job", "site.example")).toBe("https://book.example/job");
+    expect(bookingLinkOf(null, "site.example")).toBe("site.example/book");
+    expect(bookingLinkOf(null, "")).toBe("");
   });
   it("takes the site without protocol and www", () => {
     expect(siteOf("https://www.x.example/a")).toBe("x.example");

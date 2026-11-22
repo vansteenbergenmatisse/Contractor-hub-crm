@@ -1,21 +1,22 @@
-// MOCK DATA (Phase 2). The design's sample custom values and sample connection status. Replaced in
+// MOCK DATA (Phase 2). The design's sample custom values and sample connection status. The business
+// identity keys (name, owner, phone, email, address, hours, city, state, keyword, website) are empty:
+// they come from the signed-in sub-account, never from this file. Replaced in
 // Phase 3 by the sub-account's custom values and by the status an API gives. Never treat any value
 // here as a real business fact.
-import { MOCK_BUSINESS } from "@/shared/mock/business";
 import type { ConnectionStatus, CustomValues } from "./types";
 
 export const MOCK_CUSTOM_VALUES: CustomValues = {
-  business_name: MOCK_BUSINESS.business_name,
-  business_owner_name: MOCK_BUSINESS.business_owner_name,
-  business_phone_number: MOCK_BUSINESS.business_phone_number,
-  business_email: MOCK_BUSINESS.business_email,
-  business_address: MOCK_BUSINESS.business_address,
-  business_hours: MOCK_BUSINESS.business_hours,
-  business_main_city: MOCK_BUSINESS.business_main_city,
+  business_name: "",
+  business_owner_name: "",
+  business_phone_number: "",
+  business_email: "",
+  business_address: "",
+  business_hours: "",
+  business_main_city: "",
   business_main_county: "Franklin County",
-  business_main_state_abbreviation: MOCK_BUSINESS.business_main_state_abbreviation,
-  business_main_keyword: MOCK_BUSINESS.business_main_keyword,
-  business_website_url: MOCK_BUSINESS.business_website_url,
+  business_main_state_abbreviation: "",
+  business_main_keyword: "",
+  business_website_url: "",
   universal_cta: "Get A Free Quote",
   business_logo: "",
   business_favicon_url: "",

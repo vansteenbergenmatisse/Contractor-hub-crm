@@ -1,7 +1,7 @@
 // MOCK DATA (Phase 2). The design's sample to-dos, calendar, leads and money cards. Replaced in
 // Phase 3 by reads from HighLevel (to-dos by urgency, tiles, today's calendar, leads, money cards).
-// Never treat any name, amount or text here as a real fact. Business details (name, phone, email,
-// address, website) never go in this file: they come from MOCK_BUSINESS in `@/shared/mock/business`.
+// Never treat any name, amount or text here as a real fact. Business details (name, owner, phone, email,
+// address, website) never go in this file: they come from the sub-account's custom values (`useBusiness`).
 import type { Lead, MiniRow, MoneyBar, Stop, Todo } from "./types";
 
 export const TODOS: readonly Todo[] = [
@@ -98,6 +98,3 @@ export const MONEY_OWED = {
   ] satisfies readonly MiniRow[],
   foot: "3 invoices · 2 late",
 };
-
-// The design's sample first name for the greeting until the shell passes the owner's.
-export const MOCK_OWNER_FIRST = "Mike";

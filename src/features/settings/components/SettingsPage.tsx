@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { COLOR_GROUPS, CONNECTIONS, ESSENTIAL_FIELDS, SECTIONS, SOON_ITEMS, SWITCHES } from "../api/fields";
+import { COLOR_GROUPS, CONNECTIONS, ESSENTIAL_FIELDS, SECTIONS, SOON_ITEMS, SWITCHES, labelOfKey } from "../api/fields";
 import type { SettingsState } from "../api/state";
 import { useSettings } from "../hooks/use-settings";
 import { MOCK_CONNECTION_STATUS } from "../mock";
@@ -74,15 +74,17 @@ function ValueField({ field, value, saved, bad, swatch, onChange }: ValueFieldPr
   );
 }
 
-export function SettingsPage({ initial }: { initial?: SettingsState }) {
-  const { state, dispatch, filter } = useSettings(initial);
+// `initialValues` is the signed-in sub-account's custom values (key to value). When given, it replaces
+// the sample values: keys it lacks show empty fields, and keys the design does not list show too.
+export function SettingsPage({ initial, initialValues }: { initial?: SettingsState; initialValues?: Record<string, string> }) {
+  const { state, dispatch, filter, extras } = useSettings(initial, initialValues);
   const { values, draft, err } = state;
   const show = (id: string) => filter.items[id];
   const edit = (key: string, value: string) => dispatch({ type: "edit", key, value });
   const fieldProps = (f: Field) => ({ field: f, value: draft[f.key] ?? "", saved: values[f.key] ?? "", bad: err?.key === f.key, onChange: edit });
 
   const colorsOpen = state.cols || filter.active;
-  const bizFields = ESSENTIAL_FIELDS.filter((f) => show(`cv-${f.key}`));
+  const bizFields = [...ESSENTIAL_FIELDS, ...extras.map((key) => ({ key, label: labelOfKey(key) }))].filter((f) => show(`cv-${f.key}`));
   const showSt2 = filter.sections.choice || filter.sections.soon;
 
   return (

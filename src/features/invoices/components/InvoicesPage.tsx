@@ -1,8 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { usePushed } from "@/features/app-shell";
-import { MOCK_BUSINESS } from "@/shared/mock/business";
+import { useBusinessValues, usePushed } from "@/features/app-shell";
 import { businessCard, formatMoney, totals } from "../api/invoices";
 import { useInvoices } from "../hooks/useInvoices";
 import type { Filter } from "../types";
@@ -23,8 +22,8 @@ const step = (i: number) => ({ "--i": i }) as CSSProperties;
 export function InvoicesPage() {
   const s = useInvoices();
   usePushed(s.doc);
-  // Business facts come from the custom values (mock set in Phase 2), never from copy.
-  const biz = businessCard(MOCK_BUSINESS);
+  // Business facts come from the signed-in sub-account's custom values, never from copy. "" when missing.
+  const biz = businessCard(useBusinessValues());
   const t = totals(s.invoices, s.now);
   return (
     <div className={`fd-dv${s.doc ? " is-doc" : ""}`}>

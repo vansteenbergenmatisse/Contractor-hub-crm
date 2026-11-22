@@ -1,3 +1,4 @@
+import { joinParts } from "@/shared/lib/join-parts";
 import { sheetFor } from "../api/invoices";
 import type { InvoicesState } from "../hooks/useInvoices";
 import type { BusinessCard } from "../types";
@@ -32,10 +33,10 @@ export function InvoiceSheet({ s, biz }: { s: InvoicesState; biz: BusinessCard }
         <div className="fd-dch">
           <span className="fd-logo" aria-hidden="true"><span className="fd-h">{biz.init}</span></span>
           <div>
-            <p className="fd-dcb"><span className="fd-h">{biz.name}</span></p>
-            <p className="fd-dcs"><span className="fd-h">{biz.addr}</span></p>
-            <p className="fd-dcs"><span className="fd-h">{biz.phone}</span>{" · "}<span className="fd-h">{biz.email}</span></p>
-            <p className="fd-dcs"><span className="fd-h">{biz.site}</span>{" · "}<span className="fd-h">{biz.hours}</span></p>
+            {biz.name ? <p className="fd-dcb"><span className="fd-h">{biz.name}</span></p> : null}
+            {biz.addr ? <p className="fd-dcs"><span className="fd-h">{biz.addr}</span></p> : null}
+            {joinParts([biz.phone, biz.email]) ? <p className="fd-dcs"><span className="fd-h">{joinParts([biz.phone, biz.email])}</span></p> : null}
+            {joinParts([biz.site, biz.hours]) ? <p className="fd-dcs"><span className="fd-h">{joinParts([biz.site, biz.hours])}</span></p> : null}
           </div>
         </div>
         <p className="fd-dcn">
