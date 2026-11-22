@@ -78,7 +78,9 @@ PROGRESS.md             Running log: resume guide, current state, plans, blocker
 docs/                   Long-form notes and plans (e.g. docs/gohighlevel-integration.md)
 ```
 
-Existing features: `today`, `highlevel`, `auth`, `brand`, `admin`, `embed`.
+Existing features: `today`, `highlevel`, `auth`, `brand`, `admin`, `embed`, `app-shell`, `onboarding`, `inbox`, `pipeline`, `calendar`, `leads`, `quotes`, `invoices`, `payments`, `automations`, `settings`.
+
+Signed-in pages live in the route group `src/app/(app)/` (one layout: session guard, business details, search rows). Page features run on marked MOCK data until Phase 3. Read before changing them: `docs/greenlane/plan.md` (includes the rule that NO automation is written in this app: automations are HighLevel workflows, set up once and copied per client), `docs/tenant-branding.md` (every client's own colors, logo, name and details come from its custom values; the installable app), `docs/onboarding.md` (sub-account sync, users, email, decisions and open risks).
 
 ## Adding code
 
