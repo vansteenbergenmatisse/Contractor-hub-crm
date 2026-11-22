@@ -70,8 +70,11 @@ export function extraKeys(values: Record<string, string>): string[] {
   return Object.keys(values).filter((k) => !known.has(k) && isSettingsKeyAllowed(k));
 }
 
-// A readable label made from the key itself ("business_address_city" gives "Business address city").
+// The field's label: the design's label for a key it lists ("main_hover_color" gives "Main, pressed"),
+// else one made from the key itself ("business_address_city" gives "Business address city").
 export function labelOfKey(key: string): string {
+  const known = [...ESSENTIAL_FIELDS, ...COLOR_GROUPS.flatMap((g) => g.fields)].find((f) => f.key === key);
+  if (known) return known.label;
   const words = key.replace(/_/g, " ").trim();
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
@@ -90,7 +93,7 @@ export function sectionTitle(key: SectionKey): string {
   return SECTIONS.find((s) => s.key === key)?.title ?? "";
 }
 
-// Connection rows in the design's order. Status comes from the mock until an API gives it.
+// Connection rows in the design's order. Status: see api/connections.ts.
 export const CONNECTIONS: Connection[] = [
   {
     name: "Business phone number",

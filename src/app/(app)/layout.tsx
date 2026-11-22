@@ -7,8 +7,8 @@ import { searchRows as leadRows } from "@/features/leads";
 import { searchRows as paymentRows } from "@/features/payments";
 import { searchRows as pipelineRows } from "@/features/pipeline";
 import { searchRows as quoteRows } from "@/features/quotes";
+import { loadBusiness } from "@/features/brand";
 import { getRequestUser } from "../session";
-import { loadBusiness } from "./business";
 
 export const dynamic = "force-dynamic";
 

@@ -161,9 +161,13 @@ export function summarize(leads: readonly Lead[], state: LeadsState): Summary {
   return { tone: "calm", a: "Nobody waits on you.", b: "New leads show up here first.", button: "", target: null };
 }
 
+// The leads of this week by source, before any lead added on screen.
+export const WEEK_TOTAL = Object.values(MOCK_WEEK_SOURCES).reduce((n, c) => n + c, 0);
+
+// The three tiles. New today and This week stay at the sample counts, as in the design (a lead
+// added on screen shows in the list, the wait count and the sources panel, not in these two).
 export function tiles(leads: readonly Lead[], state: LeadsState): { today: number; week: number; wait: number } {
-  const week = Object.values(MOCK_WEEK_SOURCES).reduce((n, c) => n + c, 0);
-  return { today: MOCK_NEW_TODAY + state.added.length, week: week + state.added.length, wait: waitingCount(leads, state) };
+  return { today: MOCK_NEW_TODAY, week: WEEK_TOTAL, wait: waitingCount(leads, state) };
 }
 
 export const SOURCE_LABEL: Record<SourceKey | "you", string> = {

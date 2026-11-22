@@ -9,12 +9,14 @@ const { currentUserFromHeaders, listTenantCustomValues, SettingsPage } = vi.hois
 }));
 
 vi.mock("@/features/auth", () => ({ currentUserFromHeaders }));
-vi.mock("@/features/highlevel", () => ({ listTenantCustomValues }));
+// The brand feature's cached reader (5 minutes) returns every key; the settings allowlist filters it.
+vi.mock("@/features/brand", () => ({ getTenantCustomValues: listTenantCustomValues }));
 // The real allowlist and section mapping (pure functions); only the client component is replaced.
 vi.mock("@/features/settings", async () => {
   const { settingsValuesFrom } = await import("../../src/features/settings/api/allowlist");
   const { sectionFromParam } = await import("../../src/features/settings/api/section-param");
-  return { SettingsPage, settingsValuesFrom, sectionFromParam };
+  const { loadSettingsValues } = await import("../../src/features/settings/api/load-values");
+  return { SettingsPage, settingsValuesFrom, sectionFromParam, loadSettingsValues };
 });
 vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
 

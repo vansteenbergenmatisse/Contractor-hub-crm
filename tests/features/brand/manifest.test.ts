@@ -44,3 +44,11 @@ describe("parseIconRequest", () => {
     expect(parseIconRequest(new URLSearchParams("maskable=true")).maskable).toBe(false);
   });
 });
+
+describe("buildManifest colors", () => {
+  it("takes theme_color from main_color and background_color from background_color (not the defaults)", () => {
+    const manifest = buildManifest(buildBrand([v("main_color", "#1B5E20"), v("text_on_main_color", "#FFFFFF"), v("background_color", "#F4F7F5")]));
+    expect(manifest.theme_color).toBe("#1b5e20");
+    expect(manifest.background_color).toBe("#f4f7f5");
+  });
+});

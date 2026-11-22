@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useMemo, useReducer } from "react";
+import { useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { useShell } from "@/features/app-shell";
-import { boardReducer, initialBoard } from "../api/board";
+import { useKeptReducer, useShell, useUndoShortcut } from "@/features/app-shell";
+import { boardReducer, canUndo, initialBoard } from "../api/board";
 import { calendarHref, quoteHref } from "../api/links";
 import { pressPlan } from "../api/press";
 import { LAST_STAGE } from "../api/stages";
@@ -20,7 +20,9 @@ function scrollToTop() {
 // The board's state and what each button does. Every action only changes state on screen.
 // Nothing here calls the network, the database or the CRM, and nothing sends a text.
 export function usePipelineBoard() {
-  const [state, dispatch] = useReducer(boardReducer, MOCK_CARDS, initialBoard);
+  // Kept under "pipeline" while the shell is mounted, so a moved card stays moved when the owner
+  // goes to another page and comes back (mock state only, nothing is saved).
+  const [state, dispatch] = useKeptReducer("pipeline", boardReducer, MOCK_CARDS, initialBoard);
   const { sendTimer, askReason } = useShell();
   const router = useRouter();
 
@@ -30,17 +32,21 @@ export function usePipelineBoard() {
   const pick = useCallback((k: number, open?: boolean) => {
     scrollToTop();
     dispatch({ type: "pick", k, open });
-  }, []);
+  }, [dispatch]);
 
   const toList = useCallback(() => {
     scrollToTop();
     dispatch({ type: "list" });
-  }, []);
+  }, [dispatch]);
 
   const undo = useCallback(() => {
     if (state.last && state.stg !== state.last.from) scrollToTop();
     dispatch({ type: "undo" });
-  }, [state.last, state.stg]);
+  }, [state.last, state.stg, dispatch]);
+
+  // ⌘Z (Ctrl Z) runs the same Undo as the button, while that button shows. A move made by a send
+  // has no Undo, so nothing is registered for it.
+  useUndoShortcut(canUndo(state) ? undo : null);
 
   const show = useCallback(() => {
     if (state.last && !state.last.undo) pick(state.last.to, true);
@@ -49,7 +55,7 @@ export function usePipelineBoard() {
   const prev = useCallback(() => pick(state.stg - 1), [pick, state.stg]);
   const next = useCallback(() => pick(state.stg + 1), [pick, state.stg]);
 
-  const moveTo = useCallback((i: number, to: number) => dispatch({ type: "move", i, to }), []);
+  const moveTo = useCallback((i: number, to: number) => dispatch({ type: "move", i, to }), [dispatch]);
 
   const press = useCallback(
     (view: CardView) => {
@@ -59,14 +65,14 @@ export function usePipelineBoard() {
       // A card moved by a send has no Undo: `plan.done` carries bySend.
       else sendTimer({ ...plan.request, onDone: () => dispatch(plan.done) });
     },
-    [router, sendTimer],
+    [router, sendTimer, dispatch],
   );
 
   const lose = useCallback(
     (i: number) => {
       askReason({ name: MOCK_CARDS[i].name, onPick: (reason) => dispatch({ type: "lose", i, reason }) });
     },
-    [askReason],
+    [askReason, dispatch],
   );
 
   const openCalendar = useCallback((name: string) => router.push(calendarHref(name)), [router]);

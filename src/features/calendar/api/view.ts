@@ -22,8 +22,12 @@ export function bookingLink(business: CalendarBusiness): string {
   return site ? `${site}/book` : "";
 }
 
-export function daySummary(items: ReadonlyArray<{ kind: StopKind }>): string {
-  if (!items.length) return "Nothing booked";
+// The line under the day title. Stops you added are left out of the count (as in the design); a day
+// with only stops you added reads "1 stop, added by you".
+export function daySummary(all: ReadonlyArray<{ kind: StopKind; added?: boolean }>): string {
+  const items = all.filter((x) => !x.added);
+  const mine = all.length - items.length;
+  if (!items.length) return mine ? `${mine} ${mine === 1 ? "stop" : "stops"}, added by you` : "Nothing booked";
   const e = items.filter((x) => x.kind === "E").length;
   const j = items.length - e;
   const parts = [e ? `${e} ${e === 1 ? "estimate" : "estimates"}` : "", j ? `${j} ${j === 1 ? "job" : "jobs"}` : ""].filter(Boolean);
@@ -78,7 +82,8 @@ export function buildView(state: CalendarState, now: Date, business: CalendarBus
   const live = liveStops(s);
   const inWeek = live.filter((x) => x.place.week === s.wk);
   const has = [0, 0, 0, 0, 0, 0, 0];
-  inWeek.forEach((x) => { has[x.place.day] += 1; });
+  // Day dots and day labels count the booked stops only, not the ones you added (as in the design).
+  inWeek.forEach((x) => { if (!x.added) has[x.place.day] += 1; });
   const parity = s.bumps % 2 ? "-a" : "-b";
 
   const events: EventView[] = inWeek.map((x) => {

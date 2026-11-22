@@ -15,3 +15,11 @@ export function quoteHref(name: string): string {
   const quote = SEED_QUOTES.find((q) => q.name === name);
   return quote ? `/quotes?row=${encodeURIComponent(`quote-${quote.id}`)}` : "/quotes";
 }
+
+// The card a search row id points at ("pipeline-<index>", see buildSearchRows), or -1 when the id
+// is not one of this board's cards.
+export function cardIndexOfRow(row: string | null, count: number): number {
+  const m = /^pipeline-(\d+)$/.exec(row ?? "");
+  const i = m ? Number(m[1]) : -1;
+  return i >= 0 && i < count ? i : -1;
+}

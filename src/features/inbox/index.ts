@@ -4,6 +4,7 @@ import { toSearchRows } from "./api/search-rows";
 import { MOCK_CONVERSATIONS } from "./mock";
 
 export { InboxPage } from "./components/InboxPage";
+export { InboxPageFromUrl } from "./components/InboxPageFromUrl";
 export { INBOX_WAITING_COUNT } from "./mock";
 export { waitTier, waitLabel } from "./api/wait";
 

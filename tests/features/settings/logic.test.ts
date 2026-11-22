@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { contrastRatio } from "@/features/brand";
 import {
-  COLOR_KEYS, ESSENTIAL_KEYS, MOCK_CUSTOM_VALUES, contrast, filterSettings, initialState, settingsReducer, validateValues,
+  COLOR_KEYS, ESSENTIAL_KEYS, MOCK_CUSTOM_VALUES, contrast, filterSettings, initialState, labelOfKey, settingsReducer, validateValues,
 } from "@/features/settings";
 
 // The sample values hold no business identity, so a valid set needs a made-up name.
@@ -54,11 +54,12 @@ describe("validateValues", () => {
     expect(validateValues(base())).toBeNull();
   });
 
-  it("refuses every color key that is not a 6 digit hex and names the key", () => {
+  it("refuses every color key that is not a 6 digit hex and names the field by its label", () => {
     for (const key of COLOR_KEYS) {
       const p = validateValues({ ...base(), [key]: "green" });
       expect(p?.key).toBe(key);
-      expect(p?.message).toContain(`custom_values.${key}`);
+      expect(p?.message).toBe(`${labelOfKey(key)} needs a color like #2E7D32.`);
+      expect(p?.message).not.toContain("custom_values.");
       expect(p?.section).toBe("colors");
     }
     expect(validateValues({ ...base(), sub_color: "#abc" })?.key).toBe("sub_color");
@@ -75,7 +76,7 @@ describe("validateValues", () => {
     for (const key of ["business_logo", "business_favicon_url", "business_main_background_video_or_image"]) {
       const p = validateValues({ ...base(), [key]: "http://example.com/a.png" });
       expect(p?.key).toBe(key);
-      expect(p?.message).toContain(`custom_values.${key}`);
+      expect(p?.message).toBe(`${labelOfKey(key)} needs a link that starts with https://.`);
     }
   });
 
@@ -84,7 +85,8 @@ describe("validateValues", () => {
     expect(validateValues({ ...base(), main_color: "#767676", text_on_main_color: "#FFFFFF" })).toBeNull();
     const p = validateValues({ ...base(), main_color: "#777777", text_on_main_color: "#FFFFFF" });
     expect(p?.key).toBe("main_color");
-    expect(p?.message).toContain("custom_values.main_color");
+    expect(p?.message).toContain("Main color");
+    expect(p?.message).not.toContain("custom_values.");
     expect(p?.section).toBe("colors");
   });
 
@@ -95,7 +97,7 @@ describe("validateValues", () => {
     expect(validateValues({ ...base(), main_color: "#a16b33", text_on_main_color: "#FFFFFF" })).toBeNull();
     const p = validateValues({ ...base(), main_color: "#816f99", text_on_main_color: "#FFFFFF" });
     expect(p?.key).toBe("main_color");
-    expect(p?.message).toContain("custom_values.main_color");
+    expect(p?.message).toContain("Main color");
   });
 
   it("checks the main color against text_on_main_color, not against background_color", () => {
@@ -106,6 +108,64 @@ describe("validateValues", () => {
   it("checks the color format before the contrast", () => {
     const p = validateValues({ ...base(), text_on_main_color: "white" });
     expect(p?.key).toBe("text_on_main_color");
+  });
+});
+
+describe("validateValues against the saved values (only what the owner changed)", () => {
+  const empty = Object.fromEntries([...ESSENTIAL_KEYS, ...COLOR_KEYS].map((k) => [k, ""]));
+
+  it("labels say what the design's labels say", () => {
+    expect(labelOfKey("main_hover_color")).toBe("Main, pressed");
+    expect(labelOfKey("business_name")).toBe("Business name");
+    expect(labelOfKey("business_address_city")).toBe("Business address city");
+  });
+
+  it("lets a new client with no values save one brand color", () => {
+    expect(validateValues({ ...empty, main_color: "#1565C0" }, empty)).toBeNull();
+    let s = initialState(empty);
+    s = settingsReducer(s, { type: "edit", key: "main_color", value: "#1565C0" });
+    s = settingsReducer(s, { type: "save" });
+    expect(s.err).toBeNull();
+    expect(s.ok).toBe(true);
+    expect(s.values.main_color).toBe("#1565C0");
+  });
+
+  it("refuses a changed color that is not a 6 digit hex, by its label", () => {
+    const p = validateValues({ ...empty, main_hover_color: "blue" }, empty);
+    expect(p).toMatchObject({ key: "main_hover_color", section: "colors", message: "Main, pressed needs a color like #2E7D32." });
+    expect(validateValues({ ...empty, sub_color: "#abc" }, empty)?.key).toBe("sub_color");
+  });
+
+  it("does not block a save on a value the owner did not touch", () => {
+    const saved = { ...empty, border_color: "green", business_logo: "http://old.example/logo.png" };
+    expect(validateValues({ ...saved, main_color: "#1565C0" }, saved)).toBeNull();
+  });
+
+  it("lets the owner clear a color (the app then uses its own color)", () => {
+    const saved = { ...base() };
+    expect(validateValues({ ...saved, sub_color: "" }, saved)).toBeNull();
+  });
+
+  it("refuses clearing the business name but not a business name that was already empty", () => {
+    const saved = { ...base() };
+    expect(validateValues({ ...saved, business_name: "  " }, saved)).toMatchObject({
+      key: "business_name", section: "biz", message: "Enter the business name.",
+    });
+    expect(validateValues({ ...empty, business_email: "a@b.example" }, empty)).toBeNull();
+  });
+
+  it("refuses a changed link that is not https", () => {
+    expect(validateValues({ ...empty, business_logo: "http://x.example/a.png" }, empty)).toMatchObject({
+      key: "business_logo", message: "Logo (link to the image) needs a link that starts with https://.",
+    });
+  });
+
+  it("checks the contrast when the main color or the text on it changes and both are set", () => {
+    const saved = { ...base() };
+    expect(validateValues({ ...saved, main_color: "#777777" }, saved)?.key).toBe("main_color");
+    expect(validateValues({ ...empty, main_color: "#777777" }, empty)).toBeNull();
+    const low = { ...saved, main_color: "#777777" };
+    expect(validateValues({ ...low, business_email: "a@b.example" }, low)).toBeNull();
   });
 });
 
@@ -137,6 +197,14 @@ describe("bad value on save", () => {
     s = settingsReducer(s, { type: "save" });
     expect(s.sec).toBe("colors");
     expect(s.cols).toBe(true);
+  });
+
+  it("asks for focus again on every failed save (n goes 1, then 2)", () => {
+    let s = settingsReducer(initialState(base()), { type: "edit", key: "border_color", value: "nope" });
+    s = settingsReducer(s, { type: "save" });
+    expect(s.focus).toEqual({ key: "border_color", n: 1 });
+    s = settingsReducer(s, { type: "save" });
+    expect(s.focus).toEqual({ key: "border_color", n: 2 });
   });
 
   it("a good save stores the values and clears the error", () => {

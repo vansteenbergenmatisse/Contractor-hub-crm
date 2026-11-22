@@ -41,6 +41,14 @@ describe("totals and the switch", () => {
   it("counts running, off and all", () => {
     expect(totals(fresh().items)).toEqual({ on: 17, off: 0, all: 17 });
   });
+  it("counts a switched-on campaign that is not started yet as running, as the design does (logic: nOn counts every live row that is on)", () => {
+    const s = fresh();
+    const campaigns = s.items.filter((a) => a.who === "you");
+    expect(campaigns.map((a) => runLabel(a))).toEqual(["Not started yet", "Not started yet"]);
+    expect(totals(s.items).on).toBe(17);
+    const off = campaigns.reduce((x, a) => toggle(x, a.id), s);
+    expect(totals(off.items)).toEqual({ on: 15, off: 2, all: 17 });
+  });
   it("flips a row at once and updates the counts", () => {
     let s = fresh();
     const id = byName(s, "Owner ping").id;
@@ -232,12 +240,15 @@ describe("seasonal offer and referral reward", () => {
     expect(testLine("Hi {first name}, {seasonal offer}", biz)).toContain("The text reads: Hi {first name}, 10% off in spring");
     expect(testLine("Reply YES. {referral reward}", biz)).toContain("Reply YES. You both get $25.");
   });
-  it("says the offer or reward is not set instead of showing raw braces", () => {
-    expect(doesText('Texts old leads your seasonal offer: "{seasonal offer}"', NONE)).toBe("Texts old leads your seasonal offer: (no seasonal offer set)");
+  it("leaves a missing offer or reward out: no raw braces, no placeholder note, no made-up value", () => {
+    expect(doesText('Texts old leads your seasonal offer: "{seasonal offer}"', NONE)).toBe("Texts old leads your seasonal offer.");
     const line = testLine("Hi {first name}, {seasonal offer}", NONE);
-    expect(line).toContain("Hi {first name}, (no seasonal offer set)");
-    expect(line).not.toContain("{seasonal offer}");
-    expect(testLine("Reply YES. {referral reward}", NONE)).toContain("Reply YES. (no referral reward set)");
+    expect(line).toContain("The text reads: Hi {first name}");
+    expect(line).not.toMatch(/\{seasonal offer\}|no seasonal offer set|""/);
+    const reward = testLine("Hi {first name}, know someone? Reply YES. {referral reward}", NONE);
+    expect(reward).toContain("Reply YES.");
+    expect(reward).not.toMatch(/\{referral reward\}|no referral reward set/);
+    expect(doesText('Texts old leads your seasonal offer: "{seasonal offer}"', { ...NONE, seasonal_offer_text: "   " })).toBe("Texts old leads your seasonal offer.");
     expect(doesText("One text the day after.", NONE)).toBe("One text the day after.");
   });
 });

@@ -1,25 +1,16 @@
-import { headers } from "next/headers";
-import { currentUserFromHeaders } from "@/features/auth";
-import { listTenantCustomValues } from "@/features/highlevel";
-import { SettingsPage, sectionFromParam, settingsValuesFrom } from "@/features/settings";
+import { getTenantCustomValues } from "@/features/brand";
+import { SettingsPage, loadSettingsValues, sectionFromParam } from "@/features/settings";
+import { getRequestUser } from "../../session";
 
 export const dynamic = "force-dynamic";
 
 type Props = { searchParams?: Promise<Record<string, string | string[] | undefined>> };
 
-// The signed-in sub-account's own custom values fill the fields, filtered by the settings allowlist so
-// the form webhook and other secrets stay on the server. When they cannot be read the page shows empty
-// fields, never the design's sample business. `?section=connections` opens that section.
+// Composes the Settings page: the signed-in tenant's custom values (through the brand feature's
+// 5-minute cache, filtered by the settings allowlist) and the section named in `?section=`.
 export default async function Page({ searchParams }: Props = {}) {
-  const user = await currentUserFromHeaders(await headers());
-  let values: Record<string, string> = {};
-  if (user?.tenantId) {
-    try {
-      values = settingsValuesFrom(await listTenantCustomValues(user.tenantId));
-    } catch {
-      // Not readable now: empty fields.
-    }
-  }
+  const user = await getRequestUser();
+  const values = await loadSettingsValues(user?.tenantId, getTenantCustomValues);
   const section = sectionFromParam((await searchParams)?.section) ?? undefined;
   return <SettingsPage initialValues={values} initialSection={section} />;
 }

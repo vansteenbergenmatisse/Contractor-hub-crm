@@ -44,8 +44,7 @@ describe("TodayPage markup", () => {
     expect(html).toContain('aria-label="New leads: 4 today, 13 this week. Open leads"');
     expect(html).toContain('aria-label="Appointments: 4 today, next at 11:00 AM. Open the calendar"');
     expect(html).toContain('aria-label="Invoices to send: 4. Open Invoices"');
-    expect(html).toMatch(/aria-label="Jobs this week: [^"]*\. Open the pipeline"/);
-    expect(html).not.toContain("job stages");
+    expect(html).toContain('aria-label="Jobs this week: 6, 1 today. Open the job stages in the pipeline"');
   });
 
   it("lists the six to-dos with one filled button on the top row only", () => {

@@ -1,7 +1,8 @@
 import type { CustomValues, Problem } from "../types";
-import { COLOR_KEYS, LINK_KEYS, sectionOfKey } from "./fields";
+import { COLOR_KEYS, LINK_KEYS, labelOfKey, sectionOfKey } from "./fields";
 
 const HEX6 = /^#[0-9a-fA-F]{6}$/;
+const HTTPS = /^https:\/\/\S+$/i;
 const MIN_CONTRAST = 4.5;
 
 // WCAG 2.x contrast ratio of two 6 digit hex colors. Same formula as `contrastRatio` in
@@ -24,24 +25,39 @@ function problem(key: string, message: string): Problem {
   return { key, message, section: sectionOfKey(key) ?? "biz" };
 }
 
-// Returns the first value that must stop a save, or null. Order: color format, business name,
-// links, then the contrast rule (build prompt section 3, rule 6). Messages name the key.
-export function validateValues(values: CustomValues): Problem | null {
+// Returns the first value that must stop a save, or null. Order as in the design: color format,
+// business name, links, then the contrast rule (build prompt section 3, rule 6). Messages name the
+// field by its label.
+//
+// With `saved` (what Save stored last), only what the owner changed is checked, so a new client whose
+// custom values are empty can save one color, and an old value HighLevel holds never blocks a save.
+// A changed color may be cleared (the app then uses its own color); the business name may not.
+// Without `saved`, every value is checked, as in the design.
+export function validateValues(values: CustomValues, saved?: CustomValues): Problem | null {
   const v = (k: string) => (values[k] ?? "").trim();
+  const changed = (k: string) => !saved || v(k) !== (saved[k] ?? "").trim();
+  const mayBeEmpty = saved !== undefined;
 
   for (const key of COLOR_KEYS) {
-    if (!HEX6.test(v(key))) return problem(key, `custom_values.${key} needs a color like #2E7D32.`);
+    if (!changed(key) || (mayBeEmpty && v(key) === "")) continue;
+    if (!HEX6.test(v(key))) return problem(key, `${labelOfKey(key)} needs a color like #2E7D32.`);
   }
-  if (v("business_name") === "") return problem("business_name", "Enter the business name (custom_values.business_name).");
+  if (changed("business_name") && v("business_name") === "") return problem("business_name", "Enter the business name.");
   for (const key of LINK_KEYS) {
-    if (v(key) !== "" && !/^https:\/\/\S+$/i.test(v(key))) {
-      return problem(key, `custom_values.${key} needs a link that starts with https://.`);
+    if (changed(key) && v(key) !== "" && !HTTPS.test(v(key))) {
+      return problem(key, `${labelOfKey(key)} needs a link that starts with https://.`);
     }
   }
-  if (contrast(v("main_color"), v("text_on_main_color")) < MIN_CONTRAST) {
+  const main = v("main_color");
+  const onMain = v("text_on_main_color");
+  if (
+    (changed("main_color") || changed("text_on_main_color")) &&
+    HEX6.test(main) && HEX6.test(onMain) &&
+    contrast(main, onMain) < MIN_CONTRAST
+  ) {
     return problem(
       "main_color",
-      "The text on your main color is hard to read. Make custom_values.main_color darker, or change custom_values.text_on_main_color.",
+      `The text on your main color is hard to read. Make ${labelOfKey("main_color")} darker, or change ${labelOfKey("text_on_main_color")}.`,
     );
   }
   return null;

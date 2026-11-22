@@ -22,6 +22,7 @@ export type BusinessProfile = {
   address: string | null;
   city: string | null;
   state: string | null;
+  county: string | null;
   hours: string | null;
   keyword: string | null;
   websiteUrl: string | null;
@@ -30,6 +31,8 @@ export type BusinessProfile = {
   bookingQuoteUrl: string | null;
   googleProfileUrl: string | null;
   googleReviewUrl: string | null;
+  seasonalOffer: string | null;
+  referralReward: string | null;
 };
 
 export type BrandValue = { key: string; value: string };

@@ -26,7 +26,7 @@ export function LeadRow({ lead, status, main, onCall, onReply, onBook }: Props) 
   const chipText = waiting ? `${label} · waiting ${waitText(lead.minutesWaiting)}` : label;
   const mainClass = `fd-btn ${main ? "is-fill" : "is-plain"}`;
   return (
-    <div className="fd-rw">
+    <div className="fd-rw" data-row-id={lead.id}>
       <div className="fd-rm">
         <span className={`fd-cht is-${lead.source}`} aria-hidden="true"><ChannelIcon name={lead.source} /></span>
         <div className="fd-rbx">

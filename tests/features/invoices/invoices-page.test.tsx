@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 vi.mock("next/navigation", () => ({
   usePathname: () => "/invoices",
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 const calls = { pushed: [] as boolean[] };
@@ -69,9 +70,10 @@ describe("InvoicesPage markup", () => {
     expect(html.indexOf("fx-emp")).toBeLessThan(html.indexOf('class="fd-lst"'));
     expect(html).toContain("Show all invoices");
   });
-  it("has one filled button per view: the sheet beside the list shows a ready invoice, so its button is the filled one", () => {
-    expect((html.match(/class="fd-btn is-fill"/g) ?? []).length).toBe(1);
-    expect(html).toMatch(/<section class="fd-pnl fd-doc"[\s\S]*class="fd-btn is-fill"/);
+  it("fills the first ready row's Send invoice, as the design does at every width (the sheet's own button shows only on a phone)", () => {
+    expect(html).toMatch(/id="fd-iv-r1049"[\s\S]*?class="fd-btn is-fill">Send invoice<\/button>/);
+    const list = html.slice(html.indexOf('class="fd-lst"'), html.indexOf('class="fd-side2"'));
+    expect((list.match(/class="fd-btn is-fill"/g) ?? []).length).toBe(1);
   });
   it("gives the sheet a focus target and each View button an id to return to", () => {
     expect(html).toContain('id="fd-iv-sheet" tabindex="-1"');
@@ -102,6 +104,14 @@ describe("InvoicesPage markup", () => {
     expect(empty).not.toContain("> · <");
     expect(empty).not.toMatch(/fd-dcs"><span class="fd-h"> · /);
     expect(empty).toContain("Pay online with the link in this message.");
+    // Neither a logo nor a name: no empty colored tile.
+    expect(empty).not.toContain('class="fd-logo');
+  });
+  it("shows the initials tile when the business has a name", () => {
+    expect(html).toContain('<span class="fd-logo" aria-hidden="true"><span class="fd-h">TR</span></span>');
+  });
+  it("puts the sheet's title and status chip on one line: a plain-text chip, as in the design", () => {
+    expect(html).toContain('<p class="fd-dcn"><span><span class="fd-h">Invoice 1049</span></span><span class="fd-chip is-plain"><span class="fd-h">Made when the job was marked done</span></span></p>');
   });
   it("marks late invoices light red and over 7 days full red", () => {
     expect(html).toContain("fd-chip is-bad");

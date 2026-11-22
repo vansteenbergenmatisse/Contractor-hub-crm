@@ -29,11 +29,18 @@ export function KanbanCard({
           <p className="fd-kn">{card.name}</p>
           <p className="fd-ks">{card.service}</p>
         </div>
-        {view.calendar ? (
-          <button type="button" className="fd-ibtn fd-kcal" aria-label={`Open ${card.name} in the calendar`} onClick={onCalendar}>
-            <svg width="16" height="16" strokeWidth="2" {...svgProps}><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></svg>
-          </button>
-        ) : null}
+        {/* Always drawn, as in the design: off, it is hidden and out of reach, and the CSS
+            (.fd-kcal.is-off + .fd-klost) uses it to push the trash button to the right. */}
+        <button
+          type="button"
+          className={"fd-ibtn fd-kcal" + (view.calendar ? "" : " is-off")}
+          aria-label={`Open ${card.name} in the calendar`}
+          tabIndex={view.calendar ? undefined : -1}
+          aria-hidden={view.calendar ? undefined : true}
+          onClick={view.calendar ? onCalendar : undefined}
+        >
+          <svg width="16" height="16" strokeWidth="2" {...svgProps}><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></svg>
+        </button>
         {view.trash ? (
           <button type="button" className="fd-ibtn fd-klost" aria-label={`Move ${card.name} to Lost`} onClick={onTrash}>
             <svg width="16" height="16" strokeWidth="2" {...svgProps}><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12" /></svg>

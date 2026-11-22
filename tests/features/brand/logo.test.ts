@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { allowedLogoHosts, fetchLogoDataUri, isAllowedLogoUrl } from "@/features/brand";
+import { allowedLogoHosts, fetchLogoDataUri, isAllowedLogoUrl, LOGO_TIMEOUT_MS, MAX_LOGO_BYTES } from "@/features/brand";
 
 const HOSTS = ["assets.example.test"];
 const png = new Uint8Array([137, 80, 78, 71]);
@@ -69,5 +69,33 @@ describe("allowedLogoHosts", () => {
   it("has HighLevel's media host by default and adds only well-formed hosts from the variable", () => {
     expect(allowedLogoHosts("")).toEqual(["assets.cdn.filesafe.space"]);
     expect(allowedLogoHosts("cdn.one.test, bad host!, CDN.two.test")).toEqual(["assets.cdn.filesafe.space", "cdn.one.test", "cdn.two.test"]);
+  });
+});
+
+describe("fetchLogoDataUri limits", () => {
+  it.each([302, 206, 404])("gives null for a %s even when it carries image/png", async (status) => {
+    const f = (async () => new Response(png as unknown as BodyInit, { status, headers: { "content-type": "image/png" } })) as unknown as typeof fetch;
+    expect(await call("https://assets.example.test/l.png", f)).toBeNull();
+  });
+
+  it("caps at 512 KiB and times out after 4 seconds by default", () => {
+    expect(MAX_LOGO_BYTES).toBe(512 * 1024);
+    expect(LOGO_TIMEOUT_MS).toBe(4000);
+  });
+
+  it("uses the 4 second timeout and the 512 KiB cap when called without overrides", async () => {
+    const timeout = vi.spyOn(AbortSignal, "timeout");
+    const atCap = new Uint8Array(512 * 1024);
+    expect(await call("https://assets.example.test/l", (async () => ok(atCap as unknown as BodyInit)) as unknown as typeof fetch)).not.toBeNull();
+    expect(timeout).toHaveBeenCalledWith(4000);
+    const overCap = new Uint8Array(512 * 1024 + 1);
+    expect(await call("https://assets.example.test/l", (async () => ok(overCap as unknown as BodyInit)) as unknown as typeof fetch)).toBeNull();
+    timeout.mockRestore();
+  });
+
+  it("accepts exactly maxBytes streamed bytes and refuses one more (no content-length)", async () => {
+    const stream = (n: number) => (async () => ok(new ReadableStream({ start(c) { c.enqueue(new Uint8Array(n)); c.close(); } }) as unknown as BodyInit)) as unknown as typeof fetch;
+    expect(await call("https://assets.example.test/l", stream(100), { maxBytes: 100 })).not.toBeNull();
+    expect(await call("https://assets.example.test/l", stream(101), { maxBytes: 100 })).toBeNull();
   });
 });

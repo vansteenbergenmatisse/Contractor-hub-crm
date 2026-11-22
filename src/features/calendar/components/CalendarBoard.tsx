@@ -1,13 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useReducer, useRef, type CSSProperties, type MouseEvent } from "react";
-import { PageAction, usePushed, Icon } from "@/features/app-shell";
+import { useCallback, useEffect, useRef, type CSSProperties, type MouseEvent } from "react";
+import { PageAction, usePushed, Icon, useKeptReducer, useRowFocus } from "@/features/app-shell";
 import { dayAtX, slotAtY } from "../api/grid";
 import { calendarReducer, initialState } from "../api/state";
 import { buildView } from "../api/view";
 import { DAYS, GRID_ROWS } from "../api/dates";
 import { useStopDrag } from "../hooks/use-stop-drag";
-import { MOCK_STOPS } from "../mock";
+import { mockStopsFor } from "../mock";
 import type { CalendarBusiness } from "../types";
 import { AddSheet } from "./AddSheet";
 import { CalendarActions } from "./CalendarActions";
@@ -19,16 +19,18 @@ import { StopDetail } from "./StopDetail";
 const HOURS = ["7 AM", "8 AM", "9 AM", "10 AM", "11 AM", "12 PM", "1 PM", "2 PM", "3 PM", "4 PM", "5 PM"];
 const DESKTOP = 1024;
 
-// The page body for a known `now`. All state is local and mock: nothing is fetched, saved or sent.
+// The page body for a known `now`. All state is mock: nothing is fetched, saved or sent. The state is
+// kept by the shell while the owner visits other pages (as in the design), and is gone on a reload.
 export function CalendarBoard({ now, business, row = null }: { now: Date; business: CalendarBusiness; row?: string | null }) {
-  // A stop named in the URL (?row=<id>) opens on the first render, and again when the URL names another.
-  const [state, dispatch] = useReducer(calendarReducer, undefined, () => {
-    const first = initialState(MOCK_STOPS, now);
+  // A stop named in the URL (?row=<id>) opens on the first render, and again when the URL names another
+  // (also while the page is already open: the route re-renders with the new `row`).
+  const [state, dispatch] = useKeptReducer("calendar", calendarReducer, now, (at: Date) => {
+    const first = initialState(mockStopsFor(at), at);
     return row ? calendarReducer(first, { type: "openRow", id: row }) : first;
   });
   useEffect(() => {
     if (row) dispatch({ type: "openRow", id: row });
-  }, [row]);
+  }, [row, dispatch]);
   const v = buildView(state, now, business);
   const gridRef = useRef<HTMLDivElement>(null);
   const undoRef = useRef<HTMLButtonElement>(null);
@@ -38,11 +40,35 @@ export function CalendarBoard({ now, business, row = null }: { now: Date; busine
   useEffect(() => {
     if (state.ev === "nav") document.querySelector(".fd-main")?.scrollTo?.(0, 0);
   }, [state.ev, state.sw]);
+  // After that: the stop a search result names is scrolled to, focused and ringed (useRowFocus also
+  // reacts to a new ?row= while the page is open).
+  useRowFocus(v.events.map((e) => e.id));
+
+  // Close the open stop (X, Close or Escape) and give focus back to the stop button that opened it.
+  const closeDetail = useCallback(() => {
+    const id = state.selId;
+    dispatch({ type: "closeDetail" });
+    if (id) Array.from(document.querySelectorAll<HTMLElement>(".fd-cg [data-row-id]")).find((el) => el.dataset.rowId === id)?.focus();
+  }, [state.selId, dispatch]);
+
+  // Escape closes the stop detail (design: after the delete question and the add sheet, which close first).
+  const detailOpen = v.detail.open || !!v.added;
+  const busy = !!state.confirmId || !!state.add;
+  useEffect(() => {
+    if (!detailOpen || busy) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      e.preventDefault();
+      closeDetail();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [detailOpen, busy, closeDetail]);
 
   const drag = useStopDrag({
     gridRef,
     enabled: state.view === "week",
-    onDrop: useCallback((id: string, day: number, start: number) => dispatch({ type: "move", id, to: { week: state.wk, day, start } }), [state.wk]),
+    onDrop: useCallback((id: string, day: number, start: number) => dispatch({ type: "move", id, to: { week: state.wk, day, start } }), [state.wk, dispatch]),
   });
 
   // Double-click a free time in the week (computer) opens New estimate with that time first.
@@ -108,18 +134,20 @@ export function CalendarBoard({ now, business, row = null }: { now: Date; busine
       <p className="fd-csyncl">
         <span className="fd-chip fd-csync is-plain">Not available yet</span>
         <span className="fd-csynct">
-          The calendar this syncs with shows here once it can be read.{" "}
+          Connect your calendar in Settings.{" "}
           <span className="fd-wd">Drag a stop to move it. Double-click a free time to add an estimate.</span>
           <span className="fd-wm">Tap a stop to move it.</span>
         </span>
         <button type="button" className="fd-btn fd-cadd" onClick={() => dispatch({ type: "openAdd", kind: "E" })}><Icon name="plus" size={15} strokeWidth={2.2} />Add estimate</button>
         <button type="button" className="fd-btn is-plain fd-cadd" onClick={() => dispatch({ type: "openAdd", kind: "J" })}><Icon name="plus" size={15} strokeWidth={2.2} />Add job</button>
       </p>
-      <p className="fd-cbk">
+      {/* A div, so the design's .fd-cbk bottom margin applies (the .fd-app p reset removes it from a p):
+          the line no longer touches the day strip on a phone. */}
+      <div className="fd-cbk">
         <Glyph name="cal" size={16} />
         <span>A customer who accepts a quote gets a booking link{v.booking.link ? <>: <b>{v.booking.link}</b></> : null}. The job lands here and the card moves to Job Scheduled. You get an alert.{v.booking.hours ? ` Open ${v.booking.hours}.` : ""}</span>
         {v.booking.link ? <button type="button" className="fd-btn is-plain" onClick={copyLink}>{v.booking.copyText}</button> : null}
-      </p>
+      </div>
 
       <ConfirmDelete
         confirm={v.confirm}
@@ -132,7 +160,7 @@ export function CalendarBoard({ now, business, row = null }: { now: Date; busine
       <p className={`fd-cdl fd-cns${v.added ? "" : " is-off"}`}>
         <span>{v.added?.text ?? ""}</span>
         <button type="button" className="fd-btn is-danger" onClick={() => sel && dispatch({ type: "askDelete", id: sel })}><Glyph name="trash" />Delete</button>
-        <button type="button" className="fd-link" onClick={() => dispatch({ type: "closeDetail" })}>Close</button>
+        <button type="button" className="fd-link" onClick={closeDetail}>Close</button>
       </p>
       <AddSheet add={v.add} name={state.addName} onName={(name) => dispatch({ type: "setAddName", name })} onPick={pickAdd} onClose={() => dispatch({ type: "closeAdd" })} />
 
@@ -161,6 +189,7 @@ export function CalendarBoard({ now, business, row = null }: { now: Date; busine
               type="button"
               className={e.cls}
               aria-pressed={e.selected}
+              data-row-id={e.id}
               onPointerDown={(ev) => { if (!e.cls.includes("is-past")) drag.onPointerDown(ev, e.id, e.len); }}
               onClick={() => { if (!drag.consumeClick()) dispatch({ type: "pick", id: e.id }); }}
             >
@@ -177,7 +206,7 @@ export function CalendarBoard({ now, business, row = null }: { now: Date; busine
           <StopDetail
             detail={v.detail}
             deleteLabel={`Delete ${v.detail.kind ? v.detail.kind.toLowerCase() : "stop"}`}
-            onClose={() => dispatch({ type: "closeDetail" })}
+            onClose={closeDetail}
             onReschedule={() => dispatch({ type: "openReschedule" })}
             onCancelReschedule={() => dispatch({ type: "cancelReschedule" })}
             onPickSlot={pickMove}

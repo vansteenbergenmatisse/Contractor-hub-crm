@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("next/navigation", () => ({
   usePathname: () => "/pipeline",
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(""),
 }));
 
 // A stand-in for the shell: the page needs useShell and PageAction, nothing else.
@@ -50,11 +51,29 @@ describe("PipelinePage markup", () => {
     expect(STAGES).toHaveLength(MOCK_HIDDEN_COUNTS.length);
   });
 
+  it("shows the design's literal counts (read from the design page at first load)", () => {
+    const groups = [...html.matchAll(/<span class="fd-sgc">(\d+)<\/span>/g)].map((m) => Number(m[1]));
+    expect(groups).toEqual([20, 8, 3, 49]);
+    const stages = [...html.matchAll(/<span class="fd-kcn[^"]*">(\d+)<\/span><span class="fd-stn">/g)].map((m) => Number(m[1]));
+    expect(stages).toEqual([3, 6, 4, 2, 5, 2, 6, 0, 3, 42, 7]);
+    expect(html).toContain("37 more in Check Back Later");
+    expect(html).toContain("3 more in Lost");
+  });
+
   it("has no trash icon on Payment Due and Lost cards", () => {
     const card = (name: string) => html.slice(html.indexOf(`aria-label="${name}"`), html.indexOf("</article>", html.indexOf(`aria-label="${name}"`)));
     expect(card("Bright Daycare")).not.toContain("fd-klost");
     expect(card("Dale Price")).not.toContain("fd-klost");
     expect(card("Maria Alvarez")).toContain("fd-klost");
+  });
+
+  it("draws the calendar button on every card as the design does: hidden and out of reach where it does not apply", () => {
+    const card = (name: string) => html.slice(html.indexOf(`aria-label="${name}"`), html.indexOf("</article>", html.indexOf(`aria-label="${name}"`)));
+    for (const c of MOCK_CARDS) expect(card(c.name)).toContain("fd-ibtn fd-kcal");
+    // Derek Olsen (Quote to Send): the hidden button comes first, so the CSS pushes the trash button right.
+    expect(card("Derek Olsen")).toMatch(/<button type="button" class="fd-ibtn fd-kcal is-off" aria-label="Open Derek Olsen in the calendar" tabindex="-1" aria-hidden="true">.*<button type="button" class="fd-ibtn fd-klost"/);
+    // Tom Becker (Estimate Booked) has a working calendar button.
+    expect(card("Tom Becker")).toMatch(/<button type="button" class="fd-ibtn fd-kcal" aria-label="Open Tom Becker in the calendar">/);
   });
 
   it("gives every card before Job Done a Job done button", () => {
@@ -106,6 +125,19 @@ describe("no component talks to the network", () => {
     expect(src).not.toMatch(/\bfetch\s*\(/);
     expect(src).not.toMatch(/XMLHttpRequest|WebSocket|EventSource|sendBeacon/);
     expect(src).not.toMatch(/getPrisma|@\/features\/highlevel/);
+  });
+});
+
+describe("one component per file", () => {
+  const dir = join(process.cwd(), "src", "features", "pipeline", "components");
+  it("has a file for each stage column part and no StageColumn file that holds three", () => {
+    const names = readdirSync(dir);
+    for (const f of ["StageHeader.tsx", "StageEmpty.tsx", "StageMore.tsx"]) expect(names).toContain(f);
+    expect(names).not.toContain("StageColumn.tsx");
+    for (const f of names.filter((n) => n.endsWith(".tsx"))) {
+      const exported = readFileSync(join(dir, f), "utf8").match(/^export function \w+/gm) ?? [];
+      expect(exported, f).toHaveLength(1);
+    }
   });
 });
 

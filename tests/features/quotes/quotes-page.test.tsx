@@ -6,11 +6,14 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("next/navigation", () => ({
   usePathname: () => "/quotes",
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 // Shell context stub: the page needs useShell, usePushed and the business values.
 const current = vi.hoisted(() => ({ values: {} as Record<string, string> }));
-vi.mock("@/features/app-shell", () => ({
+vi.mock("@/features/app-shell", async () => ({
+  useKeptReducer: (await vi.importActual<typeof import("@/features/app-shell")>("@/features/app-shell")).useKeptReducer,
+  useRowFocus: () => {},
   useShell: () => ({ sendTimer: vi.fn(), askReason: vi.fn(), setPushed: vi.fn(), setAction: vi.fn() }),
   usePushed: () => {},
   useBusinessValues: () => current.values,
@@ -42,9 +45,10 @@ describe("QuotesPage markup", () => {
   it("lists every quote with its status and one filled approve button", () => {
     for (const q of SEED_QUOTES) expect(html).toContain(q.name);
     expect(html).toContain("Needs service and price");
-    // One filled button per view: the sheet beside the list shows the waiting quote, so the row's button is plain.
-    expect((html.match(/is-fill/g) ?? []).length).toBe(1);
-    expect(html).toMatch(/<section class="fd-pnl fd-doc"[\s\S]*class="fd-btn is-fill"/);
+    // As in the design, the first waiting row's button is filled at every width (the sheet's own button shows only on a phone).
+    const list = html.slice(html.indexOf('class="fd-lst"'), html.indexOf('class="fd-side2"'));
+    expect((list.match(/is-fill/g) ?? []).length).toBe(1);
+    expect(html).toMatch(/id="fd-qt-q0"[\s\S]*?class="fd-btn is-fill"[^>]*>Approve and send/);
     expect(html).toContain("Opened 3 times today. Call now.");
   });
   it("shows the build form only for a quote that needs a price, with labels", () => {
@@ -69,12 +73,21 @@ describe("QuotesPage markup", () => {
     expect(empty).not.toContain("> · <");
     expect(empty).not.toMatch(/fd-dcs">\s*·/);
   });
-  it("shows the frame's initials and name on the sheet when the business has no name, never a blank logo", () => {
+  it("shows no name and no initials on the sheet when the business has no name, like the invoice sheet", () => {
     current.values = NONE;
     const empty = renderToStaticMarkup(<QuotesPage />);
     current.values = VALUES;
-    expect(empty).toContain('<span class="fd-logo" aria-hidden="true"><span class="fd-h">YB</span></span>');
-    expect(empty).toContain('<p class="fd-dcb">Your business</p>');
+    // Neither a logo nor a name: no empty colored tile either.
+    expect(empty).not.toContain('class="fd-logo');
+    expect(empty).not.toContain("Your business");
+    expect(empty).not.toContain("YB");
+    expect(empty).not.toContain('class="fd-dcb"');
+  });
+  it("shows the initials tile when the business has a name", () => {
+    expect(html).toContain('<span class="fd-logo" aria-hidden="true"><span class="fd-h">TR</span></span>');
+  });
+  it("puts the sheet's title and status chip on one line: a plain-text chip, as in the design", () => {
+    expect(html).toContain('<p class="fd-dcn"><span><span class="fd-h">Quote</span></span><span class="fd-chip is-warn"><span class="fd-h">The AI built it. It waits for your OK.</span></span></p>');
   });
   it("marks every row with the id of its search row", () => {
     for (const q of SEED_QUOTES) expect(html).toContain(`data-row-id="quote-${q.id}"`);
@@ -95,13 +108,18 @@ describe("QuoteSheet", () => {
     expect(out).toContain(">Save</button>");
     expect(out).not.toContain("Approve and send");
   });
-  it("an empty quote explains itself and offers no approve or edit", () => {
+  it("an empty quote shows No price yet, no extra line, and offers no approve or edit", () => {
     const out = renderToStaticMarkup(<QuoteSheet {...base} quote={SEED_QUOTES[1]} editing={false} />);
     expect(out).toContain("No price yet");
-    expect(out).toContain("No lines yet");
+    expect(out).not.toContain("No lines yet");
     expect(out).toContain("Upload your own quote");
     expect(out).not.toContain(">Edit<");
     expect(out).not.toContain("Approve and send");
+  });
+  it("a business with a logo but no name keeps the tile for the logo", () => {
+    const out = renderToStaticMarkup(<QuoteSheet {...base} business={{ ...sheetBusiness(NONE), logo: "https://cdn.example/logo.png" }} quote={SEED_QUOTES[0]} editing={false} />);
+    expect(out).toContain('class="fd-logo"');
+    expect(out).not.toContain('class="fd-dcb"');
   });
   it("an own file shows its name and Remove", () => {
     const out = renderToStaticMarkup(<QuoteSheet {...base} quote={{ ...SEED_QUOTES[1], status: "ready", file: "mine.pdf" }} editing={false} />);

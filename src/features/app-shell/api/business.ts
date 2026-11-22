@@ -8,6 +8,8 @@ export type BusinessInput = {
   owner?: string | null;
   keyword?: string | null;
   city?: string | null;
+  // Custom value `business_main_county`, or "".
+  county?: string | null;
   state?: string | null;
   phone?: string | null;
   email?: string | null;
@@ -20,6 +22,9 @@ export type BusinessInput = {
   bookingQuoteUrl?: string | null;
   googleProfileUrl?: string | null;
   googleReviewUrl?: string | null;
+  // Custom values `seasonal_offer_text` and `referral_reward_text` (Automations texts).
+  seasonalOfferText?: string | null;
+  referralRewardText?: string | null;
 };
 
 function siteOf(url: string | null | undefined): string {
@@ -53,6 +58,7 @@ export function buildBusiness(input: BusinessInput): Business {
     email: clean(input.email),
     address: clean(input.address),
     city: clean(input.city),
+    county: clean(input.county),
     state: clean(input.state),
     hours: clean(input.hours),
     websiteUrl: link(input.websiteUrl),
@@ -62,6 +68,8 @@ export function buildBusiness(input: BusinessInput): Business {
     bookingQuoteUrl: link(input.bookingQuoteUrl),
     googleProfileUrl: link(input.googleProfileUrl),
     googleReviewUrl: link(input.googleReviewUrl),
+    seasonalOffer: clean(input.seasonalOfferText),
+    referralReward: clean(input.referralRewardText),
   };
 }
 
@@ -76,35 +84,45 @@ export function businessValues(business: Business) {
     business_address: business.address,
     business_hours: business.hours,
     business_main_city: business.city,
+    business_main_county: business.county,
     business_main_state_abbreviation: business.state,
     business_main_keyword: business.keyword,
     business_website_url: business.websiteUrl ?? "",
+    seasonal_offer_text: business.seasonalOffer,
+    referral_reward_text: business.referralReward,
   };
 }
 
 // Fields a patch may set. The rest (init, ownerInit, first, site, tag) are worked out again.
 const PATCH_KEYS = [
-  "name", "owner", "keyword", "city", "state", "phone", "email", "address", "hours", "cta",
+  "name", "owner", "keyword", "city", "county", "state", "phone", "email", "address", "hours", "cta",
   "logoUrl", "websiteUrl", "bookingJobUrl", "bookingQuoteUrl", "googleProfileUrl", "googleReviewUrl",
+  "seasonalOffer", "referralReward",
 ] as const;
 
 export type BusinessPatch = Partial<Business>;
 
 // The details with a patch on top (Settings edits in this browser session). "" or null blanks a
-// field (text to "", links to null, name and owner to their plain words); derived and unknown
-// fields in the patch are ignored and recomputed by `buildBusiness`.
+// field (text to "", links to null, the name to its plain word); derived and unknown
+// fields in the patch are ignored and recomputed by `buildBusiness`. A blank owner keeps the owner
+// already shown (the signed-in person's name), so a Settings save without an owner name never
+// turns the menu card into "Owner".
 export function patchBusiness(base: Business, patch: BusinessPatch): Business {
   const input: BusinessInput = {
-    name: base.name, owner: base.owner, keyword: base.keyword, city: base.city, state: base.state,
+    name: base.name, owner: base.owner, keyword: base.keyword, city: base.city, county: base.county, state: base.state,
     phone: base.phone, email: base.email, address: base.address, hours: base.hours, universalCta: base.cta,
     logoUrl: base.logoUrl, websiteUrl: base.websiteUrl, bookingJobUrl: base.bookingJobUrl, bookingQuoteUrl: base.bookingQuoteUrl,
     googleProfileUrl: base.googleProfileUrl, googleReviewUrl: base.googleReviewUrl,
+    seasonalOfferText: base.seasonalOffer, referralRewardText: base.referralReward,
   };
   for (const key of PATCH_KEYS) {
     if (!Object.prototype.hasOwnProperty.call(patch, key)) continue;
     const value = (patch as Record<string, unknown>)[key];
     const next = typeof value === "string" ? value : null;
     if (key === "cta") input.universalCta = next;
+    else if (key === "seasonalOffer") input.seasonalOfferText = next;
+    else if (key === "referralReward") input.referralRewardText = next;
+    else if (key === "owner" && !next?.trim()) continue;
     else input[key] = next;
   }
   return buildBusiness(input);

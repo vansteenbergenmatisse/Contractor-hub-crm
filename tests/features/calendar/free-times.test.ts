@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { freeTimes, liveStops, initialState, MOCK_STOPS } from "@/features/calendar";
+import { freeTimes, GRID_ROWS, liveStops, initialState, MOCK_STOPS } from "@/features/calendar";
 
 const NOW = new Date(2026, 10, 20, 10, 0); // Friday
 const SAT = new Date(2026, 10, 21, 8, 0);
@@ -66,5 +66,16 @@ describe("free time edges", () => {
     expect(freeTimes({ stops: [], kind: "E", now: nine, count: 1 })).toEqual([{ week: 0, day: 5, start: 8 }]);
     const early = new Date(2026, 10, 20, 8, 59);
     expect(freeTimes({ stops: [], kind: "E", now: early, count: 1 })).toEqual([{ week: 0, day: 5, start: 4 }]);
+  });
+
+  it("never offers a time that runs past the end of the grid (6:00 PM)", () => {
+    for (const kind of ["E", "J"] as const) {
+      expect(freeTimes({ stops: [], kind, len: 21, now: NOW })).toEqual([]);
+      expect(freeTimes({ stops: [], kind, len: GRID_ROWS + 1, now: NOW })).toEqual([]);
+    }
+    // A stop that exactly fills the grid from 8:00 AM still fits.
+    const full = freeTimes({ stops: [], kind: "J", len: 20, now: NOW });
+    expect(full).toEqual([{ week: 0, day: 6, start: 2 }, { week: 1, day: 1, start: 2 }, { week: 1, day: 2, start: 2 }]);
+    expect(full.every((p) => p.start + 20 <= GRID_ROWS)).toBe(true);
   });
 });

@@ -69,4 +69,8 @@ export type Lead = {
 
 export type MiniRow = { name: string; note?: string; late?: string; amount: string };
 
+// A Money owed row: the invoice number points at the Invoices page's sample invoice, whose due day
+// and lateness are the source of truth (see `owedRows`).
+export type OwedRow = { name: string; invoiceNo: number; amount: string };
+
 export type MoneyBar = { height: number; label: string; on?: boolean };

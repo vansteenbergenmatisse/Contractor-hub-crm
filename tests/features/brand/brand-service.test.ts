@@ -80,3 +80,35 @@ describe("brand service", () => {
     expect(fetchValues).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("brand service raw values", () => {
+  it("returns the raw values through the same cache as the brand", async () => {
+    const { service, fetchValues } = setup();
+    await service.getBrand("t1");
+    expect(await service.getValues("t1")).toEqual(values);
+    expect(fetchValues).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps tenants apart for values", async () => {
+    const fetchValues = vi.fn(async (id: string) => [{ key: "business_name", value: id }]);
+    const { service } = setup(fetchValues);
+    expect(await service.getValues("t1")).toEqual([{ key: "business_name", value: "t1" }]);
+    expect(await service.getValues("t2")).toEqual([{ key: "business_name", value: "t2" }]);
+  });
+
+  it("rejects on a HighLevel failure, does not cache it, and the brand still falls back", async () => {
+    const fetchValues = vi.fn().mockRejectedValueOnce(new Error("down")).mockRejectedValueOnce(new Error("down")).mockResolvedValue(values);
+    const { service } = setup(fetchValues);
+    await expect(service.getValues("t1")).rejects.toThrow("down");
+    expect((await service.getBrand("t1")).cssVars).toEqual({});
+    expect(await service.getValues("t1")).toEqual(values);
+  });
+
+  it("fetches values again after the ttl", async () => {
+    const { service, fetchValues, advance } = setup();
+    await service.getValues("t1");
+    advance(60_001);
+    await service.getValues("t1");
+    expect(fetchValues).toHaveBeenCalledTimes(2);
+  });
+});

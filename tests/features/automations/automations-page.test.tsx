@@ -65,9 +65,10 @@ describe("AutomationsPage markup", () => {
     expect(html).toContain("Back to the list");
   });
 
-  it("shows the Promotion campaign's offer sentence without raw braces", () => {
-    expect(html).toContain("Texts old leads your seasonal offer: (no seasonal offer set)");
+  it("shows the Promotion campaign's offer sentence without raw braces or a placeholder note when no offer is set", () => {
+    expect(html).toContain("Texts old leads your seasonal offer.");
     expect(html).not.toContain("{seasonal offer}");
+    expect(html).not.toContain("no seasonal offer set");
   });
 
   it("gives each row's Edit button an id to return focus to", () => {

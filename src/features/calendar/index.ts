@@ -2,7 +2,7 @@
 export { CalendarPage } from "./components/CalendarPage";
 export { CalendarPageFromUrl } from "./components/CalendarPageFromUrl";
 export { CalendarActions } from "./components/CalendarActions";
-export { MOCK_STOPS } from "./mock";
+export { MOCK_STOPS, MOCK_TODAY, mockStopsFor } from "./mock";
 
 // Pure logic (state, dates, free times, view model, pointer maths). Exported so tests can reach it.
 export { calendarReducer, initialState, liveStops, placementOf, ADD_NAME_ERROR } from "./api/state";
@@ -12,5 +12,6 @@ export {
 } from "./api/dates";
 export { CANDIDATE_STARTS, NEW_LEN, freeTimes } from "./api/free-times";
 export { dayAtX, dropStart, slotAtY } from "./api/grid";
+export { useStopDrag } from "./hooks/use-stop-drag";
 export { addOptions, bookingLink, buildView, confirmSafeButton, daySummary, rescheduleOptions, siteOf } from "./api/view";
 export type { CalendarAction, CalendarBusiness, CalendarState, Placement, Stop, StopKind } from "./types";

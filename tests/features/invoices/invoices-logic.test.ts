@@ -243,8 +243,9 @@ describe("sheet", () => {
       business_name: "Sample Co", business_address: "1 A St", business_phone_number: "555", business_email: "a@b.example",
       business_hours: "Mon", business_website_url: "https://www.sample.example/path",
     });
-    expect(card).toEqual({ init: "SC", name: "Sample Co", addr: "1 A St", phone: "555", email: "a@b.example", site: "sample.example", hours: "Mon" });
+    expect(card).toEqual({ init: "SC", name: "Sample Co", addr: "1 A St", phone: "555", email: "a@b.example", site: "sample.example", hours: "Mon", logo: null });
     expect(businessCard({ business_name: "Sample Roofing" }).init).toBe("SR");
+    expect(businessCard({}, "https://cdn.example/logo.png").logo).toBe("https://cdn.example/logo.png");
   });
   it("makes initials", () => {
     expect(initialsOf("Hilliard Storage")).toBe("HS");
@@ -342,19 +343,14 @@ describe("two separate 7-day numbers", () => {
   });
 });
 
-describe("one filled button per view", () => {
+describe("the filled button on the list (design: the first ready invoice, at every width)", () => {
   const list = mock();
   const first = list.find((i) => i.st === "ready")!;
-  const other = list.find((i) => i.st !== "ready")!;
-  it("on a computer the sheet's Send invoice is the filled one when the sheet shows a ready invoice", () => {
-    expect(rowFillNo(list, first, false, true)).toBeUndefined();
+  it("the first ready row is filled", () => {
+    expect(rowFillNo(list)).toBe(first.no);
   });
-  it("on a computer the first ready row is filled when the sheet shows another invoice or edits", () => {
-    expect(rowFillNo(list, other, false, true)).toBe(first.no);
-    expect(rowFillNo(list, first, true, true)).toBe(first.no);
-  });
-  it("on a phone the sheet is hidden behind the list, so the first ready row is filled", () => {
-    expect(rowFillNo(list, first, false, false)).toBe(first.no);
+  it("no invoice is ready: no filled row", () => {
+    expect(rowFillNo(list.map((i) => (i.st === "ready" ? markSent(i, NOW) : i)))).toBeUndefined();
   });
 });
 

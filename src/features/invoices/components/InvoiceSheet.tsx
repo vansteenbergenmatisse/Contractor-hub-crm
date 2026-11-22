@@ -1,6 +1,7 @@
 import { joinParts } from "@/shared/lib/join-parts";
 import { canSend as canSendInvoice, sheetFor } from "../api/invoices";
-import { SHEET_ID, type InvoicesState } from "../hooks/useInvoices";
+import { SHEET_ID, type InvoicesState } from "../hooks/use-invoices";
+import { SheetLogo } from "./SheetLogo";
 import type { BusinessCard } from "../types";
 
 const ALERT = (
@@ -31,7 +32,7 @@ export function InvoiceSheet({ s, biz }: { s: InvoicesState; biz: BusinessCard }
       </div>
       <div className={`fd-sheet${editing ? " is-off" : ""}`}>
         <div className="fd-dch">
-          <span className="fd-logo" aria-hidden="true"><span className="fd-h">{biz.init}</span></span>
+          <SheetLogo url={biz.logo} initials={biz.init} />
           <div>
             {biz.name ? <p className="fd-dcb"><span className="fd-h">{biz.name}</span></p> : null}
             {biz.addr ? <p className="fd-dcs"><span className="fd-h">{biz.addr}</span></p> : null}

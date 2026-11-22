@@ -1,6 +1,7 @@
 import type { SearchRow, SendTimerRequest } from "@/features/app-shell";
+import { buildMockInvoices, chipFor } from "@/features/invoices";
 import { LEADS, MONEY_OWED, QUOTES_OUT } from "../mock";
-import type { Lead, LeadRange, RowStatus, Stop, Todo, TodayState } from "../types";
+import type { Lead, LeadRange, MiniRow, OwedRow, RowStatus, Stop, Todo, TodayState } from "../types";
 
 const NBSP = " ";
 
@@ -81,5 +82,17 @@ const slug = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, "-").re
 export const searchRows: readonly SearchRow[] = [
   ...LEADS.map((l): SearchRow => ({ id: `today-lead-${slug(l.name)}`, page: "leads", name: l.name, sub: `${l.need} · ${l.chip.text}`, href: "/leads" })),
   ...QUOTES_OUT.rows.map((r): SearchRow => ({ id: `today-quote-${slug(r.name)}`, page: "quotes", name: r.name, sub: `Quote ${r.amount} · ${r.note ?? ""}`.trim(), href: "/quotes" })),
-  ...MONEY_OWED.rows.map((r): SearchRow => ({ id: `today-owed-${slug(r.name)}`, page: "payments", name: r.name, sub: `Owes ${r.amount} · ${r.late ?? r.note ?? ""}`.trim(), href: "/payments" })),
+  ...MONEY_OWED.rows.map((r): SearchRow => ({ id: `today-owed-${slug(r.name)}`, page: "payments", name: r.name, sub: `Owes ${r.amount}`, href: "/payments" })),
 ];
+
+// Money owed rows with the due day or lateness taken from the Invoices page's sample invoices on
+// `now`, so both pages say the same ("Due Nov 22" / "6 days late"). A late invoice gets the red chip.
+export function owedRows(rows: readonly OwedRow[], now: Date): MiniRow[] {
+  const invoices = buildMockInvoices(now);
+  return rows.map((r) => {
+    const inv = invoices.find((i) => i.no === r.invoiceNo);
+    const chip = inv ? chipFor(inv, now) : null;
+    const late = !!chip && (chip.tone === "is-bad" || chip.tone === "is-hot");
+    return { name: r.name, amount: r.amount, ...(late ? { late: chip.text } : { note: chip?.text ?? "" }) };
+  });
+}

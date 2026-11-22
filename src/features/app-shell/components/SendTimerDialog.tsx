@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { createSendController, sendDialogHandlers, type SendController, type SendDialogHandlers, type TimerState } from "../api/send-timer";
 import type { Business, SendTimerRequest } from "../types";
+import { useDialog } from "../hooks/use-dialog";
 import { BrandLogo } from "./BrandLogo";
 import { useBusiness } from "./ShellContext";
 
@@ -15,6 +16,8 @@ import { useBusiness } from "./ShellContext";
 export function SendTimerDialog({ request, onClose, tickMs = 1000 }: { request: SendTimerRequest; onClose: () => void; tickMs?: number }) {
   const business = useBusiness();
   const actionRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const refocus = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [timer, setTimer] = useState<TimerState | null>(null);
   const [setup] = useState(() => {
     const waits = new Set<ReturnType<typeof setTimeout>>();
@@ -41,6 +44,7 @@ export function SendTimerDialog({ request, onClose, tickMs = 1000 }: { request: 
     const id = setInterval(() => controller.tick(), tickMs);
     return () => {
       clearInterval(id);
+      clearTimeout(refocus.current);
       for (const wait of waits) clearTimeout(wait);
       waits.clear();
     };
@@ -50,23 +54,31 @@ export function SendTimerDialog({ request, onClose, tickMs = 1000 }: { request: 
   const handlers: SendDialogHandlers = {
     ...setup.handlers,
     // Back puts focus on Cancel again, like the design.
-    onBack: () => { setup.handlers.onBack(); setTimeout(() => actionRef.current?.focus(), 80); },
+    onBack: () => {
+      setup.handlers.onBack();
+      clearTimeout(refocus.current);
+      refocus.current = setTimeout(() => actionRef.current?.focus(), 80);
+    },
   };
-  return <SendTimerView request={request} business={business} state={state} handlers={handlers} actionRef={actionRef} />;
+  // Escape goes back from the document when it is shown, else cancels (design logic `uxEsc`).
+  // Tab stays in the dialog; on close focus goes back to the button that opened it.
+  useDialog(dialogRef, () => (setup.controller.state().viewing ? handlers.onBack() : handlers.onCancel()));
+  return <SendTimerView request={request} business={business} state={state} handlers={handlers} actionRef={actionRef} dialogRef={dialogRef} />;
 }
 
 // The dialog as plain markup from its state; no hooks, so a test can read the tree and press the buttons.
-export function SendTimerView({ request, business, state, handlers, actionRef }: {
+export function SendTimerView({ request, business, state, handlers, actionRef, dialogRef }: {
   request: SendTimerRequest;
   business: Business;
   state: TimerState;
   handlers: SendDialogHandlers;
   actionRef?: RefObject<HTMLButtonElement | null>;
+  dialogRef?: RefObject<HTMLDivElement | null>;
 }) {
   const view = state.viewing;
   const { doc } = request;
   return (
-    <div className={`fd-cf fd-dg${view ? " is-view" : ""}`} role="alertdialog" aria-modal="true" aria-labelledby="fd-dg-t">
+    <div ref={dialogRef} className={`fd-cf fd-dg${view ? " is-view" : ""}`} role="alertdialog" aria-modal="true" aria-labelledby="fd-dg-t">
       <div className="fd-cfb">
         <button type="button" className={`fd-link fd-aback${view ? "" : " is-off"}`} onClick={handlers.onBack}>
           <svg className="fd-flip" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="m9 6 6 6-6 6" /></svg>

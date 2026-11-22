@@ -18,6 +18,7 @@ export type Business = {
   email: string;
   address: string;
   city: string;
+  county: string;
   state: string;
   hours: string;
   websiteUrl: string | null;
@@ -28,6 +29,9 @@ export type Business = {
   bookingQuoteUrl: string | null;
   googleProfileUrl: string | null;
   googleReviewUrl: string | null;
+  // Custom values `seasonal_offer_text` and `referral_reward_text`, or "".
+  seasonalOffer: string;
+  referralReward: string;
 };
 
 // One row the search can find. `page` decides the group; `href` is where it opens.

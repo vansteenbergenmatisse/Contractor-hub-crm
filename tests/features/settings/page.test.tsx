@@ -8,9 +8,18 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/settings",
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
-vi.mock("@/features/app-shell", () => ({ usePushed: (v: boolean) => usePushed(v), useShell: () => ({}) }));
+vi.mock("@/features/app-shell", async () => {
+  const { useReducer } = await import("react");
+  return {
+    usePushed: (v: boolean) => usePushed(v),
+    useShell: () => ({}),
+    // Outside the shell useKeptReducer is exactly useReducer.
+    useKeptReducer: (_key: string, r: never, a: never, i: never) => useReducer(r, a, i),
+  };
+});
 
 import { COLOR_KEYS, ESSENTIAL_KEYS, MOCK_CUSTOM_VALUES, SettingsPage, initialState, settingsValuesFrom } from "@/features/settings";
+import type { ConnectionStatus } from "@/features/settings";
 
 describe("SettingsPage markup", () => {
   const fetchSpy = vi.fn();
@@ -38,13 +47,47 @@ describe("SettingsPage markup", () => {
     expect(usePushed).toHaveBeenCalledWith(false);
   });
 
-  it("marks the current section and shows Connected or Not connected", () => {
+  it("marks the current section and never claims a connection the app cannot read", () => {
     expect(html).toMatch(/aria-current="page"[^>]*>(?:(?!<\/button>).)*Business details/s);
-    expect(html).toContain("Connected: Google Calendar");
-    expect(html).toContain("Not connected");
-    expect(html).toContain("Ask Forge Forward to connect");
+    // No API gives a connection status yet (build prompt section 6), so no row says Connected,
+    // no row says Not connected, and the A2P line does not show.
+    expect(html).not.toContain("Connected: Google Calendar");
+    expect(html).not.toMatch(/>Connected</);
+    expect(html).not.toContain("Not connected");
+    expect(html).not.toContain("A2P verified. Your texts get delivered.");
+    expect((html.match(/class="fd-chip is-plain">(?:(?!<\/span><\/span>).)*<span class="fd-h">Not available yet<\/span><\/span>/gs) ?? []).length).toBe(6);
+    // Each row shows its steps and the ask button, as a not-connected row does in the design.
+    expect((html.match(/>Ask Forge Forward to connect</g) ?? []).length).toBe(6);
+    expect((html.match(/class="fd-rex fd-how"/g) ?? []).length).toBe(6);
     expect(html).toContain("Done when this row says Connected.");
     expect(html).not.toMatch(/>Connect</);
+  });
+
+  it("shows Connected and Not connected rows when a status is given", () => {
+    const st: ConnectionStatus[] = [
+      { state: "connected", a2pVerified: true }, { state: "connected", note: "Connected: Google Calendar" },
+      { state: "not-connected" }, { state: "unknown" }, { state: "connected" }, { state: "not-connected" },
+    ];
+    const out = renderToStaticMarkup(<SettingsPage initialValues={{ business_phone_number: "+1 (555) 010-0000" }} connections={st} />);
+    expect(out).toContain("Connected: Google Calendar");
+    expect(out).toContain("A2P verified. Your texts get delivered.");
+    expect((out.match(/Not connected/g) ?? []).length).toBe(2);
+    expect((out.match(/>Ask Forge Forward to connect</g) ?? []).length).toBe(3);
+    expect((out.match(/class="fd-rex fd-how is-off"/g) ?? []).length).toBe(3);
+  });
+
+  it("leaves out the phone number sentence when there is no number", () => {
+    expect(html).toContain('<p class="fd-rsb">Calls and texts to this number land in your Inbox.</p>');
+    expect(html).not.toContain(". Calls and texts");
+    const withNumber = renderToStaticMarkup(<SettingsPage initialValues={{ business_phone_number: "+1 (555) 010-0000" }} />);
+    expect(withNumber).toContain('<span class="fd-h">+1 (555) 010-0000</span>. Calls and texts to this number land in your Inbox.');
+  });
+
+  it("after Ask, says the request is noted on this screen only, never that it was received", () => {
+    const out = renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), sec: "conn", asked: { 1: true } }} />);
+    expect(out).toContain("Noted on this screen. The request is not sent to Forge Forward yet.");
+    expect(out).not.toContain("got your request");
+    expect((out.match(/>Ask Forge Forward to connect</g) ?? []).length).toBe(5);
   });
 
   it("has two real switches showing On or Off and three chips with no switch", () => {
@@ -79,11 +122,14 @@ describe("SettingsPage markup", () => {
     expect(none).toContain("No settings match your search.");
   });
 
-  it("shows an error naming the key and flags the field", () => {
-    const s = { ...initialState(), err: { key: "main_color", message: "custom_values.main_color needs a color.", section: "colors" as const } };
+  it("shows the error, flags the field and repeats the message at the field", () => {
+    const s = { ...initialState(), err: { key: "main_hover_color", message: "Main, pressed needs a color like #2E7D32.", section: "colors" as const } };
     const out = renderToStaticMarkup(<SettingsPage initial={s} />);
-    expect(out).toContain("custom_values.main_color needs a color.");
-    expect(out).toMatch(/id="cv-main_color"[^>]*aria-invalid="true"|aria-invalid="true"[^>]*id="cv-main_color"/);
+    expect(out).toMatch(/class="fd-lerr fd-ste" id="fd-st-err" role="alert">(?:(?!<\/p>).)*Main, pressed needs a color like #2E7D32\./s);
+    expect(out).toMatch(/id="cv-main_hover_color"[^>]*aria-invalid="true"|aria-invalid="true"[^>]*id="cv-main_hover_color"/);
+    expect(out).toMatch(/aria-describedby="cv-main_hover_color-err"/);
+    expect(out).toMatch(/<p class="fd-lerr" id="cv-main_hover_color-err">(?:(?!<\/p>).)*Main, pressed needs a color like #2E7D32\./s);
+    expect((out.match(/class="fd-lerr"/g) ?? []).length).toBe(1);
   });
 
   it("shows the sub-account's real values, empty fields for keys it lacks, and its extra keys under their own key", () => {
@@ -143,13 +189,19 @@ describe("SettingsPage markup", () => {
     }
   });
 
-  it("puts a saved color in the swatch style only when it is a hex color", () => {
+  it("puts a saved color in the swatch style only when it is a hex color, else the color the app uses", () => {
     const out = renderToStaticMarkup(<SettingsPage initialValues={{ main_color: "red;position:fixed;inset:0", sub_color: "#abc", text_color: "#112233" }} />);
     // The field itself still shows what HighLevel holds; only the style attribute must not carry it.
     expect(out).not.toMatch(/style="[^"]*(position|red|inset)/);
     expect(out).toContain('style="background:#abc"');
     expect(out).toContain('style="background:#112233"');
-    expect((out.match(/class="fd-swt"[^>]*>/g) ?? []).filter((t) => t.includes("style=")).length).toBe(2);
+    // Not a hex color, or empty: the swatch shows the color the app applies now (its CSS variable).
+    expect(out).toContain('style="background:var(--main-color)"');
+    expect(out).toContain('style="background:var(--main-hover-color)"');
+    expect(out).toContain('style="background:var(--text-on-main-color)"');
+    const swatches = out.match(/class="fd-swt"[^>]*>/g) ?? [];
+    expect(swatches).toHaveLength(14);
+    expect(swatches.every((t) => /style="background:(#[0-9a-f]{3,6}|var\(--[a-z-]+\))"/i.test(t))).toBe(true);
   });
 
   it("says Save stays on this screen", () => {

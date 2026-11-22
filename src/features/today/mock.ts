@@ -2,7 +2,7 @@
 // Phase 3 by reads from HighLevel (to-dos by urgency, tiles, today's calendar, leads, money cards).
 // Never treat any name, amount or text here as a real fact. Business details (name, owner, phone, email,
 // address, website) never go in this file: they come from the sub-account's custom values (`useBusiness`).
-import type { Lead, MiniRow, MoneyBar, Stop, Todo } from "./types";
+import type { Lead, MiniRow, MoneyBar, OwedRow, Stop, Todo } from "./types";
 
 export const TODOS: readonly Todo[] = [
   {
@@ -92,9 +92,9 @@ export const QUOTES_OUT = {
 export const MONEY_OWED = {
   total: "$23,750",
   rows: [
-    { name: "Bright Daycare", late: "14 days late", amount: "$9,400" },
-    { name: "Grace Whitfield", late: "6 days late", amount: "$4,850" },
-    { name: "Paul Ortega", note: "Due Nov 20", amount: "$9,500" },
-  ] satisfies readonly MiniRow[],
+    { name: "Bright Daycare", invoiceNo: 1042, amount: "$9,400" },
+    { name: "Grace Whitfield", invoiceNo: 1044, amount: "$4,850" },
+    { name: "Paul Ortega", invoiceNo: 1045, amount: "$9,500" },
+  ] satisfies readonly OwedRow[],
   foot: "3 invoices · 2 late",
 };

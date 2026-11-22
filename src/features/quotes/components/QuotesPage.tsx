@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useBusiness, useBusinessValues, usePushed, useShell } from "@/features/app-shell";
-import { checkBuild, filterCounts, rowFillId, rowFromSearch, sendRequest, totals, uploadName } from "../api/quotes";
+import { useBusiness, useBusinessValues, usePushed, useRowFocus, useShell } from "@/features/app-shell";
+import { checkBuild, filterCounts, isVisible, rowFillId, rowFromSearch, sendRequest, totals, uploadName } from "../api/quotes";
 import { sheetBusiness } from "../api/sheet-business";
 import { useQuotes } from "../hooks/use-quotes";
-import { useWide } from "../hooks/use-wide";
 import { WIN_TILE, mockBuildLines } from "../mock";
 import type { QuoteFilter } from "../types";
 import { QuoteRow } from "./QuoteRow";
@@ -22,8 +21,7 @@ const FILTERS: ReadonlyArray<{ key: QuoteFilter; label: string }> = [
 // quote Sent on screen.
 export function QuotesPage() {
   const shell = useShell();
-  const business = sheetBusiness(useBusinessValues(), useBusiness());
-  const wide = useWide();
+  const business = sheetBusiness(useBusinessValues(), useBusiness().logoUrl ?? null);
   const [state, dispatch] = useQuotes();
   const fileInput = useRef<HTMLInputElement>(null);
   const uploadFor = useRef<string | null>(null);
@@ -40,14 +38,18 @@ export function QuotesPage() {
   const selected = state.quotes.find((q) => q.id === state.selectedId) ?? state.quotes[0];
   const sums = totals(state.quotes);
   const counts = filterCounts(state.quotes);
-  const filledId = rowFillId(state.quotes, selected, state.editing, wide);
+  const filledId = rowFillId(state.quotes);
 
   const see = (id: string) => { dispatch({ type: "see", id }); setSeen((n) => n + 1); };
-  // A link from another page (?row=quote-<id>, for example Add price or See quote on the Pipeline)
-  // selects that quote once, when the page opens.
+  // A link (?row=quote-<id>: a search result, or Add price / See quote on the Pipeline) selects that
+  // quote when the page opens and again whenever the link changes while the page is open. A filter that
+  // hides the row is cleared first, as in the design; useRowFocus then scrolls to the row and flashes it.
+  const rowLink = useRowFocus(state.quotes.map((q) => `quote-${q.id}`)) ?? "";
   useEffect(() => {
-    const pick = rowFromSearch(window.location.search, state.quotes);
+    const pick = rowFromSearch(`?row=${encodeURIComponent(rowLink)}`, state.quotes);
     if (!pick) return;
+    const linked = state.quotes.find((q) => q.id === pick.id);
+    if (linked && !isVisible(linked, state.filter)) dispatch({ type: "filter", filter: "all" });
     const timer = setTimeout(() => {
       if (pick.see) { see(pick.id); return; }
       dispatch({ type: "select", id: pick.id });
@@ -58,9 +60,9 @@ export function QuotesPage() {
       }, 0);
     }, 0);
     return () => clearTimeout(timer);
-    // Runs once on open; later changes of the list must not re-select the linked row.
+    // Runs when the link changes; later changes of the list must not re-select the linked row.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [rowLink]);
   const shut = () => { const id = state.selectedId; dispatch({ type: "shut" }); setTimeout(() => document.getElementById(`fd-qt-${id}`)?.focus(), 0); };
   const approve = (id: string) => {
     const q = state.quotes.find((x) => x.id === id);
@@ -76,7 +78,7 @@ export function QuotesPage() {
   };
   const build = (id: string, service: string, priceRaw: string) => {
     const check = checkBuild(service, priceRaw);
-    if (check.ok) dispatch({ type: "build", id, service: check.service, low: check.low, high: check.high, lines: mockBuildLines(check.service, check.low) });
+    if (check.ok) dispatch({ type: "build", id, low: check.low, high: check.high, lines: mockBuildLines(check.service, check.low) });
   };
   // The owner's own quote file: only the file name is kept. Nothing is read or uploaded.
   const askUpload = (id: string) => { uploadFor.current = id; fileInput.current?.click(); };

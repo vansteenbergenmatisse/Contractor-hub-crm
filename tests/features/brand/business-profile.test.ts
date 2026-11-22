@@ -24,7 +24,7 @@ describe("business profile from the real key names", () => {
       address: "1 Example Rd Town ST 00000", city: "Town", state: "ST", hours: "Open 24/7", keyword: null, websiteUrl: null,
       universalCta: "Get A Free Quote",
       bookingJobUrl: "https://api.example.test/widget/booking/job1", bookingQuoteUrl: "https://api.example.test/widget/booking/quote1",
-      googleProfileUrl: "https://share.example.test/profile", googleReviewUrl: "https://g.example.test/review",
+      googleProfileUrl: "https://share.example.test/profile", googleReviewUrl: "https://g.example.test/review", county: null, seasonalOffer: null, referralReward: null,
     });
   });
 
@@ -56,5 +56,28 @@ describe("business profile from the real key names", () => {
 
   it("is all null for a sub-account with no values, and never invents a value", () => {
     for (const value of Object.values(EMPTY_BRAND.profile)) expect(value).toBeNull();
+  });
+});
+
+describe("county, seasonal offer and referral reward reach the pages", () => {
+  it("reads them from their custom value keys and passes them to the business details", async () => {
+    const { businessFromBrand } = await import("@/features/brand");
+    const { businessValues } = await import("@/features/app-shell");
+    const brand = buildBrand([
+      v("business_main_county", "Sample County"),
+      v("seasonal_offer_text", "10% off spring cleanups"),
+      v("referral_reward_text", "$50 gift card"),
+    ]);
+    expect(brand.profile.county).toBe("Sample County");
+    expect(brand.profile.seasonalOffer).toBe("10% off spring cleanups");
+    expect(brand.profile.referralReward).toBe("$50 gift card");
+    const values = businessValues(businessFromBrand(brand, "Sam"));
+    expect(values.business_main_county).toBe("Sample County");
+    expect(values.seasonal_offer_text).toBe("10% off spring cleanups");
+    expect(values.referral_reward_text).toBe("$50 gift card");
+  });
+
+  it("leaves them empty when the sub-account has no such values", () => {
+    expect(buildBrand([]).profile).toMatchObject({ county: null, seasonalOffer: null, referralReward: null });
   });
 });

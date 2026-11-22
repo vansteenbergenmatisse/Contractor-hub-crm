@@ -1,21 +1,33 @@
 "use client";
 
-import { useEffect, useMemo, useReducer, useRef } from "react";
-import { usePushed, useShell } from "@/features/app-shell";
+import { useEffect, useMemo, useRef } from "react";
+import { useKeptReducer, usePushed, useShell } from "@/features/app-shell";
 import { extraKeys } from "../api/fields";
-import { applyBrandVars, businessPatchFromValues, type BusinessPatch } from "../api/live-save";
+import { applyBrandToDocument, businessPatchFromValues, type BusinessPatch } from "../api/live-save";
 import { filterSettings } from "../api/search";
 import { initialState, settingsReducer, type SettingsState } from "../api/state";
 import type { SectionKey } from "../types";
 
-// `updateBusiness` is being added to the shell's API; until it exists the call is skipped.
-type ShellWithUpdate = { updateBusiness?: (patch: BusinessPatch) => void };
+// The shell's `updateBusiness`; when a shell does not offer it (a page rendered alone) the call is skipped.
+type ShellWithUpdate = { updateBusiness?: (patch: Partial<BusinessPatch>) => void };
 
 // Settings state plus its side effects: the pushed detail screen on a phone, the cursor in a bad
 // field after Save, scrolling to the top when a section opens, and after a good Save the new colors
 // and business details for this browser session (nothing is written to HighLevel).
+// The state is kept while the owner visits other pages, as in the design: unsaved edits, the open
+// section and the switches are as he left them when he comes back.
 export function useSettings(initial?: SettingsState, initialValues?: Record<string, string>, initialSection?: SectionKey) {
-  const [state, dispatch] = useReducer(settingsReducer, initial, (i) => i ?? initialState(initialValues, initialSection));
+  const [state, dispatch] = useKeptReducer("settings", settingsReducer, initial, (i) => i ?? initialState(initialValues, initialSection));
+  // A link such as `?section=connections` still opens its section when the state was kept.
+  const sectionRef = useRef(initialSection);
+  useEffect(() => {
+    if (sectionRef.current && state.sec !== sectionRef.current) dispatch({ type: "go", section: sectionRef.current });
+    sectionRef.current = undefined;
+    // Runs once, on arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // A focus request left from an earlier visit must not move the cursor on arrival.
+  const arrivedFocus = useRef(state.focus);
   const extras = useMemo(() => extraKeys(state.values), [state.values]);
   const filter = useMemo(() => filterSettings(state.q, extras), [state.q, extras]);
   const shell = useShell() as ShellWithUpdate;
@@ -28,7 +40,7 @@ export function useSettings(initial?: SettingsState, initialValues?: Record<stri
   usePushed(state.open && !filter.active);
 
   useEffect(() => {
-    if (!state.focus) return;
+    if (!state.focus || state.focus === arrivedFocus.current) return;
     document.getElementById(`cv-${state.focus.key}`)?.focus();
   }, [state.focus]);
 
@@ -39,7 +51,7 @@ export function useSettings(initial?: SettingsState, initialValues?: Record<stri
 
   useEffect(() => {
     if (!state.ok) return;
-    applyBrandVars(document.documentElement, state.values);
+    applyBrandToDocument(document, state.values);
     updateRef.current?.(businessPatchFromValues(state.values));
   }, [state.ok, state.values]);
 

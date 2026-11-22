@@ -41,6 +41,13 @@ describe("Sources panel service area", () => {
     expect(empty).toContain("leads of this week.</p>");
     for (const bad of ["Northway", "undefined", "null"]) expect(empty).not.toContain(bad);
   });
+  it("names city, county and state, as the design does, when the business has a county", () => {
+    // The shell's business facts may carry the county (custom value business_main_county).
+    current.business = { ...buildBusiness({ city: "Testville", state: "TS" }), county: "Test County" };
+    const full = renderToStaticMarkup(<LeadsPage />);
+    current.business = buildBusiness({ name: "Test Roofing Co", city: "Testville", state: "TS" });
+    expect(full).toContain("Service area: Testville, Test County, TS.");
+  });
   it("shows only the city when there is no state", () => {
     current.business = buildBusiness({ city: "Testville" });
     const city = renderToStaticMarkup(<LeadsPage />);

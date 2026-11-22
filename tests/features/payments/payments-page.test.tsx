@@ -5,10 +5,13 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/payments",
+  useSearchParams: () => null,
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
-import { MOCK_PAYMENTS, PaymentsPage, PaymentsView, initialState, markPaid, remind, searchRows } from "@/features/payments";
+import { PaymentsPage, PaymentsView, buildMockPayments, initialState, markPaid, remind, searchRows } from "@/features/payments";
+
+const MOCK_PAYMENTS = buildMockPayments(new Date());
 
 const html = renderToStaticMarkup(<PaymentsPage />);
 const view = (rows = MOCK_PAYMENTS, state = initialState(rows)) =>
@@ -61,10 +64,11 @@ describe("PaymentsPage", () => {
 });
 
 describe("PaymentsView states", () => {
-  it("shows the reminder line and Undo after Remind now", () => {
+  it("shows the reminder line after Remind now, and no Undo (Undo is for a paid row only)", () => {
     const out = view(MOCK_PAYMENTS, remind(initialState(MOCK_PAYMENTS), MOCK_PAYMENTS[1].id));
-    expect(out).toContain("Reminder sent just now");
-    expect((out.match(/>Undo</g) ?? []).length).toBe(1);
+    expect((out.match(/Reminder sent just now/g) ?? []).length).toBe(1);
+    expect(out).not.toContain(MOCK_PAYMENTS[1].history);
+    expect(out).not.toContain(">Undo<");
   });
 
   it("shows a paid row with Undo, stopped reminders and updated totals", () => {

@@ -71,16 +71,16 @@ export function amountLabel(q: Quote): string {
 
 export const isMoved = (q: Quote): boolean => q.status !== q.baseStatus;
 
-// The words in the status chip.
+// The words in the status chip. Phase 2 copy follows the design word for word (owner decision).
 export function statusText(q: Quote): string {
   switch (q.status) {
     case "need": return "Needs service and price";
-    case "won": return "Accepted. Marked on screen only.";
-    case "lost": return q.why ? `Lost: ${q.why.toLowerCase()}. Marked on screen only.` : "Lost. Marked on screen only.";
+    case "won": return "Accepted. Booking link sent.";
+    case "lost": return q.why ? `Lost: ${q.why}. Every text stopped.` : "Lost. Every text stopped.";
     case "later": return "Ask again later. The card sits in Check Back Later.";
     case "ready": return q.file ? "Your own quote. It waits for your OK." : q.note || "The AI built it. It waits for your OK.";
     case "sent":
-      if (isMoved(q)) return "Marked sent just now. Nothing left this app.";
+      if (isMoved(q)) return "Sent just now. Follow-ups run.";
       if (q.opens > 0) return `Opened ${q.opens} ${q.opens === 1 ? "time" : "times"} today. Call now.`;
       return q.note;
   }
@@ -97,7 +97,7 @@ export function filterCounts(quotes: readonly Quote[]): Record<QuoteFilter, numb
   return { all: quotes.length, ready: quotes.filter((q) => groupOf(q) === "ready").length, sent: quotes.filter((q) => groupOf(q) === "sent").length };
 }
 
-// The two money tiles. A range counts at its low end.
+// The two money tiles. A range counts at its low end and the tile does not say so, as in the design.
 export function totals(quotes: readonly Quote[]) {
   const sum = (status: QuoteStatus) => quotes.filter((q) => q.status === status);
   const ready = sum("ready"), out = sum("sent");
@@ -114,13 +114,9 @@ export const firstReadyId = (quotes: readonly Quote[]): string | undefined => qu
 
 export const canApprove = (q: Quote): boolean => q.status === "ready";
 
-// One filled button per view. On a computer the sheet sits beside the list; when it shows a quote that
-// waits (and is not being edited) its "Approve and send" is the filled one, so no row is. On a phone
-// the list hides the sheet, so the first waiting row carries it.
-export function rowFillId(quotes: readonly Quote[], sheet: Quote | undefined, editing: boolean, wide: boolean): string | undefined {
-  if (wide && sheet && canApprove(sheet) && !editing) return undefined;
-  return firstReadyId(quotes);
-}
+// The filled button on the list: the first waiting quote's "Approve and send", at every width, as in
+// the design. The sheet's own (filled) button shows only on a phone, where the sheet hides the list.
+export const rowFillId = (quotes: readonly Quote[]): string | undefined => firstReadyId(quotes);
 
 // A link from another page names a row with ?row=quote-<id>. A quote that needs a price is selected so
 // the owner can type it; any other quote opens its sheet.
@@ -175,7 +171,8 @@ export function quotesReducer(state: QuotesState, action: QuotesAction): QuotesS
       if (!q || q.status !== "need") return state;
       const { file: _file, ...rest } = q;
       void _file;
-      const next: Quote = { ...rest, status: "ready", service: action.service, lines: action.lines, ...(action.high ? { high: action.high } : {}) };
+      // The row keeps the lead's service as its subtitle (as in the design); what the owner typed is the line text.
+      const next: Quote = { ...rest, status: "ready", lines: action.lines, ...(action.high ? { high: action.high } : {}) };
       return { ...state, quotes: patch(state, q.id, () => next), selectedId: q.id, last: null };
     }
     case "attach": {

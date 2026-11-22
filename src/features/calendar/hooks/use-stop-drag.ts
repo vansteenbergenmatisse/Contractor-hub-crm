@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
+import { useCallback, useEffect, useRef, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 import { dayAtX, dropStart } from "../api/grid";
 
 const MIN_WIDTH = 1024;
@@ -11,6 +11,10 @@ const THRESHOLD = 8;
 export function useStopDrag(opts: { gridRef: RefObject<HTMLElement | null>; enabled: boolean; onDrop: (id: string, day: number, start: number) => void }) {
   const { gridRef, enabled, onDrop } = opts;
   const suppress = useRef(false);
+  // Ends a drag that is under way: removes the document listeners and puts the stop back.
+  const stop = useRef<(() => void) | null>(null);
+  // The page closes mid-drag: nothing may stay attached to the document, and nothing is dropped.
+  useEffect(() => () => stop.current?.(), []);
 
   // The click that follows a drag must not open the stop.
   const consumeClick = useCallback(() => {
@@ -34,13 +38,17 @@ export function useStopDrag(opts: { gridRef: RefObject<HTMLElement | null>; enab
       el.style.zIndex = "5";
       el.style.opacity = ".85";
     };
-    const up = (e: PointerEvent) => {
+    const end = () => {
       document.removeEventListener("pointermove", move);
       document.removeEventListener("pointerup", up);
-      const box = el.getBoundingClientRect();
       el.style.transform = "";
       el.style.zIndex = "";
       el.style.opacity = "";
+      stop.current = null;
+    };
+    const up = (e: PointerEvent) => {
+      const box = el.getBoundingClientRect();
+      end();
       const grid = gridRef.current;
       if (!moved || !grid) return;
       suppress.current = true;
@@ -53,6 +61,8 @@ export function useStopDrag(opts: { gridRef: RefObject<HTMLElement | null>; enab
       if (day < 0) return;
       onDrop(id, day, dropStart(box.top, rect.top, rowH, len));
     };
+    stop.current?.();
+    stop.current = end;
     document.addEventListener("pointermove", move);
     document.addEventListener("pointerup", up);
   }, [enabled, gridRef, onDrop]);

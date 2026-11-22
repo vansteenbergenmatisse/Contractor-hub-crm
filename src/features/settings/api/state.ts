@@ -77,7 +77,8 @@ export function settingsReducer(s: SettingsState, a: SettingsAction): SettingsSt
     case "save": {
       const trimmed: CustomValues = {};
       for (const k of Object.keys(s.draft)) trimmed[k] = String(s.draft[k]).trim();
-      const bad = validateValues(trimmed);
+      // Only what the owner changed since the last save is checked (see validateValues).
+      const bad = validateValues(trimmed, s.values);
       if (bad) {
         return {
           ...s,

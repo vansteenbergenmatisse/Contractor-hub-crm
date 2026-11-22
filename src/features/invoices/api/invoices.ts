@@ -108,13 +108,9 @@ export function editInvoice(inv: Invoice, form: EditForm): Result {
 // the name never does.
 export const canSend = (inv: Invoice): boolean => inv.st === "ready" && missingField(inv) === null;
 
-// One filled button per view. On a computer the sheet sits beside the list; when it shows a ready
-// invoice (not being edited) its "Send invoice" is the filled one, so no row is. On a phone the list
-// hides the sheet, so the first ready row carries it.
-export function rowFillNo(list: readonly Invoice[], sheet: Invoice | undefined, editing: boolean, wide: boolean): number | undefined {
-  if (wide && sheet && canSend(sheet) && !editing) return undefined;
-  return list.find((i) => i.st === "ready")?.no;
-}
+// The filled button on the list: the first ready invoice's "Send invoice", at every width, as in the
+// design. The sheet's own (filled) button shows only on a phone, where the sheet hides the list.
+export const rowFillNo = (list: readonly Invoice[]): number | undefined => list.find((i) => i.st === "ready")?.no;
 
 // The one field of a draft and its error: the field names the error it shows.
 export function fixFieldA11y(no: number, error: string) {
@@ -187,8 +183,9 @@ export function initialsOf(name: string): string {
   return ((words[0]?.[0] ?? "") + (words[1]?.[0] ?? "")).toUpperCase();
 }
 
-// The business facts of the sheet: always from the custom values, never from code.
-export function businessCard(values: BusinessValues): BusinessCard {
+// The business facts of the sheet: always from the custom values, never from code. `logo` is the
+// business logo link from the shell (already checked to be https), or null.
+export function businessCard(values: BusinessValues, logo: string | null = null): BusinessCard {
   const name = values.business_name?.trim() ?? "";
   const site = (values.business_website_url ?? "").split("//").pop()?.split("/")[0].replace("www.", "") ?? "";
   return {
@@ -199,6 +196,7 @@ export function businessCard(values: BusinessValues): BusinessCard {
     email: values.business_email ?? "",
     site,
     hours: values.business_hours ?? "",
+    logo,
   };
 }
 

@@ -3,10 +3,10 @@
 import type { ReactNode } from "react";
 import { COLOR_GROUPS, CONNECTIONS, ESSENTIAL_FIELDS, SECTIONS, SOON_ITEMS, SWITCHES, labelOfKey } from "../api/fields";
 import type { SettingsState } from "../api/state";
+import { connectionChip, UNKNOWN_CONNECTIONS } from "../api/connections";
 import { isHexColor } from "../api/live-save";
 import { useSettings } from "../hooks/use-settings";
-import { MOCK_CONNECTION_STATUS } from "../mock";
-import type { Field, SectionKey } from "../types";
+import type { ConnectionStatus, Field, SectionKey } from "../types";
 
 // Page CONTENT for /settings. It renders inside the shell's `.fd-view[data-pg]` wrapper. The design's
 // CSS keys off data-sec, data-open and data-q on a `.fd-view`, so this component renders a nested
@@ -45,12 +45,20 @@ type ValueFieldProps = {
   field: Field;
   value: string;
   saved: string;
-  bad: boolean;
+  error: string | null;
   swatch?: boolean;
   onChange: (key: string, value: string) => void;
 };
 
-function ValueField({ field, value, saved, bad, swatch, onChange }: ValueFieldProps) {
+// The swatch shows the saved color when it is a hex color (only a hex color reaches the style
+// attribute). Otherwise it shows the color the app applies now: its CSS variable on <html>, which
+// holds the client's color or the app's own default.
+function swatchStyle(key: string, saved: string): React.CSSProperties {
+  return { background: isHexColor(saved) ? saved : `var(--${key.replaceAll("_", "-")})` };
+}
+
+function ValueField({ field, value, saved, error, swatch, onChange }: ValueFieldProps) {
+  const errId = `cv-${field.key}-err`;
   return (
     <div className="fd-cvf">
       <label className="fd-ll" htmlFor={`cv-${field.key}`}>
@@ -58,8 +66,7 @@ function ValueField({ field, value, saved, bad, swatch, onChange }: ValueFieldPr
         <span className="fd-cvk">custom_values.{field.key}</span>
       </label>
       <div className="fd-cvi">
-        {/* Only a hex color reaches the style attribute; anything else leaves the swatch empty. */}
-        {swatch ? <span className="fd-swt" style={isHexColor(saved) ? { background: saved } : undefined} aria-hidden="true" /> : null}
+        {swatch ? <span className="fd-swt" style={swatchStyle(field.key, saved)} aria-hidden="true" /> : null}
         <input
           className="fd-lin"
           id={`cv-${field.key}`}
@@ -67,11 +74,18 @@ function ValueField({ field, value, saved, bad, swatch, onChange }: ValueFieldPr
           autoComplete="off"
           spellCheck={false}
           value={value}
-          aria-invalid={bad ? true : undefined}
-          aria-describedby={bad ? "fd-st-err" : undefined}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? errId : undefined}
           onChange={(e) => onChange(field.key, e.target.value)}
         />
       </div>
+      {/* The message also shows at the field (the alert at the top of the section is the design's). */}
+      {error ? (
+        <p className="fd-lerr" id={errId}>
+          <svg width="16" height="16" {...svgProps}><circle cx="12" cy="12" r="9" /><path d="M12 7.5v5M12 16.2v.3" /></svg>
+          <span>{error}</span>
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -79,14 +93,21 @@ function ValueField({ field, value, saved, bad, swatch, onChange }: ValueFieldPr
 // `initialValues` is the signed-in sub-account's custom values (key to value), already filtered by the
 // server allowlist. When given, it replaces the sample values: keys it lacks show empty fields, and
 // allowed keys the design does not list show too. `initialSection` comes from `?section=` in the URL.
-type Props = { initial?: SettingsState; initialValues?: Record<string, string>; initialSection?: SectionKey };
+// `connections` is each row's status in CONNECTIONS order; without it every row is "unknown" (no API
+// reads the status yet), so no row claims to be connected.
+type Props = {
+  initial?: SettingsState;
+  initialValues?: Record<string, string>;
+  initialSection?: SectionKey;
+  connections?: readonly ConnectionStatus[];
+};
 
-export function SettingsPage({ initial, initialValues, initialSection }: Props) {
+export function SettingsPage({ initial, initialValues, initialSection, connections = UNKNOWN_CONNECTIONS }: Props) {
   const { state, dispatch, filter, extras } = useSettings(initial, initialValues, initialSection);
   const { values, draft, err } = state;
   const show = (id: string) => filter.items[id];
   const edit = (key: string, value: string) => dispatch({ type: "edit", key, value });
-  const fieldProps = (f: Field) => ({ field: f, value: draft[f.key] ?? "", saved: values[f.key] ?? "", bad: err?.key === f.key, onChange: edit });
+  const fieldProps = (f: Field) => ({ field: f, value: draft[f.key] ?? "", saved: values[f.key] ?? "", error: err?.key === f.key ? err.message : null, onChange: edit });
 
   const bizFields = [...ESSENTIAL_FIELDS, ...extras.map((key) => ({ key, label: labelOfKey(key) }))].filter((f) => show(`cv-${f.key}`));
   const showSt2 = filter.sections.choice || filter.sections.soon;
@@ -206,8 +227,10 @@ export function SettingsPage({ initial, initialValues, initialSection }: Props) 
             <div className="fd-lst">
               {CONNECTIONS.map((c, i) => {
                 if (!show(`conn-${i}`)) return null;
-                const st = MOCK_CONNECTION_STATUS[i];
-                const on = st.connected;
+                const st = connections[i] ?? { state: "unknown" };
+                const on = st.state === "connected";
+                const chip = connectionChip(st);
+                const phone = i === 0 ? (values.business_phone_number ?? "").trim() : "";
                 const open = !on || !!state.how[i];
                 return (
                   <div className="fd-rw" key={c.name}>
@@ -215,15 +238,15 @@ export function SettingsPage({ initial, initialValues, initialSection }: Props) 
                       <div className="fd-rbx">
                         <p className="fd-rn">{c.name}</p>
                         <p className="fd-rsb">
-                          {i === 0 ? <><span className="fd-h">{values.business_phone_number}</span>. </> : null}
+                          {phone ? <><span className="fd-h">{phone}</span>. </> : null}
                           {c.sub}
                         </p>
                       </div>
                     </div>
                     <div className="fd-rac">
-                      <span className={`fd-chip ${on ? "is-ok" : "is-plain"}`}>
+                      <span className={`fd-chip ${chip.ok ? "is-ok" : "is-plain"}`}>
                         <ChipIcons />
-                        <span className="fd-h">{on ? (st.note ?? "Connected") : "Not connected"}</span>
+                        <span className="fd-h">{chip.text}</span>
                       </span>
                       <button
                         type="button"
@@ -248,7 +271,7 @@ export function SettingsPage({ initial, initialValues, initialSection }: Props) 
                       <p className="fd-pns fd-hint">Done when this row says Connected.</p>
                       {!on ? (
                         state.asked[i] ? (
-                          <p className="fd-pns fd-hint" role="status">Thank you. Forge Forward got your request and will connect it.</p>
+                          <p className="fd-pns fd-hint" role="status">Noted on this screen. The request is not sent to Forge Forward yet.</p>
                         ) : (
                           <button type="button" className="fd-btn" onClick={() => dispatch({ type: "ask", index: i })}>
                             Ask Forge Forward to connect

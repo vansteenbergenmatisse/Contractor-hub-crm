@@ -9,13 +9,15 @@ type Props = {
   visible: boolean;
   time: string;
   snippet: string;
-  onOpen: () => void;
+  rowId: string;
+  // `byKeyboard` is true when Enter or Space pressed the row (a click with no pointer).
+  onOpen: (byKeyboard: boolean) => void;
 };
 
-export function ConversationRow({ conversation: c, needsReply, selected, visible, time, snippet, onOpen }: Props) {
+export function ConversationRow({ conversation: c, needsReply, selected, visible, time, snippet, rowId, onOpen }: Props) {
   const cls = `fd-cr${needsReply ? " is-need" : ""}${selected ? " is-sel" : ""}${visible ? "" : " is-off"}`;
   return (
-    <button type="button" className={cls} aria-current={selected ? "true" : "false"} onClick={onOpen}>
+    <button type="button" className={cls} aria-current={selected ? "true" : "false"} data-row-id={rowId} onClick={(event) => onOpen(event.detail === 0)}>
       <ChannelIcon channel={c.channel} />
       <span className="fd-crx">
         <span className="fd-cr1">

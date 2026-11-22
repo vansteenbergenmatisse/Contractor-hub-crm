@@ -1,3 +1,7 @@
+"use client";
+
+import { useState } from "react";
+import { owedRows } from "../api/selectors";
 import { BOOKED, MONEY_OWED, QUOTES_OUT } from "../mock";
 import type { MiniRow } from "../types";
 import { Chip } from "./Chip";
@@ -22,6 +26,9 @@ function Head({ id, title }: { id: string; title: string }) {
 }
 
 export function MoneyCards() {
+  // The same "today" the Invoices page dates its sample invoices from.
+  const [now] = useState(() => new Date());
+  const owed = owedRows(MONEY_OWED.rows, now);
   return (
     <div className="fd-money">
       <section className="fd-card fd-fill fd-in" style={{ "--i": 8 } as React.CSSProperties} aria-labelledby="fd-m1">
@@ -43,7 +50,7 @@ export function MoneyCards() {
       <section className="fd-card fd-in" style={{ "--i": 10 } as React.CSSProperties} aria-labelledby="fd-m3">
         <Head id="fd-m3" title="Money owed" />
         <p className="fd-mv">{MONEY_OWED.total}</p>
-        <Mini rows={MONEY_OWED.rows} />
+        <Mini rows={owed} />
         <p className="fd-mf">{MONEY_OWED.foot}</p>
       </section>
     </div>

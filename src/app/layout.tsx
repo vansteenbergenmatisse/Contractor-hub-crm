@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { brandStyle, EMPTY_BRAND, getBrandService } from "@/features/brand";
+import { brandScopeCss, brandStyle, EMPTY_BRAND, getBrandService } from "@/features/brand";
 import { getRequestUser } from "./session";
 import "./globals.css";
 
@@ -25,14 +25,20 @@ export async function generateMetadata() {
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const { brand, tenant } = await loadBrand();
   const title = brand.businessName ?? "Contractor Hub CRM";
+  const scopeCss = brandScopeCss(brand);
   return (
     <html lang="en" style={brandStyle(brand)}>
       <head>
         <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+        {/* The design CSS re-declares its default colors on .brand-scope (the app frame), so the
+            tenant's colors are printed once more as a rule that wins there. Hex values only. */}
+        {scopeCss ? <style id="brand-first-paint">{scopeCss}</style> : null}
         {brand.faviconUrl ? <link rel="icon" href={brand.faviconUrl} /> : null}
         {tenant ? (
           <>
-            <link rel="manifest" href="/api/manifest" />
+            {/* With credentials: browsers fetch the manifest without cookies otherwise, and the signed-out
+                answer is the neutral app instead of this tenant's. */}
+            <link rel="manifest" href="/api/manifest" crossOrigin="use-credentials" />
             <link rel="apple-touch-icon" href="/api/pwa-icon?size=180" />
             <meta name="theme-color" content={brand.cssVars["--main-color"] ?? "#2e7d32"} />
             <meta name="mobile-web-app-capable" content="yes" />

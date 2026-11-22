@@ -1,5 +1,5 @@
 import { chipFor, fixFieldA11y, formatMoney, initialsOf, matchesFilter, missingField } from "../api/invoices";
-import { viewButtonId, type InvoicesState } from "../hooks/useInvoices";
+import { viewButtonId, type InvoicesState } from "../hooks/use-invoices";
 import type { Invoice, MissingField } from "../types";
 import { StatusChip } from "./StatusChip";
 

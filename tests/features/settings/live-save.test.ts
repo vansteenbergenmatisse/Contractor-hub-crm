@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyBrandVars, brandCssVars, businessPatchFromValues, sectionFromParam } from "@/features/settings";
+import { applyBrandVars, brandCssVars, brandScopeRule, businessPatchFromValues, sectionFromParam } from "@/features/settings";
 
 // Made-up values only.
 describe("businessPatchFromValues", () => {
@@ -20,18 +20,28 @@ describe("businessPatchFromValues", () => {
     });
   });
 
-  it("keeps blanks blank and never invents a value", () => {
-    const p = businessPatchFromValues({});
-    expect(p).toEqual({
-      name: "", owner: "", phone: "", email: "", address: "", hours: "", websiteUrl: null, logoUrl: null,
-      bookingJobUrl: null, bookingQuoteUrl: null, googleProfileUrl: null, googleReviewUrl: null,
+  it("leaves empty fields out, so an empty value never overrides what the shell shows (never invents one)", () => {
+    expect(businessPatchFromValues({})).toEqual({});
+    const p = businessPatchFromValues({ business_name: "Test Co", business_owner_name: "  ", business_phone_number: "", business_logo: "" });
+    expect(p).toEqual({ name: "Test Co" });
+    expect("owner" in p).toBe(false);
+  });
+
+  it("sends the seasonal offer, the referral reward and the county when filled, and leaves them out when empty", () => {
+    const p = businessPatchFromValues({
+      seasonal_offer_text: " 10% off gutter cleaning this fall ", referral_reward_text: "A $50 test gift card",
+      business_main_county: "Test County",
     });
+    expect(p).toEqual({ seasonalOffer: "10% off gutter cleaning this fall", referralReward: "A $50 test gift card", county: "Test County" });
+    const empty = businessPatchFromValues({ seasonal_offer_text: "  ", referral_reward_text: "", business_main_county: " " });
+    expect(empty).toEqual({});
+    expect("seasonalOffer" in empty || "referralReward" in empty || "county" in empty).toBe(false);
   });
 
   it("accepts https links only", () => {
     const p = businessPatchFromValues({ business_logo: "http://x.example/a.png", business_website_url: "javascript:alert(1)" });
-    expect(p.logoUrl).toBeNull();
-    expect(p.websiteUrl).toBeNull();
+    expect(p.logoUrl).toBeUndefined();
+    expect(p.websiteUrl).toBeUndefined();
   });
 });
 
@@ -53,6 +63,19 @@ describe("applyBrandVars", () => {
     const root = { style: { setProperty: (k: string, v: string) => void set.push([k, v]) } };
     applyBrandVars(root, { main_color: "#1B5E20", highlight_color: "bad;x:y", text_color: "#222222" });
     expect(set).toEqual([["--main-color", "#1B5E20"], ["--text-color", "#222222"], ["--normal-text-color", "#222222"]]);
+  });
+});
+
+describe("brandScopeRule", () => {
+  // globals.css declares the default colors again on every `.brand-scope` element, so a variable set
+  // on <html> alone never reaches the app. The rule names `.brand-scope` with a higher specificity.
+  it("puts the validated colors on <html> and on every .brand-scope element, beating the defaults", () => {
+    const css = brandScopeRule({ main_color: "#1565C0", text_color: "#222222", sub_color: "bad;}body{x:y" });
+    expect(css).toBe(":root:root:root,.brand-scope.brand-scope.brand-scope{--main-color:#1565C0;--text-color:#222222;--normal-text-color:#222222}");
+    expect(css).not.toContain("bad");
+  });
+  it("is empty when no color is valid", () => {
+    expect(brandScopeRule({ main_color: "", border_color: "red" })).toBe("");
   });
 });
 

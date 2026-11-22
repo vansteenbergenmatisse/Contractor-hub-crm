@@ -6,6 +6,8 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("next/navigation", () => ({
   usePathname: () => "/calendar",
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  // No router in a static render: useRowFocus falls back to window.location.
+  useSearchParams: () => null,
 }));
 
 import { AppShell, buildBusiness } from "@/features/app-shell";
@@ -45,7 +47,8 @@ describe("CalendarPage markup", () => {
 
   it("shows the Not available yet chip without a check icon, and a whole sentence beside it", () => {
     expect(html).toContain('<span class="fd-chip fd-csync is-plain">Not available yet</span>');
-    expect(html).toContain("The calendar this syncs with shows here once it can be read.");
+    expect(html).toContain("Connect your calendar in Settings.");
+    expect(html).not.toContain("The calendar this syncs with shows here once it can be read.");
     expect(html).not.toContain("Which calendar this syncs with.");
   });
 

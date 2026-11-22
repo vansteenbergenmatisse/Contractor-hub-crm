@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { GROUPS, STAGES, groupOf, hasTrash, secondButton } from "@/features/pipeline";
 
-// The table of docs/greenlane/build-prompt.md section 7, written out as plain data.
+// The table of docs/greenlane/build-prompt.md section 7, written out as plain data. The next line of
+// Job Done uses the design's wording (logic AUTO[7]), which ranks above the build prompt.
 const SECTION_7: ReadonlyArray<readonly [string, string, string, string]> = [
   ["New Lead", "Book visit", "Estimate Booked", "Follow-up texts today"],
   ["Following Up", "Book visit", "Estimate Booked", "Chase texts run"],
@@ -10,7 +11,7 @@ const SECTION_7: ReadonlyArray<readonly [string, string, string, string]> = [
   ["Quote Sent", "Accepted", "Job to Schedule", "Follow-up texts run"],
   ["Job to Schedule", "Book job", "Job Scheduled", "Booking link sent"],
   ["Job Scheduled", "Job done", "Job Done", "Reminder the day before"],
-  ["Job Done", "Invoice", "Payment Due", "Review request (1 hour after), referral ask (1 day after), invoice created"],
+  ["Job Done", "Invoice", "Payment Due", "Review request sent"],
   ["Payment Due", "Mark paid", "Check Back Later", "Payment reminders run"],
   ["Check Back Later", "Reopen", "New Lead", "Check-in texts run"],
   ["Lost", "Reopen", "New Lead", "Every text stopped"],

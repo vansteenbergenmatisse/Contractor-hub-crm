@@ -1,9 +1,9 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useBusinessValues, usePushed } from "@/features/app-shell";
+import { useBusiness, useBusinessValues, usePushed } from "@/features/app-shell";
 import { businessCard, formatMoney, totals } from "../api/invoices";
-import { useInvoices } from "../hooks/useInvoices";
+import { useInvoices } from "../hooks/use-invoices";
 import type { Filter } from "../types";
 import { InvoiceRow } from "./InvoiceRow";
 import { InvoiceSheet } from "./InvoiceSheet";
@@ -23,7 +23,7 @@ export function InvoicesPage() {
   const s = useInvoices();
   usePushed(s.doc);
   // Business facts come from the signed-in sub-account's custom values, never from copy. "" when missing.
-  const biz = businessCard(useBusinessValues());
+  const biz = businessCard(useBusinessValues(), useBusiness().logoUrl ?? null);
   const t = totals(s.invoices, s.now);
   return (
     <div className={`fd-dv${s.doc ? " is-doc" : ""}`}>

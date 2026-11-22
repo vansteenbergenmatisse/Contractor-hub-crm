@@ -33,6 +33,19 @@ const ROWS: ReadonlyArray<readonly [number, number, number, number, "E" | "J", s
   [1, 4, 2, 10, "J", "Rosa Diaz", "Gutter replacement", "58 Norwich St, Hilliard", NEXT],
 ];
 
+// The rows above are placed as the design draws them: today is the design's Friday (day 5) of week 0.
+export const MOCK_TODAY = 5;
+
 export const MOCK_STOPS: readonly Stop[] = ROWS.map(([week, day, start, len, kind, name, service, address, status], i) => ({
   id: `stop-${i + 1}`, week, day, start, len, kind, name, service, address, status,
 }));
+
+// The sample, moved so the design's today lands on the real today (`now`). Every stop keeps its distance
+// in days from today, so the Today page's "4 appointments today" (Tom Becker 8:30 AM, Linda Park, Carlos
+// Mendez, Owen Fletcher) and "Whitmore Dental, booked for yesterday" agree with this calendar on any day.
+export function mockStopsFor(now: Date): Stop[] {
+  return MOCK_STOPS.map((s) => {
+    const k = s.week * 7 + s.day - MOCK_TODAY + now.getDay();
+    return { ...s, week: Math.floor(k / 7), day: ((k % 7) + 7) % 7 };
+  });
+}

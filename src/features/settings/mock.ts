@@ -1,9 +1,9 @@
-// MOCK DATA (Phase 2). The design's sample custom values and sample connection status. The business
+// MOCK DATA (Phase 2). The design's sample custom values and switches. The business
 // identity keys (name, owner, phone, email, address, hours, city, state, keyword, website) are empty:
 // they come from the signed-in sub-account, never from this file. Replaced in
-// Phase 3 by the sub-account's custom values and by the status an API gives. Never treat any value
+// Phase 3 by the sub-account's custom values. Never treat any value
 // here as a real business fact.
-import type { ConnectionStatus, CustomValues } from "./types";
+import type { CustomValues } from "./types";
 
 export const MOCK_CUSTOM_VALUES: CustomValues = {
   business_name: "",
@@ -38,16 +38,6 @@ export const MOCK_CUSTOM_VALUES: CustomValues = {
   light_text_color: "#5E6E7E",
   text_on_main_color: "#FFFFFF",
 };
-
-// Same order as CONNECTIONS in api/fields.ts: phone, calendar, Facebook, Instagram, Google My Business, payments.
-export const MOCK_CONNECTION_STATUS: ConnectionStatus[] = [
-  { connected: true, a2pVerified: true },
-  { connected: true, note: "Connected: Google Calendar" },
-  { connected: true },
-  { connected: false },
-  { connected: true },
-  { connected: false },
-];
 
 // Both switches start On, as in the design.
 export const MOCK_SWITCHES: [boolean, boolean] = [true, true];

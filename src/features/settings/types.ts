@@ -14,8 +14,11 @@ export type Connection = {
   steps: string[];
 };
 
+// "unknown": no API gives this row's status yet (build prompt section 6), so the row claims nothing.
+export type ConnectionState = "connected" | "not-connected" | "unknown";
+
 export type ConnectionStatus = {
-  connected: boolean;
+  state: ConnectionState;
   // Short note shown on the chip of a connected row, for example "Connected: Google Calendar".
   note?: string;
   // Phone only: shows the "A2P verified" line on a connected row.

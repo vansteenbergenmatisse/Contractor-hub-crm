@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
-  canUndo, chipText, historyLines, initialState, lateness, markPaid, money, nobodyOwes, remind, totals, undo, undoPaid, undoRemind,
-  MOCK_PAYMENTS, searchRows,
+  canUndo, chipText, historyLines, initialState, lateness, markPaid, money, nobodyOwes, remind, totals, undo, undoPaid,
+  buildMockPayments, searchRows,
 } from "@/features/payments";
+import { buildMockInvoices, chipFor } from "@/features/invoices";
 
-const rows = MOCK_PAYMENTS;
+const NOW = new Date(2026, 10, 22, 9, 0);
+const rows = buildMockPayments(NOW);
 const [a, b, c] = rows;
 
 describe("lateness", () => {
@@ -46,15 +48,16 @@ describe("totals", () => {
 });
 
 describe("Remind now", () => {
-  it("adds a history line and Undo removes it", () => {
+  it("sets one flag per row: the history line reads Reminder sent just now, pressing again adds nothing", () => {
     let s = remind(initialState(rows), b.id);
-    expect(historyLines(b, s)).toEqual([b.history, "Reminder sent just now"]);
-    expect(canUndo(s, b.id)).toBe(true);
+    expect(historyLines(b, s)).toEqual(["Reminder sent just now"]);
     s = remind(s, b.id);
-    expect(historyLines(b, s)).toHaveLength(3);
-    s = undo(undo(s, b.id), b.id);
-    expect(historyLines(b, s)).toEqual([b.history]);
+    expect(historyLines(b, s)).toEqual(["Reminder sent just now"]);
+  });
+  it("offers no Undo: Undo is only for a paid row", () => {
+    const s = remind(initialState(rows), b.id);
     expect(canUndo(s, b.id)).toBe(false);
+    expect(undo(s, b.id)).toBe(s);
   });
   it("does not change totals", () => {
     const s = remind(initialState(rows), b.id);
@@ -64,7 +67,6 @@ describe("Remind now", () => {
     const paid = markPaid(initialState(rows), b.id);
     expect(remind(paid, b.id)).toBe(paid);
     expect(remind(paid, "nope")).toBe(paid);
-    expect(undoRemind(paid, b.id)).toBe(paid);
   });
 });
 
@@ -75,8 +77,32 @@ describe("Mark paid", () => {
     expect(historyLines(a, s)).toEqual(["Reminders stopped"]);
     expect(canUndo(s, a.id)).toBe(true);
     s = undo(s, a.id);
+    expect(canUndo(s, a.id)).toBe(false);
     expect(chipText(a, s)).toBe(a.when);
-    expect(historyLines(a, s)).toEqual([a.history, "Reminder sent just now"]);
+    expect(historyLines(a, s)).toEqual(["Reminder sent just now"]);
+  });
+});
+
+describe("the same invoices as the Invoices page", () => {
+  const invoices = buildMockInvoices(NOW).filter((i) => i.st === "sent");
+  it("lists every sent invoice once, with the same name, job and amount", () => {
+    expect(rows.map((r) => r.invoice).sort()).toEqual(invoices.map((i) => `Invoice ${i.no}`).sort());
+    for (const inv of invoices) {
+      const r = rows.find((x) => x.invoice === `Invoice ${inv.no}`)!;
+      expect(r).toMatchObject({ name: inv.name, job: inv.svc, amount: inv.amt });
+    }
+  });
+  it("shows the due chip the Invoices page shows (1045 is due today there, so here too)", () => {
+    for (const inv of invoices) {
+      const r = rows.find((x) => x.invoice === `Invoice ${inv.no}`)!;
+      expect(r.when).toBe(chipFor(inv, NOW).text);
+      expect(`is-${lateness(r.daysLate)}`).toBe(chipFor(inv, NOW).tone);
+    }
+    expect(rows.find((r) => r.invoice === "Invoice 1045")!.when).toBe("Due Nov 22");
+    expect(rows.find((r) => r.invoice === "Invoice 1042")!.when).toBe("14 days late");
+  });
+  it("keeps the design's order: most late first", () => {
+    expect(rows.map((r) => r.name)).toEqual(["Bright Daycare", "Grace Whitfield", "Paul Ortega"]);
   });
 });
 

@@ -35,7 +35,7 @@ export type BusinessValues = Partial<
     string
   >
 >;
-export type BusinessCard = { init: string; name: string; addr: string; phone: string; email: string; site: string; hours: string };
+export type BusinessCard = { init: string; name: string; addr: string; phone: string; email: string; site: string; hours: string; logo: string | null };
 
 export type SheetView = {
   title: string;

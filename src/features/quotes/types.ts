@@ -45,7 +45,7 @@ export type QuotesAction =
   | { type: "see"; id: string }
   | { type: "select"; id: string }
   | { type: "shut" }
-  | { type: "build"; id: string; service: string; low: number; high?: number; lines: QuoteLine[] }
+  | { type: "build"; id: string; low: number; high?: number; lines: QuoteLine[] }
   | { type: "attach"; id: string; file: string }
   | { type: "detach"; id: string }
   | { type: "sent"; id: string }

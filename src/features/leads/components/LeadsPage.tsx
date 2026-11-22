@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
-import { PAGE_PATH, PageAction } from "@/features/app-shell";
-import { addLeadMode, filterCounts, firstNeedId, summarize, tiles, visibleAdded, visibleLeads } from "../api/leads-logic";
+import { PAGE_PATH, PageAction, useRowFocus } from "@/features/app-shell";
+import { WEEK_TOTAL, addLeadMode, filterCounts, firstNeedId, summarize, tiles, visibleAdded, visibleLeads } from "../api/leads-logic";
 import { isPhoneNow, useIsPhone } from "../hooks/use-is-phone";
-import { useLeads, useOpenAddFromUrl } from "../hooks/use-leads";
+import { useLeads, useOpenAddFromUrl, useRevealLead } from "../hooks/use-leads";
 import { MOCK_LEADS } from "../mock";
 import { AddLeadPanel } from "./AddLeadPanel";
 import { AddedLeadRow } from "./AddedLeadRow";
@@ -54,6 +54,10 @@ export function LeadsPage() {
   const added = visibleAdded(state);
   const mainId = firstNeedId(MOCK_LEADS, state);
   const openInbox = () => router.push(PAGE_PATH.inbox);
+  // A search result opens /leads?row=<lead id>: show all leads when the filter hides that lead,
+  // then the shell's useRowFocus brings the row into view (it only gets the rows on screen).
+  useRevealLead(rows.map((l) => l.id), dispatch);
+  useRowFocus(rows.map((l) => l.id));
 
   const go = () => {
     if (!summary.target) return;
@@ -133,7 +137,7 @@ export function LeadsPage() {
             onSubmit={() => dispatch({ type: "submit" })}
             onClose={() => dispatch({ type: "closeAdd" })}
           />
-          <SourcesPanel nAdded={state.added.length} total={t.week} />
+          <SourcesPanel nAdded={state.added.length} total={WEEK_TOTAL + state.added.length} />
         </div>
       </div>
     </>

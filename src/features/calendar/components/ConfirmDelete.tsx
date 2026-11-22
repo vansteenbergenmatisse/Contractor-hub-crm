@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef, type KeyboardEvent, type RefObject } from "react";
+import { useEffect, useRef, type RefObject } from "react";
+import { trapTab } from "@/features/app-shell";
 import { confirmSafeButton, type CalendarViewModel } from "../api/view";
 
 // Delete asks first. The safe choice, Reschedule, is the filled button; Delete is red. A small local
 // dialog (the shell has no confirm dialog yet). On open the cursor goes to the safe button (Reschedule
-// instead, else Cancel); Escape works like Cancel; on close the cursor goes back to the Delete button
-// that opened it, or to the Undo line when the stop was deleted.
+// instead, else Cancel); Tab stays inside the dialog; Escape works like Cancel; on close the cursor goes
+// back to the Delete button that opened it, or to the Undo line when the stop was deleted.
 export function ConfirmDelete({ confirm, onReschedule, onYes, onNo, undoRef }: {
   confirm: CalendarViewModel["confirm"];
   onReschedule: () => void;
@@ -18,6 +19,7 @@ export function ConfirmDelete({ confirm, onReschedule, onYes, onNo, undoRef }: {
   const cancelRef = useRef<HTMLButtonElement>(null);
   const opener = useRef<HTMLElement | null>(null);
   const deleted = useRef(false);
+  const box = useRef<HTMLDivElement>(null);
   const safe = confirmSafeButton(confirm);
 
   useEffect(() => {
@@ -34,20 +36,34 @@ export function ConfirmDelete({ confirm, onReschedule, onYes, onNo, undoRef }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [confirm.open]);
 
-  const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === "Escape" && confirm.open) {
+  // While open, on the whole document (so it works wherever focus is): Escape cancels, Tab cycles
+  // through the dialog's shown buttons.
+  useEffect(() => {
+    if (!confirm.open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onNo();
+        return;
+      }
+      if (e.key !== "Tab" || !box.current) return;
+      const items = Array.from(box.current.querySelectorAll<HTMLButtonElement>("button")).filter((b) => !b.classList.contains("is-off") && !b.disabled);
+      const next = trapTab(items.indexOf(document.activeElement as HTMLButtonElement), items.length, e.shiftKey);
+      if (next === null) return;
       e.preventDefault();
-      onNo();
-    }
-  };
+      items[next].focus();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [confirm.open, onNo]);
   const yes = () => {
     deleted.current = true;
     onYes();
   };
 
   return (
-    <div className={`fd-cf${confirm.open ? "" : " is-off"}`} role="alertdialog" aria-modal="true" aria-labelledby="fd-cf-t" aria-hidden={!confirm.open} onKeyDown={onKey}>
-      <div className="fd-cfb">
+    <div className={`fd-cf${confirm.open ? "" : " is-off"}`} role="alertdialog" aria-modal="true" aria-labelledby="fd-cf-t" aria-hidden={!confirm.open}>
+      <div className="fd-cfb" ref={box}>
         <h3 className="fd-cft" id="fd-cf-t">{confirm.title}</h3>
         <p className="fd-cfp">{confirm.body}</p>
         <div className="fd-cfa">

@@ -15,6 +15,6 @@ export { cardView, stubView, stageCounts, groupCounts, computeLayout, needsPrice
 export { buildSearchRows, sendDocFor, sendTotal } from "./api/send";
 export { pressPlan } from "./api/press";
 export type { PressPlan } from "./api/press";
-export { calendarHref, quoteHref } from "./api/links";
+export { calendarHref, quoteHref, cardIndexOfRow } from "./api/links";
 export { MOCK_CARDS, MOCK_HIDDEN_COUNTS } from "./mock";
 export type { BoardState, CardView, MockCard } from "./types";

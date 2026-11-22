@@ -94,6 +94,10 @@ export function rowHref(row: SearchRow): string {
   return `${row.href}${row.href.includes("?") ? "&" : "?"}row=${encodeURIComponent(row.id)}`;
 }
 
+// Sent on `window` (detail: the row id) each time a search result is opened, so a page already
+// showing `?row=<id>` flashes the row again when the same result is picked twice.
+export const ROW_PICK_EVENT = "fx:row-pick";
+
 // The `row` id in a location search string ("?row=..."), or null.
 export function rowParam(search: string): string | null {
   return new URLSearchParams(search).get("row") || null;

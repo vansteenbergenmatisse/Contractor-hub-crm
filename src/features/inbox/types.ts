@@ -63,4 +63,6 @@ export type InboxAction =
   | { type: "toggleDone" }
   | { type: "toList" }
   | { type: "filter"; filter: Filter }
-  | { type: "replyTo"; id: string };
+  | { type: "replyTo"; id: string }
+  // A search result: show everyone when the filter hides the conversation (`hidden`), then open it.
+  | { type: "show"; id: string; hidden: boolean };

@@ -5,10 +5,13 @@ import { sourceRows } from "../api/leads-logic";
 import { ChannelIcon } from "./ChannelIcon";
 
 // Where this week's leads came from. Mock counts until Phase 3. The service area is the business's
-// own city and state; it is left out when the sub-account has neither.
+// own city, county and state, as in the design; a missing part is left out, and the whole sentence
+// when the sub-account has none. The county shows once the shell's business facts carry it
+// (custom value business_main_county); until then it is skipped.
 export function SourcesPanel({ nAdded, total }: { nAdded: number; total: number }) {
-  const { city, state } = useBusiness();
-  const area = joinParts([city, state], ", ");
+  const business = useBusiness();
+  const county = "county" in business && typeof business.county === "string" ? business.county : "";
+  const area = joinParts([business.city, county, business.state], ", ");
   return (
     <section className="fd-pnl" aria-labelledby="fd-ld-s">
       <h2 className="fd-pnh" id="fd-ld-s">Where your leads come from</h2>

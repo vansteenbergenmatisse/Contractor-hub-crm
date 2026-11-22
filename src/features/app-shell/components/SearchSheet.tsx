@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { highlight, nextScope, pushRecent, rowHref, searchPlacement, searchRows, shortcutHint, trapTab } from "../api/search";
 import { createFocusReturn } from "../api/focus";
+import { detectMac } from "../api/keys";
 import { useWindowWidth } from "../hooks/use-window-width";
 import type { SearchRow } from "../types";
 import { Icon } from "./Icon";
@@ -13,14 +14,6 @@ const SCOPES: ReadonlyArray<readonly [Scope, string]> = [
   ["invoices", "Invoices"], ["payments", "Payments"], ["inbox", "Messages"],
 ];
 const SCOPE_KEYS = SCOPES.map(([key]) => key);
-
-const detectMac = () => {
-  try {
-    return /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || "");
-  } catch {
-    return true;
-  }
-};
 
 // The top Search field's box, when it is on screen (computer layout).
 function anchorBox(): { top: number; right: number } | null {
@@ -36,17 +29,22 @@ function anchorBox(): { top: number; right: number } | null {
 // on a computer it sits under the top Search field. Phase 2 searches the mock rows the layout hands
 // in; Phase 3 asks the backend. `viewportWidth` and `isMac` stand in where there is no window
 // (server render, tests). Opening a result hands `onOpen` the row with `?row=<id>` on its link.
-export function SearchSheet({ rows, onClose, onOpen, viewportWidth, isMac }: {
+// `recent` and `onRecentChange` keep the recent searches outside the sheet (the shell holds them,
+// so they survive closing and opening search); without them the sheet keeps its own list.
+export function SearchSheet({ rows, onClose, onOpen, viewportWidth, isMac, recent: heldRecent, onRecentChange }: {
   rows: readonly SearchRow[];
   onClose: () => void;
   onOpen: (row: SearchRow) => void;
   viewportWidth?: number;
   isMac?: boolean;
+  recent?: readonly string[];
+  onRecentChange?: (recent: string[]) => void;
 }) {
   const [term, setTerm] = useState("");
   const [scope, setScope] = useState<Scope>("all");
   const [active, setActive] = useState(0);
-  const [recent, setRecent] = useState<string[]>([]);
+  const [ownRecent, setOwnRecent] = useState<string[]>([]);
+  const recent = heldRecent ?? ownRecent;
   const input = useRef<HTMLInputElement>(null);
   const dialog = useRef<HTMLDivElement>(null);
   const [back] = useState(createFocusReturn);
@@ -97,7 +95,9 @@ export function SearchSheet({ rows, onClose, onOpen, viewportWidth, isMac }: {
   }, [current, count]);
 
   const open = (row: SearchRow) => {
-    setRecent((r) => pushRecent(r, term));
+    const next = pushRecent(recent, term);
+    if (onRecentChange) onRecentChange(next);
+    else setOwnRecent(next);
     back.forget();
     onOpen({ ...row, href: rowHref(row) });
   };

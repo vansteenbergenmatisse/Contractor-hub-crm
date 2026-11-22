@@ -70,6 +70,7 @@ function buildProfile(byKey: Map<string, string>): BusinessProfile {
     address: first(byKey, "business_address", "business_full_address"),
     city: first(byKey, "business_address_city", "business_main_city"),
     state: first(byKey, "business_address_state", "business_main_state_abbreviation"),
+    county: first(byKey, "business_main_county"),
     hours: first(byKey, "business_hours"),
     keyword: first(byKey, "business_main_keyword"),
     websiteUrl: link("business_website_url"),
@@ -78,6 +79,8 @@ function buildProfile(byKey: Map<string, string>): BusinessProfile {
     bookingQuoteUrl: link("request_a_quote_booking_link"),
     googleProfileUrl: link("business_google_profile_url"),
     googleReviewUrl: link("google_review_request_url"),
+    seasonalOffer: first(byKey, "seasonal_offer_text"),
+    referralReward: first(byKey, "referral_reward_text"),
   };
 }
 

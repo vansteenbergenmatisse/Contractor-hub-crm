@@ -3,10 +3,15 @@ export { SEND_SECONDS, startTimer, tick, setViewing, shouldFire, markFired, crea
 export type { TimerState, SendController, SendDialogHandlers } from "./api/send-timer";
 export { pushRecent, scoreRow, searchRows, SEARCH_GROUPS, highlight, searchPlacement, nextScope, trapTab, rowHref, rowParam, shortcutHint, flashStyle } from "./api/search";
 export type { SearchGroup, SearchPlacement } from "./api/search";
-export { createFocusReturn, viewClass } from "./api/focus";
+export { createFocusReturn, focusables, isShown, trapFocus, viewClass } from "./api/focus";
+export { helpRows, shortcutFor } from "./api/keys";
+export type { ShortcutAction } from "./api/keys";
 export { useRowFocus } from "./hooks/use-row-focus";
+export { useUndoShortcut } from "./hooks/use-undo-shortcut";
 export { SearchSheet } from "./components/SearchSheet";
-export { SendTimerView } from "./components/SendTimerDialog";
+export { SendTimerDialog, SendTimerView } from "./components/SendTimerDialog";
+export { ReasonDialog } from "./components/ReasonDialog";
+export { FeedbackSheet } from "./components/FeedbackSheet";
 export { REASONS } from "./types";
 export type { Business, PageKey, Reason, ReasonRequest, SearchRow, SendDoc, SendTimerRequest } from "./types";
 export { MENU_GROUPS, PAGE_PATH, PAGE_TITLE, TAB_PAGES, pageFromPath } from "./nav";
@@ -15,5 +20,6 @@ export { PageAction, useBusiness, useBusinessValues, usePushed, useShell } from 
 export type { ShellApi } from "./components/ShellContext";
 export { Icon } from "./components/Icon";
 export type { IconName } from "./components/Icon";
-export { buildBusiness, businessValues, patchBusiness } from "./api/business";
+export { buildBusiness, businessValues, patchBusiness, pickPatch } from "./api/business";
 export type { BusinessInput, BusinessPatch } from "./api/business";
+export { PageStateProvider, useKeptReducer } from "./components/PageState";

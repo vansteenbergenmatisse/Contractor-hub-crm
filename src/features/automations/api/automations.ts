@@ -122,7 +122,7 @@ export function runLabel(a: Automation): string {
 
 // The business details a text may use, from the signed-in sub-account ("" when it has no value).
 // `review_url` is its Google review link. Other {tokens} stay as they are. The seasonal offer and the
-// referral reward are optional: the shell's business values do not carry them yet.
+// referral reward are optional custom values.
 export type AutomationBusiness = {
   business_name: string;
   business_owner_name: string;
@@ -133,15 +133,20 @@ export type AutomationBusiness = {
   referral_reward_text?: string;
 };
 
-// {seasonal offer} and {referral reward}: the tenant's text, or a plain note that it is not set (never
-// raw braces, never a made-up offer). A quoted token keeps its quotes only around a real value.
+// {seasonal offer} and {referral reward}: the tenant's text (custom values seasonal_offer_text and
+// referral_reward_text), as the design fills them. When a value is missing the token is left out
+// with its quotes and lead-in, so the line never shows raw braces, a placeholder note or a made-up
+// offer: 'Texts old leads your seasonal offer: "{seasonal offer}"' reads "Texts old leads your seasonal offer.".
 function fillOffers(text: string, business: AutomationBusiness): string {
-  const one = (out: string, token: string, value: string | undefined, missing: string) => {
+  const one = (out: string, token: string, value: string | undefined) => {
     const v = (value ?? "").trim();
-    return out.replace(new RegExp(`"\\{${token}\\}"|\\{${token}\\}`, "g"), (m) => (v ? (m.startsWith('"') ? `"${v}"` : v) : missing));
+    if (v) return out.replace(new RegExp(`"\\{${token}\\}"|\\{${token}\\}`, "g"), (m) => (m.startsWith('"') ? `"${v}"` : v));
+    const cut = out.replace(new RegExp(`\\s*:?\\s*"?\\{${token}\\}"?`, "g"), "");
+    if (cut === out) return out;
+    const tidy = cut.replace(/[\s,:]+$/, "");
+    return /[A-Za-z0-9]$/.test(tidy) ? `${tidy}.` : tidy;
   };
-  const withOffer = one(text, "seasonal offer", business.seasonal_offer_text, "(no seasonal offer set)");
-  return one(withOffer, "referral reward", business.referral_reward_text, "(no referral reward set)");
+  return one(one(text, "seasonal offer", business.seasonal_offer_text), "referral reward", business.referral_reward_text);
 }
 
 // The Does line of a row as shown.

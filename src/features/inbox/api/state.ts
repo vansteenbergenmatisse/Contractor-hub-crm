@@ -24,6 +24,11 @@ export function inboxReducer(state: InboxState, action: InboxAction): InboxState
     }
     case "replyTo":
       return { ...state, filter: "all", selected: action.id, open: true, swaps: state.swaps + 1, event: "open" };
+    case "show": {
+      if (!(action.id in state.needs)) return state;
+      const changed = action.id !== state.selected || !state.open;
+      return { ...state, filter: action.hidden ? "all" : state.filter, selected: action.id, open: true, swaps: state.swaps + (changed ? 1 : 0), event: "open" };
+    }
     case "send": {
       const text = action.text.trim();
       if (!text) return state;
@@ -43,6 +48,16 @@ export function inboxReducer(state: InboxState, action: InboxAction): InboxState
       return state.filter === action.filter ? state : { ...state, filter: action.filter, event: "flt" };
   }
 }
+
+// The conversation a search row id ("inbox-<id>") points at, or null when it is not one of these.
+export function conversationOfRow(row: string | null | undefined, conversations: readonly Conversation[]): Conversation | null {
+  if (!row || !row.startsWith("inbox-")) return null;
+  const id = row.slice("inbox-".length);
+  return conversations.find((c) => c.id === id) ?? null;
+}
+
+// The id the shell search uses for a conversation row (see `toSearchRows`).
+export const rowIdOf = (c: Conversation): string => `inbox-${c.id}`;
 
 export function waitingCount(state: InboxState): number {
   return Object.values(state.needs).filter(Boolean).length;

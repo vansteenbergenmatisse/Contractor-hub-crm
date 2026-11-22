@@ -15,6 +15,12 @@ describe("day summary", () => {
     expect(daySummary([{ kind: "J" }])).toBe("1 stop: 1 job");
     expect(daySummary([{ kind: "E" }, { kind: "E" }, { kind: "J" }])).toBe("3 stops: 2 estimates, 1 job");
   });
+
+  it("leaves stops you added out of a mixed day, and names a day with only those (design logic)", () => {
+    expect(daySummary([{ kind: "E" }, { kind: "J", added: true }])).toBe("1 stop: 1 estimate");
+    expect(daySummary([{ kind: "J", added: true }])).toBe("1 stop, added by you");
+    expect(daySummary([{ kind: "J", added: true }, { kind: "E", added: true }])).toBe("2 stops, added by you");
+  });
 });
 
 describe("week view model", () => {
@@ -172,12 +178,12 @@ describe("stops you add", () => {
     expect(v.add.options).toHaveLength(3);
   });
 
-  it("shows the new stop on its day, counts it, and offers a short line with Delete when pressed", () => {
+  it("shows the new stop on its day, leaves it out of the day dot (design), and offers a short line with Delete when pressed", () => {
     const s = added();
     const v = view(s);
     const e = v.events.find((x) => x.name === "Sam Sample")!;
     expect(e).toMatchObject({ added: true, cls: expect.stringContaining("fd-evn is-J is-d6 is-t2 is-l12") });
-    expect(v.days[6].cls).toContain("is-has");
+    expect(v.days[6].cls).not.toContain("is-has");
     const v2 = view(calendarReducer(s, { type: "pick", id: e.id }));
     expect(v2.added?.text).toBe("Job for Sam Sample · Sat, Nov 21 · 8:00 AM");
     expect(v2.detail.open).toBe(false);
@@ -186,8 +192,17 @@ describe("stops you add", () => {
   it("counts an added stop on an empty day, so the day is not empty", () => {
     const v = view(added());
     expect(v.dayTitle).toBe("Saturday, Nov 21");
-    expect(v.daySummary).toBe("1 stop: 1 job");
+    expect(v.daySummary).toBe("1 stop, added by you");
     expect(v.emptyCls).toBe("fd-cempty is-off");
+  });
+
+  it("leaves stops you added out of the day dots and day labels (design: sample stops only)", () => {
+    const sat = view(added()).days[6];
+    expect(sat.cls).not.toContain("is-has");
+    expect(sat.label).toBe("Saturday, November 21, nothing booked");
+    const fri = view(run({ type: "openAdd", kind: "E" }, { type: "setAddName", name: "Jo Sample" }, { type: "submitAdd", placement: { week: 0, day: 5, start: 20 } })).days[5];
+    expect(fri.label).toBe("Friday, November 20, 4 stops");
+    expect(fri.cls).toContain("is-has");
   });
 });
 

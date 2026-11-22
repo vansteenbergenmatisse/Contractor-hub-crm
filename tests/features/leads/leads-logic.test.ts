@@ -203,10 +203,10 @@ describe("tiles and source panel", () => {
     expect(sourceRows(6).at(-1)).toMatchObject({ count: 6, width: 100 });
   });
 
-  it("tiles follow the added leads and the waiting count", () => {
+  it("New today and This week stay at the sample counts (as in the design); Wait on you follows the leads", () => {
     expect(tiles(MOCK_LEADS, fresh())).toEqual({ today: 4, week: 13, wait: 3 });
     const s = run(fill(fresh(), { name: "Pat", phone: "6145550100" }), { type: "submit" }, { type: "call", id: "ld-1" });
-    expect(tiles(MOCK_LEADS, s)).toEqual({ today: 5, week: 14, wait: 3 });
+    expect(tiles(MOCK_LEADS, s)).toEqual({ today: 4, week: 13, wait: 3 });
   });
 });
 

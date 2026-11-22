@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useBusiness, useBusinessValues, usePushed } from "@/features/app-shell";
-import { deliveryLabel, doneLabel, filterCounts, isVisible, replyLabel, rowSnippet, rowTime, summarize, visibleCount } from "../api/state";
+import { useBusiness, useBusinessValues, usePushed, useRowFocus } from "@/features/app-shell";
+import { conversationOfRow, deliveryLabel, doneLabel, filterCounts, isVisible, replyLabel, rowIdOf, rowSnippet, rowTime, summarize, visibleCount } from "../api/state";
 import { bookingLinkOf, fillText } from "../api/text";
 import { waitLabel, waitLevelClass } from "../api/wait";
 import { useInbox } from "../hooks/use-inbox";
@@ -15,7 +15,8 @@ import { WaitSummary } from "./WaitSummary";
 
 // The Inbox page content. The shell adds the page wrapper, the top bar and the tab bar.
 // Everything here changes local state only: nothing is sent, fetched or saved.
-export function InboxPage() {
+// `row` is the shell search's `?row=<id>`: that conversation opens (see `InboxPageFromUrl`).
+export function InboxPage({ row = null }: { row?: string | null } = {}) {
   const biz = useBusiness();
   const values = useBusinessValues();
   // The business's own facts for the sample texts. "" when the sub-account has no value.
@@ -32,6 +33,10 @@ export function InboxPage() {
   const [draft, setDraft] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const threadRef = useRef<HTMLDivElement>(null);
+  const rowsRef = useRef<HTMLDivElement>(null);
+  // Where focus goes after the next render: the reply box (opened from the keyboard) or the open row
+  // (Escape on a phone took the owner back to the list).
+  const focusNext = useRef<"" | "composer" | "row">("");
 
   const current = conversations.find((c) => c.id === state.selected) ?? conversations[0];
   const needs = !!state.needs[current.id];
@@ -41,23 +46,63 @@ export function InboxPage() {
   const delivery = deliveryLabel(state, current);
   const fresh = state.event === "send" ? (state.bumps % 2 ? "a" : "b") : "";
 
-  // A conversation opens at its newest message; the list opens at its top.
+  // A conversation opens at its newest message; the list opens at its top. As in the design only
+  // opening, sending and going back to the list scroll: Mark done and the filters leave it alone.
+  const { event, open: isOpen, swaps, bumps } = state;
   useEffect(() => {
+    if (event === "done" || event === "flt") return;
     const thread = threadRef.current;
     const main = thread?.closest("main");
-    const end = state.open;
-    if (thread) thread.scrollTop = end ? thread.scrollHeight : 0;
-    if (main && main.scrollHeight > main.clientHeight + 1) main.scrollTop = end ? main.scrollHeight : 0;
-  }, [state.open, state.selected, state.bumps]);
+    if (thread) thread.scrollTop = isOpen ? thread.scrollHeight : 0;
+    if (main && main.scrollHeight > main.clientHeight + 1) main.scrollTop = isOpen ? main.scrollHeight : 0;
+  }, [event, isOpen, swaps, bumps]);
 
-  function open(id: string) {
+  // Focus moves only after the render that shows its target (on a phone the reply box and the list
+  // are hidden until then).
+  useEffect(() => {
+    const target = focusNext.current;
+    focusNext.current = "";
+    if (target === "composer") inputRef.current?.focus({ preventScroll: true });
+    if (target === "row") rowsRef.current?.querySelector<HTMLElement>('.fd-cr[aria-current="true"]')?.focus();
+  }, [state.open, state.selected, state.swaps]);
+
+  // Escape on a phone closes the open conversation (the design's uxEsc), unless a dialog, the menu
+  // drawer or the feedback box is open: those close first.
+  useEffect(() => {
+    if (!state.open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented || window.innerWidth >= 1024) return;
+      if (document.querySelector('[aria-modal="true"], .fd-side.is-open, .fd-fb.is-open')) return;
+      e.preventDefault();
+      focusNext.current = "row";
+      dispatch({ type: "toList" });
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [state.open, dispatch]);
+
+  // A search result opens its conversation, also when the Inbox is already on screen.
+  const target = conversationOfRow(row, conversations);
+  const targetId = target?.id ?? null;
+  const targetHidden = target ? !isVisible(state, target) : false;
+  useEffect(() => {
+    if (!targetId) return;
+    dispatch({ type: "show", id: targetId, hidden: targetHidden });
+    // Only a new result opens a conversation; later filter changes must not reopen it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetId, dispatch]);
+  useRowFocus(conversations.map(rowIdOf));
+
+  function open(id: string, byKeyboard: boolean) {
     if (id !== state.selected) setDraft("");
+    if (byKeyboard) focusNext.current = "composer";
     dispatch({ type: "open", id });
   }
   // The summary button: show everyone, then open the conversation that waits longest.
-  function replyToLongest() {
+  function replyToLongest(byKeyboard: boolean) {
     if (!summary.targetId) return;
     if (summary.targetId !== state.selected) setDraft("");
+    if (byKeyboard) focusNext.current = "composer";
     dispatch({ type: "replyTo", id: summary.targetId });
   }
   function send() {
@@ -84,7 +129,7 @@ export function InboxPage() {
         <section className="fd-il" aria-label="Conversations">
           <FilterBar filter={state.filter} counts={counts} onChange={(filter) => dispatch({ type: "filter", filter })} />
           <WaitSummary summary={summary} onReply={replyToLongest} />
-          <div className="fd-crs">
+          <div className="fd-crs" ref={rowsRef}>
             {conversations.map((c) => (
               <ConversationRow
                 key={c.id}
@@ -94,7 +139,8 @@ export function InboxPage() {
                 visible={isVisible(state, c)}
                 time={rowTime(state, c)}
                 snippet={rowSnippet(state, c, BUSINESS)}
-                onOpen={() => open(c.id)}
+                rowId={rowIdOf(c)}
+                onOpen={(byKeyboard) => open(c.id, byKeyboard)}
               />
             ))}
             <div className={`fd-none${visibleCount(state, conversations) ? " is-off" : ""}`}>

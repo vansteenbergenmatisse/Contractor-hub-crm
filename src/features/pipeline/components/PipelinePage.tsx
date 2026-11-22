@@ -1,6 +1,7 @@
 "use client";
 
-import { PageAction } from "@/features/app-shell";
+import { PageAction, useRowFocus } from "@/features/app-shell";
+import { useRevealRow } from "../hooks/use-reveal-row";
 import { usePipelineBoard } from "../hooks/use-pipeline-board";
 import { STAGES } from "../api/stages";
 import {
@@ -18,13 +19,17 @@ import {
 import { MOCK_HIDDEN_COUNTS } from "../mock";
 import { KanbanCard } from "./KanbanCard";
 import { MoveStub } from "./MoveStub";
-import { StageEmpty, StageHeader, StageMore } from "./StageColumn";
+import { StageEmpty } from "./StageEmpty";
+import { StageHeader } from "./StageHeader";
+import { StageMore } from "./StageMore";
 import { StageMap } from "./StageMap";
 
-function Arrow({ size, flip }: { size: number; flip?: boolean }) {
+// A right chevron. The CSS turns it around inside a "Previous stage" button (.fd-sprev svg), so
+// that button points left at every width.
+function Arrow({ size }: { size: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
-      <path d={flip ? "m15 6-6 6 6 6" : "m9 6 6 6-6 6"} />
+      <path d="m9 6 6 6-6 6" />
     </svg>
   );
 }
@@ -38,6 +43,11 @@ export function PipelinePage() {
   const layout = computeLayout(state);
   const stub = stubView(state, cards, layout);
   const line = lineSelected(state);
+  // A search result opens /pipeline?row=pipeline-N: open the stage the card is in now, then bring
+  // the card into view. Only the cards of the open stage are offered, so the focus waits until
+  // that stage shows.
+  useRevealRow(state.sg, b.pick);
+  useRowFocus(cards.flatMap((_, i) => (state.sg[i] === state.stg ? [`pipeline-${i}`] : [])));
 
   return (
     <div className={boardClass(state)}>
@@ -45,7 +55,7 @@ export function PipelinePage() {
         <PageAction>
           <span className="fx-accg">
             <button type="button" className={"fd-ibtn fd-sprev" + (b.isFirst ? " is-dis" : "")} aria-label="Previous stage" disabled={b.isFirst} onClick={b.prev}>
-              <Arrow size={20} flip />
+              <Arrow size={20} />
             </button>
             <span className="fx-accst" aria-live="polite">
               <b>{STAGES[state.stg].name}</b> <span>{counts[state.stg]}</span>

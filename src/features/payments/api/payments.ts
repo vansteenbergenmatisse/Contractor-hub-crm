@@ -1,4 +1,4 @@
-import type { Lateness, PaymentRow, PaymentsState, Totals } from "../types";
+import type { Lateness, PaymentRow, PaymentsAction, PaymentsState, Totals } from "../types";
 
 // Amber: not due yet. Light red: late. Full red: more than 7 days late.
 export function lateness(daysLate: number): Lateness {
@@ -12,7 +12,7 @@ export function money(n: number): string {
 }
 
 export function initialState(rows: readonly PaymentRow[]): PaymentsState {
-  return Object.fromEntries(rows.map((row) => [row.id, { paid: false, reminders: 0 }]));
+  return Object.fromEntries(rows.map((row) => [row.id, { paid: false, reminded: false }]));
 }
 
 const patch = (state: PaymentsState, id: string, change: Partial<PaymentsState[string]>): PaymentsState =>
@@ -22,21 +22,23 @@ const patch = (state: PaymentsState, id: string, change: Partial<PaymentsState[s
 export const markPaid = (state: PaymentsState, id: string) => patch(state, id, { paid: true });
 export const undoPaid = (state: PaymentsState, id: string) => patch(state, id, { paid: false });
 
-// Remind now only adds a line to the history on screen. It sends nothing. In Phase 3 the same
-// button starts the reminder workflow in the CRM. A paid invoice takes no reminder.
+// Remind now replaces the history line with "Reminder sent just now" (design wording, the owner's
+// choice for Phase 2). It sends nothing; in Phase 3 the same button starts the reminder workflow in
+// the CRM. One flag per row: pressing again changes nothing. A paid invoice takes no reminder.
 export function remind(state: PaymentsState, id: string): PaymentsState {
   const row = state[id];
-  return row && !row.paid ? patch(state, id, { reminders: row.reminders + 1 }) : state;
+  return row && !row.paid && !row.reminded ? patch(state, id, { reminded: true }) : state;
 }
 
-export function undoRemind(state: PaymentsState, id: string): PaymentsState {
-  const row = state[id];
-  return row && !row.paid && row.reminders > 0 ? patch(state, id, { reminders: row.reminders - 1 }) : state;
-}
+// Undo is offered only for a paid row, as in the design. It brings the invoice back.
+export const canUndo = (state: PaymentsState, id: string): boolean => !!state[id]?.paid;
+export const undo = (state: PaymentsState, id: string): PaymentsState => (canUndo(state, id) ? undoPaid(state, id) : state);
 
-// The one Undo link on a row brings back a paid invoice, else removes the last reminder line.
-export const canUndo = (state: PaymentsState, id: string): boolean => !!state[id] && (state[id].paid || state[id].reminders > 0);
-export const undo = (state: PaymentsState, id: string): PaymentsState => (state[id]?.paid ? undoPaid(state, id) : undoRemind(state, id));
+export function paymentsReducer(state: PaymentsState, action: PaymentsAction): PaymentsState {
+  if (action.type === "remind") return remind(state, action.id);
+  if (action.type === "paid") return state[action.id]?.paid ? state : markPaid(state, action.id);
+  return undo(state, action.id);
+}
 
 export function totals(rows: readonly PaymentRow[], state: PaymentsState): Totals {
   const t: Totals = { owed: 0, late: 0, lateCount: 0, got: 0 };
@@ -54,11 +56,11 @@ export function totals(rows: readonly PaymentRow[], state: PaymentsState): Total
   return t;
 }
 
-// The reminder history lines of a row, oldest first.
+// The reminder history line of a row (one line, as in the design).
 export function historyLines(row: PaymentRow, state: PaymentsState): string[] {
   const s = state[row.id];
   if (s?.paid) return ["Reminders stopped"];
-  return [row.history, ...Array.from({ length: s?.reminders ?? 0 }, () => "Reminder sent just now")];
+  return [s?.reminded ? "Reminder sent just now" : row.history];
 }
 
 export const chipText = (row: PaymentRow, state: PaymentsState): string => (state[row.id]?.paid ? "Paid just now" : row.when);

@@ -132,7 +132,7 @@ describe("buildBrand: images and text", () => {
       profile: {
         name: null, owner: null, phone: null, email: null, address: null, city: null, state: null, hours: null,
         keyword: null, websiteUrl: null, universalCta: null, bookingJobUrl: null, bookingQuoteUrl: null,
-        googleProfileUrl: null, googleReviewUrl: null,
+        googleProfileUrl: null, googleReviewUrl: null, county: null, seasonalOffer: null, referralReward: null,
       },
       rejected: [],
     });

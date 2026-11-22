@@ -5,6 +5,7 @@ import { amountLabel, canApprove, canEdit, canUpload, checkEdit, formatMoney } f
 import { joinParts } from "@/shared/lib/join-parts";
 import type { SheetBusiness } from "../api/sheet-business";
 import type { EditDraft, Quote, QuoteLine } from "../types";
+import { SheetLogo } from "./SheetLogo";
 import { StatusChip } from "./StatusChip";
 
 const svg = { fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true, focusable: "false" } as const;
@@ -85,7 +86,7 @@ export function QuoteSheet(p: QuoteSheetProps) {
       ) : (
         <div className="fd-sheet">
           <div className="fd-dch">
-            <span className="fd-logo" aria-hidden="true"><span className="fd-h">{b.init}</span></span>
+            <SheetLogo url={b.logo} initials={b.init} />
             <div>
               {b.name ? <p className="fd-dcb">{b.name}</p> : null}
               {b.addr ? <p className="fd-dcs">{b.addr}</p> : null}
@@ -93,7 +94,7 @@ export function QuoteSheet(p: QuoteSheetProps) {
               {joinParts([b.site, b.hours]) ? <p className="fd-dcs">{joinParts([b.site, b.hours])}</p> : null}
             </div>
           </div>
-          <p className="fd-dcn"><span>Quote</span><StatusChip quote={q} /></p>
+          <p className="fd-dcn"><span><span className="fd-h">Quote</span></span><StatusChip quote={q} plain /></p>
           <p className="fd-dcs">{q.service}</p>
           <p className="fd-dcl">Quote for</p>
           <p className="fd-dcv">{q.name}</p>
@@ -110,7 +111,6 @@ export function QuoteSheet(p: QuoteSheetProps) {
             ))}
             <li className="is-tot"><span>Total</span><b>{amountLabel(q)}</b></li>
           </ul>
-          {q.status === "need" && !q.file ? <p className="fd-dcs">No lines yet. Enter a service and a price in the list, or upload your own quote.</p> : null}
           <p className="fd-dcs">Accept online with the link in this message.</p>
         </div>
       )}

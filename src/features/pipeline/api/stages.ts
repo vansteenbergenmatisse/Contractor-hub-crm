@@ -11,13 +11,8 @@ export const STAGES: readonly StageDef[] = [
   { index: 4, name: "Quote Sent", group: "Sales", button: { label: "Accepted", to: 5 }, next: "Follow-up texts run" },
   { index: 5, name: "Job to Schedule", group: "Delivery", button: { label: "Book job", to: 6 }, next: "Booking link sent" },
   { index: 6, name: "Job Scheduled", group: "Delivery", button: { label: "Job done", to: 7 }, next: "Reminder the day before" },
-  {
-    index: 7,
-    name: "Job Done",
-    group: "Delivery",
-    button: { label: "Invoice", to: 8 },
-    next: "Review request (1 hour after), referral ask (1 day after), invoice created",
-  },
+  // The design's wording (logic AUTO[7]); it ranks above build-prompt.md, which lists every step.
+  { index: 7, name: "Job Done", group: "Delivery", button: { label: "Invoice", to: 8 }, next: "Review request sent" },
   { index: 8, name: "Payment Due", group: "Money", button: { label: "Mark paid", to: 9 }, next: "Payment reminders run" },
   { index: 9, name: "Check Back Later", group: "Later", button: { label: "Reopen", to: 0 }, next: "Check-in texts run" },
   { index: 10, name: "Lost", group: "Later", button: { label: "Reopen", to: 0 }, next: "Every text stopped" },

@@ -77,8 +77,8 @@ export function PaymentsView({ rows, state, onRemind, onPaid, onUndo }: Props) {
                       <svg {...svg} width={15} height={15} strokeWidth={2}><path d="M5 4h4l1.5 4.5-2 1.5a12 12 0 0 0 5.5 5.5l1.5-2L20 15v4a1 1 0 0 1-1 1A15 15 0 0 1 4 5a1 1 0 0 1 1-1z" /></svg>
                       Call
                     </button>
-                    <button type="button" className="fd-btn is-plain" onClick={() => onRemind(row.id)} aria-label={`Remind ${row.name} now`}>Remind now</button>
-                    <button type="button" className="fd-btn" onClick={() => onPaid(row.id)} aria-label={`Mark ${row.name} paid`}>Mark paid</button>
+                    <button type="button" className="fd-btn is-plain" onClick={() => onRemind(row.id)} aria-label={`Remind now, ${row.name}`}>Remind now</button>
+                    <button type="button" className="fd-btn" onClick={() => onPaid(row.id)} aria-label={`Mark paid, ${row.name}`}>Mark paid</button>
                   </>
                 )}
               </div>
