@@ -25,6 +25,15 @@ Every automation we run for a client lives in HighLevel as a workflow. This app 
 
 Mock data sits in marked mock modules (`MOCK DATA` header, one `mock.ts` per feature, all fed from one shared set of sample people and amounts in `src/shared/mock/`), replaced field by field in Phase 3. No automation is written here (see the principle above). Layout shell first (side menu, phone top bar, tab bar, bottom sheets), then one page per ticket in this order: Today, Inbox, Pipeline, Leads, Quotes, Invoices, Payments, Calendar, Automations, Settings. Each page: Playwright at the 14 widths, 44 pt targets, 390x844 thumb check, then `fe:review-final`.
 
+## Next work, in this order (user, 2026-11-22; recorded before a context clear, nothing built yet)
+
+1. **Finish Phase 2 polish**: the round 4 fix list R4-1..R4-12 in PROGRESS.md (lean review rounds: the user's API budget).
+2. **Sync in our own code, no n8n.** First the initial syncs: webhooks (INSTALL, UNINSTALL, LocationUpdate, UserCreate/Update/Delete) keep users and locations in step at once; the daily Vercel cron stays as a backstop (needs `CRON_SECRET`); add an on-visit sync (when a tenant user opens the app and that tenant last synced over 10 minutes ago, sync that tenant after the response, rate-limited per tenant). No n8n anywhere.
+3. **Pipeline drag and stage picker.** The owner must be able to drag a card to another stage and also select a card and choose another stage (keyboard and phone friendly), with Undo. Phase 2: mock state; Phase 3: the move changes the opportunity stage in HighLevel (no automation in this app).
+4. **Accounts: email unique per client (user decision).** The same email may exist once per client sub-account (option b in `docs/onboarding.md` decision 3, a change to Better Auth's user table and sign-in: the sign-in must know which client). Forge Forward admins sign in across all clients. The user also wrote "I guess C is best" (move an unused account when HighLevel proves the person belongs to the other client) because admins log in too: CONFIRM b, c or both with the user before building.
+5. **Login, kept simple (user).** Clients sign in with email and password or with Google, land in THEIR sub-account, and see only that sub-account's data (leads, contacts, everything). Admins can sign in too. Google sign-in needs a Google Cloud OAuth client (user to create; id and secret go in Vercel and `.env.local`).
+6. **Custom values drive everything, and Settings writes them back.** Brand colors (the 14 `02_Branding` keys, confirmed from the user's screenshot 2026-11-22; that folder has NO font keys), logo, favicon, sign-in background, business details, services and service areas all come from the sub-account's custom values (key catalogue in `docs/tenant-branding.md`). When the owner changes a value in our Settings, it must update the custom value in HighLevel (write-back; important to the user), and a change made in HighLevel shows in the app (brand cache invalidation on LocationUpdate exists; per server instance).
+
 ## Phase 3: wire each page to HighLevel
 
 One ticket per page, replacing mock fields. Also: 20-second send timer on the server, simple per-tenant invoice template (own database, built after the invoice page works), AI quote builder (OpenAI, model name in an env var, tested Astra vs Sol first) with a per-quote usage log, Settings write-back behind an off-by-default flag.
@@ -36,5 +45,5 @@ Stripe: monthly subscription plus usage from the log (read Stripe's current mete
 ## Needs the user
 
 - Test sub-account created and the Test app installed from the agency (not verified by Claude).
-- Vercel env vars for dev (the user said production and staging only; dev unknown).
+- Vercel env vars: see `docs/vercel-env-setup-prompt.md` (a ready prompt for another agent).
 - Slack channel set up before phase 4.
