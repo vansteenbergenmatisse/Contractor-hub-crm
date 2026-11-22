@@ -1,0 +1,97 @@
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/quotes",
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+}));
+
+// Shell context stub: the page only needs useShell and usePushed.
+vi.mock("@/features/app-shell", () => ({
+  useShell: () => ({ sendTimer: vi.fn(), askReason: vi.fn(), setPushed: vi.fn(), setAction: vi.fn() }),
+  usePushed: () => {},
+  REASONS: ["Ask again later", "Said no", "Chose a competitor", "Not a fit", "Opted out"],
+}));
+
+import { QuoteSheet, QuotesPage, SEED_QUOTES, sheetBusiness } from "@/features/quotes";
+import { MOCK_BUSINESS } from "@/shared/mock/business";
+
+const html = renderToStaticMarkup(<QuotesPage />);
+
+describe("QuotesPage markup", () => {
+  it("renders the title, the tiles and the three filters", () => {
+    expect(html).toContain(">Quotes</h1>");
+    expect(html).toContain("1 waits for your OK");
+    expect(html).toContain("5 out with customers");
+    expect(html).toContain("3 of 10");
+    for (const f of ["All", "To approve", "Sent"]) expect(html).toContain(`>${f}</button>`);
+    expect(html).not.toContain("fd-view");
+  });
+  it("lists every quote with its status and one filled approve button", () => {
+    for (const q of SEED_QUOTES) expect(html).toContain(q.name);
+    expect(html).toContain("Needs service and price");
+    expect((html.match(/is-fill/g) ?? []).length).toBe(2); // list button and sheet button of the same quote
+    expect(html).toContain("Opened 3 times today. Call now.");
+  });
+  it("shows the build form only for a quote that needs a price, with labels", () => {
+    expect((html.match(/Build quote/g) ?? []).length).toBe(1);
+    expect(html).toContain('for="fd-qt-sv-q1"');
+    expect(html).toContain("Price or price range");
+  });
+  it("has the empty state right before the list so CSS can show it", () => {
+    expect(html).toMatch(/class="fx-emp">.*No quotes in this view\..*<\/div><div class="fd-lst">/);
+  });
+  it("shows the business facts from the mock custom values on the sheet", () => {
+    expect(html).toContain(MOCK_BUSINESS.business_name);
+    expect(html).toContain(MOCK_BUSINESS.business_phone_number);
+    expect(html).toContain("northwayroofing.example");
+  });
+  it("starts on the list, not on the sheet", () => {
+    expect(html).toContain('class="fd-dv"');
+    expect(html).not.toContain("is-doc");
+  });
+});
+
+describe("QuoteSheet", () => {
+  const base = { business: sheetBusiness(MOCK_BUSINESS), onShut() {}, onEdit() {}, onCancel() {}, onSave() {}, onUpload() {}, onRemoveFile() {}, onApprove() {} };
+  it("edit mode shows fields, Save and Cancel and hides the sheet", () => {
+    const out = renderToStaticMarkup(<QuoteSheet {...base} quote={SEED_QUOTES[0]} editing />);
+    expect(out).toContain('id="fd-qe-name"');
+    expect(out).toContain('id="fd-qe-a2"');
+    expect(out).not.toContain('id="fd-qe-a3"');
+    expect(out).toContain(">Save</button>");
+    expect(out).not.toContain("Approve and send");
+  });
+  it("an empty quote explains itself and offers no approve or edit", () => {
+    const out = renderToStaticMarkup(<QuoteSheet {...base} quote={SEED_QUOTES[1]} editing={false} />);
+    expect(out).toContain("No price yet");
+    expect(out).toContain("No lines yet");
+    expect(out).toContain("Upload your own quote");
+    expect(out).not.toContain(">Edit<");
+    expect(out).not.toContain("Approve and send");
+  });
+  it("an own file shows its name and Remove", () => {
+    const out = renderToStaticMarkup(<QuoteSheet {...base} quote={{ ...SEED_QUOTES[1], status: "ready", file: "mine.pdf" }} editing={false} />);
+    expect(out).toContain("Your own quote: mine.pdf");
+    expect(out).toContain(">Remove</button>");
+  });
+});
+
+describe("no network, no automation", () => {
+  it("the feature never calls fetch, a database or an AI client", () => {
+    const root = join(process.cwd(), "src/features/quotes");
+    const files: string[] = [];
+    const walk = (dir: string) => { for (const e of readdirSync(dir, { withFileTypes: true })) {
+      if (e.isDirectory()) walk(join(dir, e.name));
+      else if (/\.tsx?$/.test(e.name)) files.push(join(dir, e.name));
+    } };
+    walk(root);
+    expect(files.length).toBeGreaterThan(5);
+    for (const f of files) {
+      const code = readFileSync(f, "utf8").split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
+      expect(code, f).not.toMatch(/\bfetch\s*\(|XMLHttpRequest|WebSocket|@\/shared\/lib\/prisma|setInterval|anthropic|openai/i);
+    }
+  });
+});
