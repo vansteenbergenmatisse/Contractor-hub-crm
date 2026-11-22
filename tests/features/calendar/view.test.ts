@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bookingLink, buildView, calendarReducer, daySummary, initialState, MOCK_STOPS, siteOf, type CalendarAction } from "@/features/calendar";
+import { bookingLink, buildView, calendarReducer, confirmSafeButton, daySummary, initialState, MOCK_STOPS, siteOf, type CalendarAction } from "@/features/calendar";
 
 const NOW = new Date(2026, 10, 20, 10, 0); // Friday 10:00
 const start = () => initialState(MOCK_STOPS, NOW);
@@ -213,5 +213,31 @@ describe("booking link", () => {
     expect(b.hours).toBe(BIZ.business_hours);
     expect(b.copyText).toBe("Copy link");
     expect(view(run({ type: "copyLink" })).booking.copyText).toBe("Copied");
+  });
+});
+
+describe("view edges", () => {
+  it("a past stop that was moved (to another past time) can still be rescheduled", () => {
+    const tom = id("Tom Becker"); // Friday 8:30, over at 10:00
+    expect(view(run({ type: "pick", id: tom })).detail.canReschedule).toBe(false);
+    const s = run({ type: "move", id: tom, to: { week: -1, day: 2, start: 4 } });
+    expect(view(s).detail.open).toBe(true);
+    expect(view(s).detail.canReschedule).toBe(true);
+    expect(view(calendarReducer(s, { type: "askDelete", id: tom })).confirm.canReschedule).toBe(true);
+  });
+
+  it("puts the detail panel on the left from Thursday on", () => {
+    const at = (name: string) => view(run({ type: "pick", id: id(name) })).detail.cls;
+    expect(at("Dublin Bakery")).not.toContain("is-left"); // Wednesday, day 3
+    expect(at("Whitmore Dental")).toContain("is-left"); // Thursday, day 4
+    expect(at("Linda Park")).toContain("is-left"); // Friday, day 5
+  });
+});
+
+describe("the delete question's safe button", () => {
+  it("is Reschedule instead when it shows, else Cancel", () => {
+    const linda = id("Linda Park");
+    expect(confirmSafeButton(view(run({ type: "askDelete", id: linda })).confirm)).toBe("reschedule");
+    expect(confirmSafeButton(view(run({ type: "askDelete", id: id("Tom Becker") })).confirm)).toBe("cancel");
   });
 });

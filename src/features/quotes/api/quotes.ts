@@ -4,6 +4,7 @@ import type {
   BuildCheck, EditCheck, EditDraft, PriceParse, Quote, QuoteFilter, QuoteLine, QuotesAction, QuotesState, QuoteStatus,
 } from "../types";
 
+// The edit form holds at most this many lines.
 export const MAX_LINES = 3;
 
 // $1,234 (whole dollars, like the design). Totals of lines with cents round at display time.
@@ -53,6 +54,7 @@ export function checkEdit(draft: EditDraft): EditCheck {
     lines.push({ text, amount });
   });
   if (!name) return { ok: false, field: "name", message: "Enter the customer name." };
+  if (lines.length > MAX_LINES) return { ok: false, field: `t${MAX_LINES}`, message: `A quote holds at most ${MAX_LINES} lines.` };
   if (badField) return { ok: false, field: badField, message: "Every line needs words and a price in dollars." };
   return { ok: true, name, lines };
 }
@@ -111,6 +113,23 @@ export function totals(quotes: readonly Quote[]) {
 export const firstReadyId = (quotes: readonly Quote[]): string | undefined => quotes.find((q) => q.status === "ready")?.id;
 
 export const canApprove = (q: Quote): boolean => q.status === "ready";
+
+// One filled button per view. On a computer the sheet sits beside the list; when it shows a quote that
+// waits (and is not being edited) its "Approve and send" is the filled one, so no row is. On a phone
+// the list hides the sheet, so the first waiting row carries it.
+export function rowFillId(quotes: readonly Quote[], sheet: Quote | undefined, editing: boolean, wide: boolean): string | undefined {
+  if (wide && sheet && canApprove(sheet) && !editing) return undefined;
+  return firstReadyId(quotes);
+}
+
+// A link from another page names a row with ?row=quote-<id>. A quote that needs a price is selected so
+// the owner can type it; any other quote opens its sheet.
+export function rowFromSearch(search: string, quotes: readonly Quote[]): { id: string; see: boolean } | null {
+  const row = new URLSearchParams(search).get("row") ?? "";
+  if (!row.startsWith("quote-")) return null;
+  const q = quotes.find((x) => x.id === row.slice("quote-".length));
+  return q ? { id: q.id, see: q.status !== "need" } : null;
+}
 export const canEdit = (q: Quote): boolean => (q.status === "ready" || q.status === "sent") && !q.file;
 export const canUpload = (q: Quote): boolean => (q.status === "need" || q.status === "ready") && !q.file;
 
@@ -149,6 +168,7 @@ export function quotesReducer(state: QuotesState, action: QuotesAction): QuotesS
   switch (action.type) {
     case "filter": return { ...state, filter: action.filter };
     case "see": return { ...state, selectedId: action.id, doc: true, editing: false };
+    case "select": return state.quotes.some((q) => q.id === action.id) ? { ...state, selectedId: action.id, editing: false } : state;
     case "shut": return { ...state, doc: false, editing: false };
     case "build": {
       const q = find(state, action.id);

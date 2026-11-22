@@ -2,9 +2,13 @@
 
 import { useState } from "react";
 import { useShell } from "@/features/app-shell";
-import { editInvoice, fixMissing, markPaid, markSent, sendRequest } from "../api/invoices";
+import { canSend, editInvoice, fixMissing, markPaid, markSent, rowFillNo, sendRequest } from "../api/invoices";
 import { buildMockInvoices } from "../mock";
 import type { EditForm, Filter, Invoice } from "../types";
+import { useWide } from "./use-wide";
+
+export const SHEET_ID = "fd-iv-sheet";
+export const viewButtonId = (no: number) => `fd-iv-v${no}`;
 
 const focusId = (id: string) => {
   setTimeout(() => document.getElementById(id)?.focus(), 0);
@@ -32,10 +36,11 @@ export function useInvoices() {
 
   const selected = invoices.find((i) => i.no === sel) ?? invoices[0];
   const replace = (next: Invoice) => setInvoices((list) => list.map((i) => (i.no === next.no ? next : i)));
-  const firstReady = invoices.find((i) => i.st === "ready")?.no;
+  const wide = useWide();
+  const fillNo = rowFillNo(invoices, selected, editing, wide);
 
   return {
-    now, invoices, selected, doc, editing, editError, form, filter, fixText, fixError, firstReady,
+    now, invoices, selected, doc, editing, editError, form, filter, fixText, fixError,
     setFilter,
     setForm,
     setFixText: (no: number, text: string) => setFixText((t) => ({ ...t, [no]: text })),
@@ -45,14 +50,27 @@ export function useInvoices() {
       setEditing(false);
       setEditError("");
       if (isPhone()) document.querySelector(".fd-main")?.scrollTo?.({ top: 0 });
-      else if (isOneColumn()) setTimeout(() => document.querySelector(".fd-doc")?.scrollIntoView?.({ block: "start" }), 0);
+      else {
+        // On a computer the sheet sits beside (or under) the list: move the focus to it.
+        setTimeout(() => {
+          const sheet = document.getElementById(SHEET_ID);
+          if (isOneColumn()) sheet?.scrollIntoView?.({ block: "start" });
+          sheet?.focus({ preventScroll: true });
+        }, 0);
+      }
     },
     shut() {
       const at = selected?.no;
       setDoc(false);
       setEditing(false);
       setEditError("");
-      if (at !== undefined && isPhone()) setTimeout(() => document.getElementById(`fd-iv-r${at}`)?.scrollIntoView?.({ block: "center" }), 60);
+      // Back returns the focus to the View button of the row it came from.
+      if (at !== undefined) {
+        setTimeout(() => {
+          if (isPhone()) document.getElementById(`fd-iv-r${at}`)?.scrollIntoView?.({ block: "center" });
+          document.getElementById(viewButtonId(at))?.focus({ preventScroll: isPhone() });
+        }, 60);
+      }
     },
     make(no: number) {
       const inv = invoices.find((i) => i.no === no);
@@ -71,7 +89,7 @@ export function useInvoices() {
     // Opens the shared 20 second timer. At 0 the invoice is marked Sent on screen. Nothing is sent.
     send(no: number) {
       const inv = invoices.find((i) => i.no === no);
-      if (!inv || inv.st !== "ready") return;
+      if (!inv || !canSend(inv)) return;
       shell.sendTimer(
         sendRequest(inv, () => {
           setInvoices((list) => list.map((i) => (i.no === no ? markSent(i, new Date()) : i)));
@@ -106,7 +124,7 @@ export function useInvoices() {
       setEditing(false);
       setEditError("");
     },
-    isFirstReady: (no: number) => no === firstReady,
+    isFirstReady: (no: number) => no === fillNo,
   };
 }
 

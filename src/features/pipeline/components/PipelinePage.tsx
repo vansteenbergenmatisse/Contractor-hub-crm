@@ -104,8 +104,8 @@ export function PipelinePage() {
                 onSecond={() => view.second && b.moveTo(i, view.second.to)}
                 onTrash={() => b.lose(i)}
                 onUndo={b.undo}
-                onCalendar={b.openCalendar}
-                onSeeQuote={b.openQuote}
+                onCalendar={() => b.openCalendar(view.card.name)}
+                onSeeQuote={() => b.openQuote(view.card.name)}
               />
             );
           })}

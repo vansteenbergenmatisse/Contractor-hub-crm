@@ -10,7 +10,7 @@ describe("buildManifest", () => {
   });
 
   it("shortens a long name for the home screen label", () => {
-    expect(buildManifest(buildBrand([v("business_name", "Northern Landscaping And Snow Services")])).short_name).toBe("Northern");
+    expect(buildManifest(buildBrand([v("business_name", "Sample Lawn And Snow Services")])).short_name).toBe("Sample");
   });
 
   it("lists PNG icons of 192 and 512 pixels, one of them maskable, all on our own icon route", () => {

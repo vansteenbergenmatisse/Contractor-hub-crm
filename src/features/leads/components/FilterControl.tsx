@@ -1,6 +1,7 @@
 "use client";
 
 import type { CSSProperties, KeyboardEvent } from "react";
+import { filterKeyIndex } from "../api/leads-logic";
 import type { WaitFilter } from "../types";
 
 const OPTIONS: ReadonlyArray<{ key: WaitFilter; label: string }> = [
@@ -12,17 +13,15 @@ const OPTIONS: ReadonlyArray<{ key: WaitFilter; label: string }> = [
 
 type Props = { value: WaitFilter; counts: Record<WaitFilter, number>; onChange: (f: WaitFilter) => void };
 
-// Segmented control: one radio group, arrow keys move between the options.
+// Segmented control: one radio group. Arrow keys, Home and End move between the options.
 export function FilterControl({ value, counts, onChange }: Props) {
   const index = OPTIONS.findIndex((o) => o.key === value);
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    const step = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
-    if (!step) return;
+    const next = filterKeyIndex(e.key, index, OPTIONS.length);
+    if (next < 0) return;
     e.preventDefault();
-    const next = OPTIONS[(index + step + OPTIONS.length) % OPTIONS.length].key;
-    onChange(next);
-    const buttons = e.currentTarget.querySelectorAll<HTMLButtonElement>("[role=radio]");
-    buttons[(index + step + OPTIONS.length) % OPTIONS.length]?.focus();
+    onChange(OPTIONS[next].key);
+    e.currentTarget.querySelectorAll<HTMLButtonElement>("[role=radio]")[next]?.focus();
   };
   return (
     <div className="fd-wseg" role="radiogroup" aria-label="Show who waits" style={{ "--seg": index } as CSSProperties} onKeyDown={onKey}>

@@ -43,6 +43,20 @@ describe("CalendarPage markup", () => {
     expect(html).not.toContain("Synced with");
   });
 
+  it("shows the Not available yet chip without a check icon, and a whole sentence beside it", () => {
+    expect(html).toContain('<span class="fd-chip fd-csync is-plain">Not available yet</span>');
+    expect(html).toContain("The calendar this syncs with shows here once it can be read.");
+    expect(html).not.toContain("Which calendar this syncs with.");
+  });
+
+  it("opens the stop named in ?row=<id> (the shell's pushed-row convention)", () => {
+    const linda = renderToStaticMarkup(<AppShell business={business} searchRows={[]}><CalendarPage now={NOW} row="stop-14" /></AppShell>);
+    expect(linda).toContain("fd-cdet is-on");
+    expect(linda).toMatch(/<h3 class="fd-dn">Linda Park<\/h3>/);
+    const none = renderToStaticMarkup(<AppShell business={business} searchRows={[]}><CalendarPage now={NOW} row="nope" /></AppShell>);
+    expect(none).toContain('class="fd-cdet is-off"');
+  });
+
   it("takes the booking link and hours from the business, not from the code", () => {
     expect(html).toContain("book.sample-roofing.test/job");
     expect(html).toContain("Open Mon - Fri: 9 - 4.");

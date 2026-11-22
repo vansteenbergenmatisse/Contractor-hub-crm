@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import Link from "next/link";
 import { canUndo, chipText, historyLines, lateness, money, nobodyOwes, totals } from "../api/payments";
 import type { PaymentRow, PaymentsState } from "../types";
 
@@ -32,14 +33,16 @@ export function PaymentsView({ rows, state, onRemind, onPaid, onUndo }: Props) {
       </section>
       <p className="fd-ppb is-warn" role="status">
         <svg {...svg} width={16} height={16} strokeWidth={2}><circle cx="12" cy="12" r="9" /><path d="M12 7.5v5M12 16.2v.3" /></svg>
-        <span>Not available yet. Online payments are not connected, so a paid invoice does not mark itself paid.</span>
-        <a className="fd-btn" href="/settings">Connect in Settings</a>
+        {/* Rule 9: a feature the system does not have shows a "Not available yet" chip and no switch. */}
+        <b className="fd-chip is-plain">Not available yet</b>
+        <span>Online payments are not connected. A paid invoice does not mark itself paid yet.</span>
+        <Link className="fd-btn" href="/settings?section=connections">Connect in Settings</Link>
       </p>
       <div className="fd-lst fd-in" style={stagger(2)}>
         {rows.map((row) => {
           const paid = !!state[row.id]?.paid;
           return (
-            <div key={row.id} className={`fd-rw${paid ? " is-done" : ""}`}>
+            <div key={row.id} className={`fd-rw${paid ? " is-done" : ""}`} data-row-id={`payments-${row.id}`}>
               <div className="fd-rm">
                 <span className="fd-av" aria-hidden="true">{row.initials}</span>
                 <div className="fd-rbx">

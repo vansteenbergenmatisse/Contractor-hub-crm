@@ -56,6 +56,13 @@ export function calendarReducer(s: CalendarState, a: CalendarAction): CalendarSt
       return go(s, { sd: a.day, view: "day", selId: null, picking: false, sw: s.sw + 1, ev: "nav" });
     case "pick":
       return go(s, { selId: s.selId === a.id ? null : a.id, picking: false, ev: "pick" });
+    case "openRow": {
+      const stop = findStop(s, a.id);
+      if (!stop || s.deleted[stop.id]) return s;
+      const p = placementOf(s, stop);
+      if (s.selId === stop.id && s.wk === p.week && s.sd === p.day) return s;
+      return go(s, { selId: stop.id, wk: p.week, sd: p.day, picking: false, confirmId: null, sw: s.sw + 1, ev: "nav" });
+    }
     case "closeDetail":
       return go(s, { selId: null, picking: false, ev: "pick" });
     case "openReschedule":

@@ -14,7 +14,7 @@ export function FeedbackSheet({ open, first, onClose }: { open: boolean; first: 
       <div className={`fd-part${sent ? " is-off" : ""}`}>
         <h2 className="fd-fbt" id="fd-fb-h">Send feedback</h2>
         <p className="fd-fbs">What should we fix or add? It goes straight to our team.</p>
-        <textarea className="fd-fbi" rows={4} aria-label="Your feedback" placeholder="Type it here" />
+        <textarea id="fd-fb-text" name="feedback" className="fd-fbi" rows={4} aria-label="Your feedback" placeholder="Type it here" />
         <div className="fd-fbb">
           <button type="button" className="fd-btn is-plain" onClick={close}>Cancel</button>
           <button type="button" className="fd-btn is-fill" onClick={() => setSent(true)}>Send</button>

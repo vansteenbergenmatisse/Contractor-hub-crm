@@ -65,6 +65,16 @@ describe("AutomationsPage markup", () => {
     expect(html).toContain("Back to the list");
   });
 
+  it("shows the Promotion campaign's offer sentence without raw braces", () => {
+    expect(html).toContain("Texts old leads your seasonal offer: (no seasonal offer set)");
+    expect(html).not.toContain("{seasonal offer}");
+  });
+
+  it("gives each row's Edit button an id to return focus to", () => {
+    expect(html).toContain('id="fd-au-edit-wf-1"');
+    expect(count(/id="fd-au-edit-wf-\d+"/g)).toBe(17);
+  });
+
   it("offers New automation at the top and in the panel", () => {
     expect(count(/New automation/g)).toBeGreaterThanOrEqual(2);
   });

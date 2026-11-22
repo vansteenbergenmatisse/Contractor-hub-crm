@@ -1,9 +1,10 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { PAGE_PATH, PageAction } from "@/features/app-shell";
-import { filterCounts, firstNeedId, summarize, tiles, visibleAdded, visibleLeads } from "../api/leads-logic";
+import { addLeadMode, filterCounts, firstNeedId, summarize, tiles, visibleAdded, visibleLeads } from "../api/leads-logic";
+import { isPhoneNow, useIsPhone } from "../hooks/use-is-phone";
 import { useLeads, useOpenAddFromUrl } from "../hooks/use-leads";
 import { MOCK_LEADS } from "../mock";
 import { AddLeadPanel } from "./AddLeadPanel";
@@ -22,7 +23,29 @@ const rise = (i: number) => ({ "--i": i }) as CSSProperties;
 export function LeadsPage() {
   const [state, dispatch] = useLeads();
   const router = useRouter();
-  useOpenAddFromUrl(dispatch);
+  const phone = useIsPhone();
+  // Computer: each press of "Add a lead" scrolls to the side form and puts the cursor in it.
+  const [focusTick, setFocusTick] = useState(0);
+  const openAdd = useCallback(() => {
+    if (addLeadMode(isPhoneNow()) === "sheet") dispatch({ type: "openAdd" });
+    else setFocusTick((n) => n + 1);
+  }, [dispatch]);
+  useOpenAddFromUrl(openAdd);
+
+  // Phone: when the sheet closes, the cursor goes back to the "Add a lead" button in the action bar.
+  // That button is mounted again by the shell after the sheet closes, so its ref takes the focus.
+  const wasSheet = useRef(false);
+  const returnFocus = useRef(false);
+  useEffect(() => {
+    if (wasSheet.current && !state.sheet) returnFocus.current = true;
+    wasSheet.current = state.sheet;
+  }, [state.sheet]);
+  const addButtonRef = useCallback((el: HTMLButtonElement | null) => {
+    if (el && returnFocus.current) {
+      returnFocus.current = false;
+      el.focus();
+    }
+  }, []);
 
   const counts = filterCounts(MOCK_LEADS, state);
   const summary = summarize(MOCK_LEADS, state);
@@ -42,7 +65,7 @@ export function LeadsPage() {
     <>
       {!state.sheet && (
         <PageAction>
-          <button type="button" className="fd-btn fx-accb" onClick={() => dispatch({ type: "openAdd" })}>
+          <button ref={addButtonRef} type="button" className="fd-btn fx-accb" onClick={openAdd}>
             <ChannelIcon name="plus" size={16} strokeWidth={2.2} />Add a lead
           </button>
         </PageAction>
@@ -63,7 +86,7 @@ export function LeadsPage() {
           </section>
           <div className="fd-flr">
             <FilterControl value={state.filter} counts={counts} onChange={(filter) => dispatch({ type: "filter", filter })} />
-            <button type="button" className="fd-btn is-plain fd-addb" onClick={() => dispatch({ type: "openAdd" })}>
+            <button type="button" className="fd-btn is-plain fd-addb" onClick={openAdd}>
               <ChannelIcon name="plus" size={16} strokeWidth={2.2} />Add a lead
             </button>
           </div>
@@ -101,6 +124,8 @@ export function LeadsPage() {
           />
           <AddLeadPanel
             sheet={state.sheet}
+            phone={phone}
+            focusTick={focusTick}
             form={state.form}
             errors={state.errors}
             focus={state.focus}

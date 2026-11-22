@@ -69,6 +69,13 @@ describe("InboxPage markup", () => {
     expect((html.match(/fd-btn is-fill/g) ?? []).length).toBe(1);
     expect(html).toContain('aria-live="polite"');
   });
+  it("announces only the status line, not the whole thread, when the conversation changes", () => {
+    const tm = html.match(/<div class="fd-tm[^"]*"[^>]*>/)?.[0] ?? "";
+    expect(tm).not.toBe("");
+    expect(tm).not.toContain("aria-live");
+    expect(html).toMatch(/<p class="fd-tst" aria-live="polite"/);
+    expect((html.match(/aria-live=/g) ?? []).length).toBe(2);
+  });
   it("offers the three quick replies and Mark done", () => {
     for (const q of ["Call in 10 min", "Booking link", "Thanks"]) expect(html).toContain(`>${q}</button>`);
     expect(html).toContain("Mark done");

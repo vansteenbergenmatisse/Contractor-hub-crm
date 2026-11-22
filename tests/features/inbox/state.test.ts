@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   deliveryLabel, doneLabel, filterCounts, initialState, inboxReducer, isVisible, replyLabel, rowSnippet, rowTime,
-  summarize, visibleCount, waitingCount,
+  rowWaitLabel, summarize, visibleCount, waitingCount,
 } from "../../../src/features/inbox/api/state";
+import { waitLevelClass } from "../../../src/features/inbox/api/wait";
 import { bookingLinkOf, fillText, replyName, siteOf } from "../../../src/features/inbox/api/text";
 import { toSearchRows } from "../../../src/features/inbox/api/search-rows";
 import { INBOX_WAITING_COUNT, MOCK_CONVERSATIONS as C } from "../../../src/features/inbox/mock";
@@ -76,7 +77,7 @@ describe("open, back and the summary button", () => {
     const only = { ...s, needs: { ...s.needs, c3: false } };
     const one = summarize(only, C);
     expect(one.lead).toBe("1 person waits on you.");
-    expect(one.rest).toBe("Bright Daycare waits 2 hrs.");
+    expect(one.rest).toBe("Bright Daycare waits 0 min.");
     expect(one.button).toBe("Reply to Bright Daycare");
   });
   it("says nobody waits when all are done", () => {
@@ -163,5 +164,28 @@ describe("search rows", () => {
     expect(searchRows).toHaveLength(9);
     expect(searchRows.every((r) => r.page === "inbox" && r.href === "/inbox")).toBe(true);
     expect(toSearchRows([C[0]])[0]).toMatchObject({ name: "Maria Alvarez", sub: "Call · Roof leak repair · New Lead" });
+  });
+});
+
+describe("spec mock: minutes waiting of the conversations that do not wait", () => {
+  it("is 0 for every conversation that needs no reply, as in the design", () => {
+    for (const c of C.filter((x) => !x.needsReply)) expect(c.minutesWaiting, c.name).toBe(0);
+  });
+  it("Flag for reply shows Waiting 0 min in the amber tier and counts under 1 hour", () => {
+    const s = run(start(), { type: "open", id: "c4" }, { type: "toggleDone" });
+    expect(rowWaitLabel(byName("Dana Kim"))).toBe("Waiting 0 min");
+    expect(waitLevelClass(byName("Dana Kim").minutesWaiting)).toBe("is-warn");
+    expect(filterCounts(s, C)).toEqual({ all: 9, warn: 2, bad: 1, hot: 1 });
+  });
+});
+
+describe("who waits longest: a tie", () => {
+  it("picks the first in the list when two wait the same minutes", () => {
+    const a = { ...byName("Maria Alvarez"), id: "t1", name: "Ann First", minutesWaiting: 90 };
+    const b = { ...byName("Jordan Reyes"), id: "t2", name: "Bob Second", minutesWaiting: 90 };
+    const list = [a, b];
+    const sum = summarize(initialState(list), list);
+    expect(sum.targetId).toBe("t1");
+    expect(sum.rest).toBe("Ann waits longest: 1 hr.");
   });
 });

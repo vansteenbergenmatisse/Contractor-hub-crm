@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  MADE_BY_YOU, MAX_NEW, STOP, WAIT, WHEN, askRemove, closeEdit, draftOf, emptyDraft, fillBusiness, groupByFolder, initialState, keep,
-  openEdit, openNew, remove, runLabel, save, sendTest, testLine, toggle, totals, undo, whoLabel,
+  MADE_BY_YOU, MAX_NEW, STOP, WAIT, WHEN, askRemove, closeEdit, doesText, draftOf, emptyDraft, fillBusiness, groupByFolder, initialState, keep,
+  openEdit, openNew, remove, returnTarget, runLabel, save, sendTest, testLine, toggle, totals, undo, whoLabel,
 } from "../../../src/features/automations/api/automations";
 import { mockAutomations } from "../../../src/features/automations/mock";
 
@@ -12,12 +12,28 @@ describe("sample set", () => {
   it("has the 17 workflows of the design, all on, valid indexes", () => {
     const items = mockAutomations();
     expect(items).toHaveLength(17);
-    for (const a of items) {
-      expect(a.on).toBe(true);
-      expect(WHEN[a.when]).toBeDefined();
-      expect(WAIT[a.wait]).toBeDefined();
-      expect(STOP[a.stop]).toBeDefined();
-    }
+    for (const a of items) expect(a.on).toBe(true);
+    // When / How soon / Stops label per sample row, in the design's order.
+    const NOW = "At once", ONCE = "It runs once";
+    expect(items.map((a) => [a.name, WHEN[a.when], WAIT[a.wait], STOP[a.stop]])).toEqual([
+      ["Lead capture", "A new lead comes in", NOW, ONCE],
+      ["Instant reply and same-day follow-ups", "A new lead comes in", NOW, "You call or text back"],
+      ["Owner ping", "A lead waits an hour", "After 1 hour", ONCE],
+      ["Later-day chase", "A lead stays quiet", "Day 2, 4, 7 and 14", "The customer books or replies"],
+      ["Online booking", "A customer books on your booking link", NOW, ONCE],
+      ["Estimate reminders", "An estimate is booked", "24 hours and 1 hour before", "The visit is done or cancelled"],
+      ["Quote follow-up", "A quote is sent", "Day 2, 6, 12 and 25", "The customer accepts or the quote is lost"],
+      ["Booking link after a yes", "A quote is accepted", NOW, ONCE],
+      ["Job reminder", "A job is booked", "The day before", ONCE],
+      ["Invoice and payment reminders", "An invoice is sent", "Day 3, 7 and 14", "The invoice is paid"],
+      ["Check-in texts", "A card moves to Check Back Later", "Every 1 to 3 months", "The customer asks to stop"],
+      ["Stop on Lost", "A card moves to Lost", NOW, ONCE],
+      ["Thank-you and review request", "A job is marked done", NOW, ONCE],
+      ["Referral ask", "A job is marked done", "The day after", ONCE],
+      ["Review campaign to old leads", "You start it", NOW, ONCE],
+      ["Promotion campaign", "Every 3 to 4 months", NOW, ONCE],
+      ["AI quote builder", "A visit is done", NOW, ONCE],
+    ]);
   });
 });
 
@@ -125,10 +141,15 @@ describe("new automation", () => {
   });
   it("holds only two new ones in the sample", () => {
     let s = fresh();
-    for (let i = 0; i < MAX_NEW; i++) s = save(openNew(s), { ...emptyDraft(), name: `New ${i}` });
+    expect(MAX_NEW).toBe(2);
+    s = save(openNew(s), { ...emptyDraft(), name: "New 1" });
+    s = save(openNew(s), { ...emptyDraft(), name: "New 2" });
+    expect(s.err).toBe("");
+    expect(s.items.filter((a) => a.mine)).toHaveLength(2);
     s = save(openNew(s), { ...emptyDraft(), name: "Third" });
     expect(s.err).toBe("This sample holds two new automations.");
-    expect(s.items.filter((a) => a.mine)).toHaveLength(MAX_NEW);
+    expect(s.edit).toBe("new");
+    expect(s.items.filter((a) => a.mine).map((a) => a.name)).toEqual(["New 1", "New 2"]);
   });
 });
 
@@ -198,5 +219,47 @@ describe("send me a test", () => {
     expect(fillBusiness(texts[0], NONE)).toBe("Hi {first name}, this is our team. Thanks for reaching out. How can we help?");
     expect(fillBusiness(texts[1], NONE)).toBe("You are booked, {first name}. Our team comes {day} at {time}.");
     expect(testLine("", NONE)).toBe("Would text the business phone. Nothing is sent in this preview.");
+  });
+});
+
+describe("seasonal offer and referral reward", () => {
+  it("the Promotion campaign's Does line holds the offer sentence of the design", () => {
+    expect(byName(fresh(), "Promotion campaign").does).toBe('Texts old leads your seasonal offer: "{seasonal offer}"');
+  });
+  it("fills the offer and the reward when the business has them", () => {
+    const biz = { ...BIZ, seasonal_offer_text: "10% off in spring", referral_reward_text: "You both get $25." };
+    expect(doesText('Texts old leads your seasonal offer: "{seasonal offer}"', biz)).toBe('Texts old leads your seasonal offer: "10% off in spring"');
+    expect(testLine("Hi {first name}, {seasonal offer}", biz)).toContain("The text reads: Hi {first name}, 10% off in spring");
+    expect(testLine("Reply YES. {referral reward}", biz)).toContain("Reply YES. You both get $25.");
+  });
+  it("says the offer or reward is not set instead of showing raw braces", () => {
+    expect(doesText('Texts old leads your seasonal offer: "{seasonal offer}"', NONE)).toBe("Texts old leads your seasonal offer: (no seasonal offer set)");
+    const line = testLine("Hi {first name}, {seasonal offer}", NONE);
+    expect(line).toContain("Hi {first name}, (no seasonal offer set)");
+    expect(line).not.toContain("{seasonal offer}");
+    expect(testLine("Reply YES. {referral reward}", NONE)).toContain("Reply YES. (no referral reward set)");
+    expect(doesText("One text the day after.", NONE)).toBe("One text the day after.");
+  });
+});
+
+describe("where the cursor goes back to after the editor closes", () => {
+  it("returns to the edited row, or the row a new automation made", () => {
+    let s = fresh();
+    const id = byName(s, "Job reminder").id;
+    const open = openEdit(s, id);
+    expect(returnTarget(open.edit, open.items, closeEdit(open).items)).toBe(id);
+    const saved = save(open, { ...draftOf(byName(open, "Job reminder")), name: "Job heads-up" });
+    expect(returnTarget(open.edit, open.items, saved.items)).toBe(id);
+    s = openNew(fresh());
+    const made = save(s, { ...emptyDraft(), name: "Spring offer" });
+    expect(returnTarget(s.edit, s.items, made.items)).toBe(made.items.at(-1)!.id);
+  });
+  it("has nowhere to go for a cancelled new one, a removed row or a closed editor", () => {
+    const s = openNew(fresh());
+    expect(returnTarget(s.edit, s.items, closeEdit(s).items)).toBeNull();
+    const id = byName(fresh(), "Owner ping").id;
+    const e = openEdit(fresh(), id);
+    expect(returnTarget(e.edit, e.items, remove(e, id).items)).toBeNull();
+    expect(returnTarget(null, e.items, e.items)).toBeNull();
   });
 });

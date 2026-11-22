@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { COLOR_GROUPS, CONNECTIONS, ESSENTIAL_FIELDS, SECTIONS, SOON_ITEMS, SWITCHES, labelOfKey } from "../api/fields";
 import type { SettingsState } from "../api/state";
+import { isHexColor } from "../api/live-save";
 import { useSettings } from "../hooks/use-settings";
 import { MOCK_CONNECTION_STATUS } from "../mock";
 import type { Field, SectionKey } from "../types";
@@ -57,7 +58,8 @@ function ValueField({ field, value, saved, bad, swatch, onChange }: ValueFieldPr
         <span className="fd-cvk">custom_values.{field.key}</span>
       </label>
       <div className="fd-cvi">
-        {swatch ? <span className="fd-swt" style={{ background: saved }} aria-hidden="true" /> : null}
+        {/* Only a hex color reaches the style attribute; anything else leaves the swatch empty. */}
+        {swatch ? <span className="fd-swt" style={isHexColor(saved) ? { background: saved } : undefined} aria-hidden="true" /> : null}
         <input
           className="fd-lin"
           id={`cv-${field.key}`}
@@ -74,16 +76,18 @@ function ValueField({ field, value, saved, bad, swatch, onChange }: ValueFieldPr
   );
 }
 
-// `initialValues` is the signed-in sub-account's custom values (key to value). When given, it replaces
-// the sample values: keys it lacks show empty fields, and keys the design does not list show too.
-export function SettingsPage({ initial, initialValues }: { initial?: SettingsState; initialValues?: Record<string, string> }) {
-  const { state, dispatch, filter, extras } = useSettings(initial, initialValues);
+// `initialValues` is the signed-in sub-account's custom values (key to value), already filtered by the
+// server allowlist. When given, it replaces the sample values: keys it lacks show empty fields, and
+// allowed keys the design does not list show too. `initialSection` comes from `?section=` in the URL.
+type Props = { initial?: SettingsState; initialValues?: Record<string, string>; initialSection?: SectionKey };
+
+export function SettingsPage({ initial, initialValues, initialSection }: Props) {
+  const { state, dispatch, filter, extras } = useSettings(initial, initialValues, initialSection);
   const { values, draft, err } = state;
   const show = (id: string) => filter.items[id];
   const edit = (key: string, value: string) => dispatch({ type: "edit", key, value });
   const fieldProps = (f: Field) => ({ field: f, value: draft[f.key] ?? "", saved: values[f.key] ?? "", bad: err?.key === f.key, onChange: edit });
 
-  const colorsOpen = state.cols || filter.active;
   const bizFields = [...ESSENTIAL_FIELDS, ...extras.map((key) => ({ key, label: labelOfKey(key) }))].filter((f) => show(`cv-${f.key}`));
   const showSt2 = filter.sections.choice || filter.sections.soon;
 
@@ -147,7 +151,7 @@ export function SettingsPage({ initial, initialValues }: { initial?: SettingsSta
       <div className="fx-stbody">
         <p className={`fd-okl${state.ok ? "" : " is-off"}`} role="status">
           <svg width="16" height="16" {...svgProps} strokeWidth={2.2}><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
-          <span>Saved. Every page uses the new values.</span>
+          <span>Saved on this screen. It is not written to HighLevel yet.</span>
         </p>
         <p className={`fd-lerr fd-ste${err ? "" : " is-off"}`} id="fd-st-err" role="alert">
           <svg width="16" height="16" {...svgProps}><circle cx="12" cy="12" r="9" /><path d="M12 7.5v5M12 16.2v.3" /></svg>
@@ -169,7 +173,7 @@ export function SettingsPage({ initial, initialValues }: { initial?: SettingsSta
             <button
               type="button"
               className="fd-btn is-plain fd-cvt"
-              aria-expanded={colorsOpen}
+              aria-expanded={state.cols}
               aria-controls="fd-st-col"
               onClick={() => dispatch({ type: "toggleCols" })}
             >

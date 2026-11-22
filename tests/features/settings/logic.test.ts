@@ -29,6 +29,24 @@ describe("key names", () => {
     expect(Object.keys(saved.values).sort()).toEqual(Object.keys(MOCK_CUSTOM_VALUES).sort());
     expect(saved.values.business_name).toBe("New Name");
   });
+
+  it("never change on save, also for a tenant's extra key", () => {
+    const start = { ...MOCK_CUSTOM_VALUES, business_name: "Test Co", extra_tenant_key: "x" };
+    let s = settingsReducer(initialState(start), { type: "edit", key: "business_name", value: "Other Co" });
+    s = settingsReducer(s, { type: "save" });
+    expect(s.ok).toBe(true);
+    expect(Object.keys(s.values)).toEqual(Object.keys(start));
+    for (const k of Object.keys(start)) expect(k in s.values, k).toBe(true);
+    expect(s.values.extra_tenant_key).toBe("x");
+  });
+});
+
+describe("opening on a section from the URL", () => {
+  it("starts on the given section, opened", () => {
+    const s = initialState({}, "conn");
+    expect(s).toMatchObject({ sec: "conn", open: true });
+    expect(initialState({})).toMatchObject({ sec: "biz", open: false });
+  });
 });
 
 describe("validateValues", () => {
@@ -68,6 +86,21 @@ describe("validateValues", () => {
     expect(p?.key).toBe("main_color");
     expect(p?.message).toContain("custom_values.main_color");
     expect(p?.section).toBe("colors");
+  });
+
+  it("draws the line at exactly 4.5 to 1 (ratios checked with this repo's formula)", () => {
+    // #a16b33 on white is 4.5004 to 1; #816f99 on white is 4.4995 to 1.
+    expect(contrast("#a16b33", "#FFFFFF")).toBeGreaterThan(4.5);
+    expect(contrast("#816f99", "#FFFFFF")).toBeLessThan(4.5);
+    expect(validateValues({ ...base(), main_color: "#a16b33", text_on_main_color: "#FFFFFF" })).toBeNull();
+    const p = validateValues({ ...base(), main_color: "#816f99", text_on_main_color: "#FFFFFF" });
+    expect(p?.key).toBe("main_color");
+    expect(p?.message).toContain("custom_values.main_color");
+  });
+
+  it("checks the main color against text_on_main_color, not against background_color", () => {
+    // #777777 on black is 4.69 to 1 (fine); on white it would be 4.48 to 1.
+    expect(validateValues({ ...base(), main_color: "#777777", text_on_main_color: "#000000", background_color: "#FFFFFF" })).toBeNull();
   });
 
   it("checks the color format before the contrast", () => {

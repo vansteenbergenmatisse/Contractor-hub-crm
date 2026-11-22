@@ -1,6 +1,7 @@
 // MOCK DATA (Phase 2). Sample conversations from the design. Every name, number and text here is
 // made up. Replaced in Phase 3 by conversations from HighLevel. Business facts in the texts are
 // tokens ({name}, {first}, {site}, {booking link}) filled from the business record, never written in here.
+// minutesWaiting is 0 for a conversation that does not wait, as in the design (a flagged one then reads "Waiting 0 min").
 import type { Conversation, QuickReply } from "./types";
 
 const day = (label: string) => ({ type: "day", label }) as const;
@@ -42,7 +43,7 @@ export const MOCK_CONVERSATIONS: readonly Conversation[] = [
     ],
   },
   {
-    id: "c4", initials: "DK", name: "Dana Kim", channel: "Facebook", time: "8:40 AM", needsReply: false, minutesWaiting: 70,
+    id: "c4", initials: "DK", name: "Dana Kim", channel: "Facebook", time: "8:40 AM", needsReply: false, minutesWaiting: 0,
     sub: "Gutter guards · Following Up", contact: "Facebook: Dana Kim", via: "by Facebook message",
     snippet: "Yes, still thinking. I get back to you next week.", lastIsOutgoing: false,
     thread: [
@@ -52,7 +53,7 @@ export const MOCK_CONVERSATIONS: readonly Conversation[] = [
     ],
   },
   {
-    id: "c5", initials: "BD", name: "Bright Daycare", channel: "Email", time: "8:00 AM", needsReply: false, minutesWaiting: 130,
+    id: "c5", initials: "BD", name: "Bright Daycare", channel: "Email", time: "8:00 AM", needsReply: false, minutesWaiting: 0,
     sub: "Roof repair · Payment Due · $9,400", contact: "billing@brightdaycare.example", via: "by email",
     snippet: "System: Second reminder: invoice 1042 for $9,400 is now 14 days late.", lastIsOutgoing: true,
     thread: [
@@ -63,7 +64,7 @@ export const MOCK_CONVERSATIONS: readonly Conversation[] = [
     ],
   },
   {
-    id: "c6", initials: "EN", name: "Ellen Novak", channel: "Web form", time: "7:12 AM", needsReply: false, minutesWaiting: 180,
+    id: "c6", initials: "EN", name: "Ellen Novak", channel: "Web form", time: "7:12 AM", needsReply: false, minutesWaiting: 0,
     sub: "Skylight leak · New Lead", contact: "(614) 555-0165", phone: "(614) 555-0165", via: "by text",
     snippet: "System: Hi Ellen, thanks for your request. We got it. {first} calls you soon.", lastIsOutgoing: true,
     thread: [
@@ -73,7 +74,7 @@ export const MOCK_CONVERSATIONS: readonly Conversation[] = [
     ],
   },
   {
-    id: "c7", initials: "HB", name: "Hannah Brooks", channel: "Instagram", time: "Yesterday", needsReply: false, minutesWaiting: 1500,
+    id: "c7", initials: "HB", name: "Hannah Brooks", channel: "Instagram", time: "Yesterday", needsReply: false, minutesWaiting: 0,
     sub: "Roof inspection · Following Up", contact: "Instagram: hannah.brooks", via: "by Instagram message",
     snippet: "Let me check my week. I message you tomorrow.", lastIsOutgoing: false,
     thread: [
@@ -84,7 +85,7 @@ export const MOCK_CONVERSATIONS: readonly Conversation[] = [
     ],
   },
   {
-    id: "c8", initials: "HR", name: "Harlan Realty", channel: "Email", time: "Yesterday", needsReply: false, minutesWaiting: 1700,
+    id: "c8", initials: "HR", name: "Harlan Realty", channel: "Email", time: "Yesterday", needsReply: false, minutesWaiting: 0,
     sub: "Roof replacement · Quote Sent · $31,400", contact: "office@harlanrealty.example", via: "by email",
     snippet: "Thanks. Our board looks at it on Friday. We get back to you after that.", lastIsOutgoing: false,
     thread: [
@@ -94,7 +95,7 @@ export const MOCK_CONVERSATIONS: readonly Conversation[] = [
     ],
   },
   {
-    id: "c9", initials: "LP", name: "Linda Park", channel: "Text", time: "Yesterday", needsReply: false, minutesWaiting: 1300,
+    id: "c9", initials: "LP", name: "Linda Park", channel: "Text", time: "Yesterday", needsReply: false, minutesWaiting: 0,
     sub: "Shingle repair · Estimate today 11:00 AM", contact: "(614) 555-0109", phone: "(614) 555-0109", via: "by text",
     snippet: "System: Thanks Linda. You are confirmed for 11:00 AM.", lastIsOutgoing: true,
     thread: [

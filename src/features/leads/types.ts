@@ -9,10 +9,12 @@ export type Lead = {
   name: string;
   source: SourceKey;
   need: string;
-  // How long the lead waits, as the row says it ("14 min", "Yesterday").
-  when: string;
-  // Minutes waiting. Picks the chip color. 0 when nobody waits.
-  mins: number;
+  // Minutes waiting, as the backend sends it (never a ready-made label). Picks the chip color and
+  // the words ("14 min", "2 days"). 0 when the lead does not wait.
+  minutesWaiting: number;
+  // When a lead that does not wait came in, as the row shows it ("Yesterday", "Tuesday").
+  // Proposal, not existing: Phase 3 derives it from the contact's date added.
+  received?: string;
   address: string;
   status: LeadStatus;
 };

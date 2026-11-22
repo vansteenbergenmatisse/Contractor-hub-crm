@@ -23,6 +23,7 @@ vi.mock("@/features/app-shell", async (orig) => {
 
 import { buildBusiness } from "@/features/app-shell";
 import { LeadsPage, searchRows } from "@/features/leads";
+import { AddLeadPanel } from "../../../src/features/leads/components/AddLeadPanel";
 
 // Made-up business.
 current.business = buildBusiness({ name: "Test Roofing Co", city: "Testville", state: "TS" });
@@ -128,6 +129,29 @@ describe("LeadsPage markup", () => {
 
   it("starts with no empty state", () => {
     expect(html).not.toContain("Nobody waits this long.");
+  });
+});
+
+describe("Add a lead panel: a dialog only as the phone sheet", () => {
+  const noop = () => {};
+  const panel = (sheet: boolean, phone: boolean) => renderToStaticMarkup(
+    <AddLeadPanel sheet={sheet} phone={phone} focusTick={0} form={{ name: "", phone: "", email: "", addr: "", need: "" }} errors={{ name: "", phone: "", email: "" }} focus={null} onField={noop} onSubmit={noop} onClose={noop} />,
+  );
+  it("is a plain labelled section on a computer, even with the sheet flag on", () => {
+    for (const sheet of [false, true]) {
+      const out = panel(sheet, false);
+      expect(out).not.toContain('role="dialog"');
+      expect(out).not.toContain("aria-modal");
+      expect(out).toContain('aria-labelledby="fd-ld-h"');
+    }
+  });
+  it("is a modal dialog only when the phone sheet is open", () => {
+    expect(panel(true, true)).toContain('role="dialog"');
+    expect(panel(true, true)).toContain('aria-modal="true"');
+    expect(panel(false, true)).not.toContain('role="dialog"');
+  });
+  it("the page renders no dialog on the server (no width known yet)", () => {
+    expect(html).not.toContain('role="dialog"');
   });
 });
 

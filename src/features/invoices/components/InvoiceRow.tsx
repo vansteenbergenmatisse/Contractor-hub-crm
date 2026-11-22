@@ -1,5 +1,5 @@
-import { chipFor, formatMoney, initialsOf, matchesFilter, missingField } from "../api/invoices";
-import type { InvoicesState } from "../hooks/useInvoices";
+import { chipFor, fixFieldA11y, formatMoney, initialsOf, matchesFilter, missingField } from "../api/invoices";
+import { viewButtonId, type InvoicesState } from "../hooks/useInvoices";
 import type { Invoice, MissingField } from "../types";
 import { StatusChip } from "./StatusChip";
 
@@ -25,9 +25,10 @@ export function InvoiceRow({ inv, s }: { inv: Invoice; s: InvoicesState }) {
   const chip = chipFor(inv, s.now);
   const miss = inv.st === "need" ? missingField(inv) : null;
   const err = s.fixError[inv.no] ?? "";
+  const a11y = fixFieldA11y(inv.no, err);
   const cls = `fd-rw${matchesFilter(s.filter, inv.st) ? "" : " is-off"}${s.selected?.no === inv.no ? " is-sel" : ""}`;
   return (
-    <div className={cls} id={`fd-iv-r${inv.no}`}>
+    <div className={cls} id={`fd-iv-r${inv.no}`} data-row-id={`invoice-${inv.no}`}>
       <div className="fd-rm">
         <Avatar name={inv.name} />
         <div className="fd-rbx">
@@ -38,28 +39,29 @@ export function InvoiceRow({ inv, s }: { inv: Invoice; s: InvoicesState }) {
       </div>
       <div className="fd-rac">
         <span className="fd-ram"><span className="fd-h">{inv.amt ? formatMoney(inv.amt) : "No price yet"}</span></span>
-        <button type="button" className="fd-btn is-plain" onClick={() => s.view(inv.no)}>View</button>
+        <button type="button" className="fd-btn is-plain" id={viewButtonId(inv.no)} onClick={() => s.view(inv.no)}>View</button>
         <button type="button" className={`fd-btn${s.isFirstReady(inv.no) ? " is-fill" : ""}${inv.st === "ready" ? "" : " is-off"}`} onClick={() => s.send(inv.no)}>Send invoice</button>
         <button type="button" className={`fd-btn${inv.st === "sent" ? "" : " is-off"}`} onClick={() => s.paid(inv.no)}>Mark paid</button>
       </div>
       {miss ? (
         <div className="fd-rex fd-ivn">
           <div className="fd-ivf">
-            <label className="fd-ll" htmlFor={`fd-iv-${inv.no}`}>{FIELD[miss].label}</label>
+            <label className="fd-ll" htmlFor={a11y.id}>{FIELD[miss].label}</label>
             <input
               className="fd-lin"
-              id={`fd-iv-${inv.no}`}
+              id={a11y.id}
               type="text"
               inputMode={FIELD[miss].inputMode}
               autoComplete="off"
               placeholder={FIELD[miss].placeholder}
               value={s.fixText[inv.no] ?? ""}
-              aria-invalid={err ? true : undefined}
+              aria-invalid={a11y["aria-invalid"]}
+              aria-describedby={a11y["aria-describedby"]}
               onChange={(e) => s.setFixText(inv.no, e.target.value)}
             />
           </div>
           <button type="button" className="fd-btn" onClick={() => s.make(inv.no)}>Make invoice</button>
-          <p className={`fd-lerr${err ? "" : " is-off"}`} role="alert">
+          <p className={`fd-lerr${err ? "" : " is-off"}`} id={a11y.errorId} role="alert">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9" /><path d="M12 7.5v5M12 16.2v.3" /></svg>
             <span><span className="fd-h">{err}</span></span>
           </p>

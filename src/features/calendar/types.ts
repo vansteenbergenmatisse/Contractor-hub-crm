@@ -57,6 +57,8 @@ export type CalendarAction =
   | { type: "setView"; view: CalendarView }
   | { type: "selectDay"; day: number }
   | { type: "pick"; id: string }
+  // Open a stop named in the URL (?row=<id>): its week, its day and its detail.
+  | { type: "openRow"; id: string }
   | { type: "closeDetail" }
   | { type: "openReschedule" }
   | { type: "cancelReschedule" }

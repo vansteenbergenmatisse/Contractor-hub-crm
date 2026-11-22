@@ -123,12 +123,14 @@ export function InboxPage() {
               </span>
             ) : null}
           </header>
-          <div ref={threadRef} className={`fd-tm${state.event === "open" ? ` is-sw-${state.swaps % 2 ? "a" : "b"}` : ""}`} aria-live="polite">
+          {/* Only the status line and the Delivered/Seen line are live, so opening another conversation
+              does not read the whole thread out again. */}
+          <div ref={threadRef} className={`fd-tm${state.event === "open" ? ` is-sw-${state.swaps % 2 ? "a" : "b"}` : ""}`}>
             <div className="fd-tcv">
               <ThreadBody conversation={current} business={BUSINESS} sent={sent} fresh={fresh} />
             </div>
-            <p className={`fx-dlv${delivery.show ? "" : " is-off"}`}><span className="fd-h">{delivery.text}</span></p>
-            <p className="fd-tst">
+            <p className={`fx-dlv${delivery.show ? "" : " is-off"}`} aria-live="polite"><span className="fd-h">{delivery.text}</span></p>
+            <p className="fd-tst" aria-live="polite">
               <span className={`fd-chip ${waitLevelClass(current.minutesWaiting)}${needs ? "" : " is-off"}`}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
                 <span className="fd-h">{waitLabel(current.minutesWaiting)}</span>

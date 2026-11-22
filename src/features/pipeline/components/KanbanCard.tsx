@@ -22,7 +22,7 @@ export function KanbanCard({
 }) {
   const { card, primary, second } = view;
   return (
-    <article className={view.className} aria-label={card.name}>
+    <article className={view.className} aria-label={card.name} data-row-id={`pipeline-${view.i}`}>
       <div className="fd-kt">
         <span className="fd-av" aria-hidden="true">{card.init}</span>
         <div className="fd-kx">
@@ -45,6 +45,7 @@ export function KanbanCard({
         <span>{card.address}</span>
       </p>
       <p className="fd-km">
+        {card.amount ? <b>{card.amount}</b> : null}
         <span>{view.timeText}</span>
         {view.showUndo ? <button type="button" className="fd-link fd-kun" onClick={onUndo}>Undo</button> : null}
       </p>

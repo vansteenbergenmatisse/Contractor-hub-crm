@@ -24,7 +24,7 @@ const SEEDS: Seed[] = [
   ["Reviews", "Thank-you and review request", 8, 0, "A thank-you and a Google review request, one hour after the job is done.", 0, "auto", 2, "Thank you, {first name}. Would you leave us a review? {review link}"],
   ["Reviews", "Referral ask", 8, 8, "One text the day after. It asks for a referral and names your reward.", 0, "auto", 2, "Hi {first name}, know someone who needs {main keyword}? Reply YES. {referral reward}"],
   ["Campaigns", "Review campaign to old leads", 12, 0, "Asks past customers for a Google review. It skips people who already left one.", 0, "you", 0, "Hi {first name}, would you leave {business} a quick review? {review link}"],
-  ["Campaigns", "Promotion campaign", 13, 0, "Texts old leads your seasonal offer.", 0, "you", 0, "Hi {first name}, {seasonal offer}"],
+  ["Campaigns", "Promotion campaign", 13, 0, 'Texts old leads your seasonal offer: "{seasonal offer}"', 0, "you", 0, "Hi {first name}, {seasonal offer}"],
   ["AI Agents", "AI quote builder", 4, 0, "Builds the quote from your service and price. You approve it on Quotes.", 0, "ok", 5, ""],
 ];
 

@@ -15,6 +15,10 @@ describe("CalendarActions (phone action bar)", () => {
     expect(html).toContain("<span>Job</span>");
   });
 
+  it("names its Today button apart from the tab bar's Today", () => {
+    expect(html).toContain('aria-label="Go to today&#x27;s week">Today</button>');
+  });
+
   it("has one filled button: Estimate", () => {
     expect((html.match(/class="fd-btn"/g) ?? []).length).toBe(1);
     expect((html.match(/is-plain/g) ?? []).length).toBe(2);

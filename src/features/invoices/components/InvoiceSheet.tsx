@@ -1,6 +1,6 @@
 import { joinParts } from "@/shared/lib/join-parts";
-import { sheetFor } from "../api/invoices";
-import type { InvoicesState } from "../hooks/useInvoices";
+import { canSend as canSendInvoice, sheetFor } from "../api/invoices";
+import { SHEET_ID, type InvoicesState } from "../hooks/useInvoices";
 import type { BusinessCard } from "../types";
 
 const ALERT = (
@@ -15,9 +15,9 @@ export function InvoiceSheet({ s, biz }: { s: InvoicesState; biz: BusinessCard }
   if (!inv) return null;
   const v = sheetFor(inv, s.now);
   const { editing, form, setForm } = s;
-  const canSend = inv.st === "ready" && !editing;
+  const canSend = canSendInvoice(inv) && !editing;
   return (
-    <section className="fd-pnl fd-doc" aria-label="The invoice the customer gets" aria-live="polite">
+    <section className="fd-pnl fd-doc" aria-label="The invoice the customer gets" aria-live="polite" id={SHEET_ID} tabIndex={-1}>
       <button type="button" className="fd-link fd-aback" onClick={s.shut}>
         <svg className="fd-flip" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="m9 6 6 6-6 6" /></svg>
         Back to the list

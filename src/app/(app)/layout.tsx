@@ -1,14 +1,13 @@
 import type { ReactNode } from "react";
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { AppShell, type SearchRow } from "@/features/app-shell";
-import { currentUserFromHeaders } from "@/features/auth";
 import { INBOX_WAITING_COUNT, searchRows as inboxRows } from "@/features/inbox";
 import { searchRows as invoiceRows } from "@/features/invoices";
 import { searchRows as leadRows } from "@/features/leads";
 import { searchRows as paymentRows } from "@/features/payments";
 import { searchRows as pipelineRows } from "@/features/pipeline";
 import { searchRows as quoteRows } from "@/features/quotes";
+import { getRequestUser } from "../session";
 import { loadBusiness } from "./business";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +19,7 @@ const SEARCH_ROWS: readonly SearchRow[] = [...leadRows, ...pipelineRows, ...quot
 // Every signed-in tenant page. Signed out goes to /sign-in; an admin has no tenant data and goes to
 // the admin page. The tenant comes from the session only.
 export default async function AppLayout({ children }: { children: ReactNode }) {
-  const user = await currentUserFromHeaders(await headers());
+  const user = await getRequestUser();
   if (!user) redirect("/sign-in");
   if (user.role === "admin" || !user.tenantId) redirect("/admin/clients");
   const business = await loadBusiness(user.tenantId, user.name);

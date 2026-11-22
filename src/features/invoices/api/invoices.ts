@@ -15,6 +15,9 @@ import type {
 // Placeholder due term (build prompt section 12: 7 days is not decided). One place to change it.
 export const INVOICE_DUE_DAYS = 7;
 
+// "Full red" lateness: more than this many days late (build prompt section 8). Not the due term above.
+export const OVER_WEEK_DAYS = 7;
+
 const PRICE_ERROR = "Enter the price in dollars. For example 950.";
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const DAY_MS = 86_400_000;
@@ -101,6 +104,25 @@ export function editInvoice(inv: Invoice, form: EditForm): Result {
   return { ok: true, invoice: settle({ ...inv, name: form.name.trim(), addr: form.addr.trim(), svc, amt: price }) };
 }
 
+// Only a complete, ready invoice opens the send timer. A draft that misses the price, the address or
+// the name never does.
+export const canSend = (inv: Invoice): boolean => inv.st === "ready" && missingField(inv) === null;
+
+// One filled button per view. On a computer the sheet sits beside the list; when it shows a ready
+// invoice (not being edited) its "Send invoice" is the filled one, so no row is. On a phone the list
+// hides the sheet, so the first ready row carries it.
+export function rowFillNo(list: readonly Invoice[], sheet: Invoice | undefined, editing: boolean, wide: boolean): number | undefined {
+  if (wide && sheet && canSend(sheet) && !editing) return undefined;
+  return list.find((i) => i.st === "ready")?.no;
+}
+
+// The one field of a draft and its error: the field names the error it shows.
+export function fixFieldA11y(no: number, error: string) {
+  const id = `fd-iv-${no}`;
+  const errorId = `${id}-e`;
+  return { id, errorId, "aria-invalid": error ? (true as const) : undefined, "aria-describedby": error ? errorId : undefined };
+}
+
 // The send timer reached 0: the invoice is marked Sent on screen. Nothing leaves this app.
 export function markSent(inv: Invoice, now: Date): Invoice {
   if (inv.st !== "ready") return inv;
@@ -136,7 +158,7 @@ export function chipFor(inv: Invoice, now: Date): Chip {
   if (inv.st === "paid") return { tone: "is-ok", text: inv.justNow ? "Paid just now" : `Paid ${inv.paidOn ? formatDay(inv.paidOn) : ""}`.trim() };
   if (inv.justNow) return { tone: "is-ok", text: "Sent just now" };
   const late = inv.dueOn ? daysLate(inv.dueOn, now) : 0;
-  if (late > INVOICE_DUE_DAYS) return { tone: "is-hot", text: lateText(late) };
+  if (late > OVER_WEEK_DAYS) return { tone: "is-hot", text: lateText(late) };
   if (late > 0) return { tone: "is-bad", text: lateText(late) };
   return { tone: "is-warn", text: `Due ${inv.dueOn ? formatDay(inv.dueOn) : ""}`.trim() };
 }

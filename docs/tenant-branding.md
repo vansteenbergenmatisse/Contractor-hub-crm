@@ -22,7 +22,8 @@ Different sub-accounts use different spellings for the same thing (the live one 
 
 ## Installable app (Add to Home Screen)
 - Signed-in pages link `GET /api/manifest` (the tenant's name, theme and background colors, standalone display), `GET /api/pwa-icon` (a PNG made from the logo, or the favicon, centered on the main color, or the initials when there is no image; sizes 180, 192, 512 and a maskable variant), an Apple touch icon and the theme color. Signed out gets a neutral manifest.
+- The server fetches the logo itself with limits (https, host allowlist: `assets.cdn.filesafe.space` plus `LOGO_HOST_ALLOWLIST`, no redirects, 4 second timeout, 512 KB cap, image content types only) and passes it to the renderer as a data URI; anything else gives the initials. The icon response is private and not cached.
 - The icon is a PNG because iPhone and Android installs need one and the custom values hold SVG or other images.
 - Opening the installed app starts at `/`, which signs the person in with their year-long session (or shows `/sign-in`).
-- NOT VERIFIED: that the logo image renders in the icon route for every logo type (an SVG on HighLevel's file host is the JCR case; the route falls back to initials on failure); the install prompt on Android Chrome; Add to Home Screen on iOS Safari; that the app opens in standalone mode. Test on a real phone with a connected sub-account.
+- NOT VERIFIED: that the logo image renders in the icon route for every logo type (an SVG on HighLevel's file host is the JCR case; the route falls back to initials when the logo fails the checks below); the install prompt on Android Chrome; Add to Home Screen on iOS Safari; that the app opens in standalone mode. Test on a real phone with a connected sub-account.
 - No service worker yet, so there is no offline mode and no install banner built by us.

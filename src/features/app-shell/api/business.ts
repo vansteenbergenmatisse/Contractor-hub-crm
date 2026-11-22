@@ -81,3 +81,38 @@ export function businessValues(business: Business) {
     business_website_url: business.websiteUrl ?? "",
   };
 }
+
+// Fields a patch may set. The rest (init, ownerInit, first, site, tag) are worked out again.
+const PATCH_KEYS = [
+  "name", "owner", "keyword", "city", "state", "phone", "email", "address", "hours", "cta",
+  "logoUrl", "websiteUrl", "bookingJobUrl", "bookingQuoteUrl", "googleProfileUrl", "googleReviewUrl",
+] as const;
+
+export type BusinessPatch = Partial<Business>;
+
+// The details with a patch on top (Settings edits in this browser session). "" or null blanks a
+// field (text to "", links to null, name and owner to their plain words); derived and unknown
+// fields in the patch are ignored and recomputed by `buildBusiness`.
+export function patchBusiness(base: Business, patch: BusinessPatch): Business {
+  const input: BusinessInput = {
+    name: base.name, owner: base.owner, keyword: base.keyword, city: base.city, state: base.state,
+    phone: base.phone, email: base.email, address: base.address, hours: base.hours, universalCta: base.cta,
+    logoUrl: base.logoUrl, websiteUrl: base.websiteUrl, bookingJobUrl: base.bookingJobUrl, bookingQuoteUrl: base.bookingQuoteUrl,
+    googleProfileUrl: base.googleProfileUrl, googleReviewUrl: base.googleReviewUrl,
+  };
+  for (const key of PATCH_KEYS) {
+    if (!Object.prototype.hasOwnProperty.call(patch, key)) continue;
+    const value = (patch as Record<string, unknown>)[key];
+    const next = typeof value === "string" ? value : null;
+    if (key === "cta") input.universalCta = next;
+    else input[key] = next;
+  }
+  return buildBusiness(input);
+}
+
+// Only the fields a patch may set, so an override never carries unknown keys.
+export function pickPatch(patch: BusinessPatch): BusinessPatch {
+  const out: Record<string, unknown> = {};
+  for (const key of PATCH_KEYS) if (Object.prototype.hasOwnProperty.call(patch, key)) out[key] = (patch as Record<string, unknown>)[key];
+  return out as BusinessPatch;
+}

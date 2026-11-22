@@ -2,8 +2,9 @@ import { MOCK_CUSTOM_VALUES, MOCK_SWITCHES } from "../mock";
 import type { CustomValues, Problem, SectionKey } from "../types";
 import { validateValues } from "./validate";
 
-// Local state only. In Phase 3 Save writes values back to the sub-account's custom values behind an
-// off-by-default flag; here it only updates this state.
+// Local state. In Phase 3 Save writes values back to the sub-account's custom values behind an
+// off-by-default flag. Here a good Save updates this state, and the hook applies the colors and the
+// business details to this browser session only.
 export type SettingsState = {
   values: CustomValues; // saved
   draft: CustomValues; // what the fields hold
@@ -33,7 +34,8 @@ export type SettingsAction =
 // `values` is the sub-account's own custom values (key to value). When given it replaces the sample
 // values completely: a key the sub-account does not have shows an empty field. Without it the design's
 // sample values are used (tests and the design only).
-export function initialState(values?: CustomValues): SettingsState {
+// `section` (from `?section=` in the URL) opens that section at once.
+export function initialState(values?: CustomValues, section?: SectionKey): SettingsState {
   const start = values ?? MOCK_CUSTOM_VALUES;
   return {
     values: { ...start },
@@ -44,8 +46,8 @@ export function initialState(values?: CustomValues): SettingsState {
     cols: true,
     how: {},
     asked: {},
-    sec: "biz",
-    open: false,
+    sec: section ?? "biz",
+    open: section !== undefined,
     q: "",
     focus: null,
   };

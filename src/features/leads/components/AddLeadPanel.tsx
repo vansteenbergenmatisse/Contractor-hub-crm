@@ -6,6 +6,11 @@ import { ChannelIcon } from "./ChannelIcon";
 
 type Props = {
   sheet: boolean;
+  // True on a phone (under 1024px): only then is the open sheet a modal dialog.
+  phone: boolean;
+  // Raised each time "Add a lead" is pressed on a computer: the form scrolls into view and the name
+  // field gets the cursor, every time.
+  focusTick: number;
   form: FormValues;
   errors: FormErrors;
   focus: LeadsState["focus"];
@@ -26,7 +31,7 @@ function FieldError({ id, message }: { id: string; message: string }) {
 // "Add a lead by hand": a bottom sheet on a phone, a panel beside the list on a computer.
 // Phase 2: it only adds a row on screen. In Phase 3 it posts to the form webhook so the
 // lead-capture workflow in HighLevel runs.
-export function AddLeadPanel({ sheet, form, errors, focus, onField, onSubmit, onClose }: Props) {
+export function AddLeadPanel({ sheet, phone, focusTick, form, errors, focus, onField, onSubmit, onClose }: Props) {
   const nameRef = useRef<HTMLInputElement | null>(null);
   const phoneRef = useRef<HTMLInputElement | null>(null);
   const emailRef = useRef<HTMLInputElement | null>(null);
@@ -41,6 +46,16 @@ export function AddLeadPanel({ sheet, form, errors, focus, onField, onSubmit, on
     if (sheet) nameRef.current?.focus();
   }, [sheet]);
 
+  // On a computer, "Add a lead" goes to the form that is already there.
+  useEffect(() => {
+    if (!focusTick) return;
+    const el = nameRef.current;
+    if (!el) return;
+    try { el.scrollIntoView({ block: "center" }); } catch { /* older browsers: focus still moves */ }
+    el.focus();
+  }, [focusTick]);
+
+  const dialog = sheet && phone;
   const onKey = (e: KeyboardEvent<HTMLElement>) => {
     if (e.key === "Escape" && sheet) onClose();
   };
@@ -49,7 +64,7 @@ export function AddLeadPanel({ sheet, form, errors, focus, onField, onSubmit, on
   return (
     <>
       <button type="button" className={`fx-addscrim${sheet ? " is-on" : ""}`} aria-label="Close" tabIndex={sheet ? 0 : -1} onClick={onClose} />
-      <section className={`fd-pnl fx-addp${sheet ? " is-sheet" : ""}`} aria-labelledby="fd-ld-h" role={sheet ? "dialog" : undefined} aria-modal={sheet ? true : undefined} onKeyDown={onKey}>
+      <section className={`fd-pnl fx-addp${sheet ? " is-sheet" : ""}`} aria-labelledby="fd-ld-h" role={dialog ? "dialog" : undefined} aria-modal={dialog ? true : undefined} onKeyDown={onKey}>
         <h2 className="fd-pnh" id="fd-ld-h">Add a lead by hand</h2>
         <p className="fd-pns">For a lead you met in person. Leads from calls, forms and messages add themselves.</p>
         <label className="fd-ll" htmlFor="fd-ld-name">Name</label>

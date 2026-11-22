@@ -8,9 +8,9 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/settings",
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
-vi.mock("@/features/app-shell", () => ({ usePushed: (v: boolean) => usePushed(v) }));
+vi.mock("@/features/app-shell", () => ({ usePushed: (v: boolean) => usePushed(v), useShell: () => ({}) }));
 
-import { COLOR_KEYS, ESSENTIAL_KEYS, SettingsPage, initialState } from "@/features/settings";
+import { COLOR_KEYS, ESSENTIAL_KEYS, MOCK_CUSTOM_VALUES, SettingsPage, initialState, settingsValuesFrom } from "@/features/settings";
 
 describe("SettingsPage markup", () => {
   const fetchSpy = vi.fn();
@@ -122,6 +122,54 @@ describe("SettingsPage markup", () => {
     const out = renderToStaticMarkup(<SettingsPage initialValues={{ business_address_city: "Testville", business_email: "a@b.example" }} initial={{ ...initialState({ business_address_city: "Testville", business_email: "a@b.example" }), q: "address_city", open: true }} />);
     expect(out).toContain('id="cv-business_address_city"');
     expect(out).not.toContain('id="cv-business_email"');
+  });
+
+  it("never renders a secret or unknown key, whether filtered on the server or passed straight in", () => {
+    // Made-up values only.
+    const raw = [
+      { key: "business_name", value: "Test Co" }, { key: "0_webhook_url_form", value: "https://hooks.example/abc" },
+      { key: "some_api_key", value: "key-123" }, { key: "stripe_secret", value: "sec-456" },
+      { key: "unknown_tenant_key", value: "zzz-unknown" }, { key: "_google_maps_embed_src", value: "<iframe src=x>" },
+    ];
+    const outs = [
+      renderToStaticMarkup(<SettingsPage initialValues={settingsValuesFrom(raw)} />),
+      renderToStaticMarkup(<SettingsPage initialValues={Object.fromEntries(raw.map((r) => [r.key, r.value]))} />),
+    ];
+    for (const out of outs) {
+      expect(out).toContain('value="Test Co"');
+      for (const bad of ["0_webhook_url_form", "hooks.example", "some_api_key", "key-123", "stripe_secret", "sec-456", "unknown_tenant_key", "zzz-unknown", "google_maps_embed", "iframe"]) {
+        expect(out).not.toContain(bad);
+      }
+    }
+  });
+
+  it("puts a saved color in the swatch style only when it is a hex color", () => {
+    const out = renderToStaticMarkup(<SettingsPage initialValues={{ main_color: "red;position:fixed;inset:0", sub_color: "#abc", text_color: "#112233" }} />);
+    // The field itself still shows what HighLevel holds; only the style attribute must not carry it.
+    expect(out).not.toMatch(/style="[^"]*(position|red|inset)/);
+    expect(out).toContain('style="background:#abc"');
+    expect(out).toContain('style="background:#112233"');
+    expect((out.match(/class="fd-swt"[^>]*>/g) ?? []).filter((t) => t.includes("style=")).length).toBe(2);
+  });
+
+  it("says Save stays on this screen", () => {
+    expect(html).toContain("Saved on this screen. It is not written to HighLevel yet.");
+    expect(html).not.toContain("Every page uses the new values.");
+  });
+
+  it("keeps the color toggle's aria-expanded equal to what shows, also while searching", () => {
+    const closed = renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), cols: false, q: "main" }} />);
+    expect(closed).toMatch(/aria-expanded="false"[^>]*aria-controls="fd-st-col"/);
+    expect(closed).toContain('class="fd-cvg is-off" id="fd-st-col"');
+    const open = renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), cols: true, q: "main" }} />);
+    expect(open).toMatch(/aria-expanded="true"[^>]*aria-controls="fd-st-col"/);
+    expect(open).toContain('class="fd-cvg" id="fd-st-col"');
+  });
+
+  it("opens on the section named in the URL", () => {
+    const out = renderToStaticMarkup(<SettingsPage initialValues={{ ...MOCK_CUSTOM_VALUES }} initialSection="conn" />);
+    expect(out).toContain('data-sec="conn"');
+    expect(out).toContain('data-open="1"');
   });
 
   it("never calls fetch and the feature source has no fetch", () => {

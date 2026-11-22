@@ -15,7 +15,7 @@ vi.mock("@/features/app-shell", async (original) => ({
   PageAction: () => null,
 }));
 
-import { MOCK_CARDS, PipelinePage, searchRows } from "@/features/pipeline";
+import { GROUPS, MOCK_CARDS, MOCK_HIDDEN_COUNTS, PipelinePage, STAGES, searchRows } from "@/features/pipeline";
 
 const html = renderToStaticMarkup(<PipelinePage />);
 
@@ -39,9 +39,15 @@ describe("PipelinePage markup", () => {
   });
 
   it("shows the counts, including the cards not drawn", () => {
-    expect(html).toContain("37 more in Check Back Later");
-    expect(html).toContain("3 more in Lost");
-    expect(html).toContain('<span class="fd-sgc">42</span>'.replace("42", String(5 + 37 + 4 + 3)));
+    expect(html).toContain(`${MOCK_HIDDEN_COUNTS[9]} more in Check Back Later`);
+    expect(html).toContain(`${MOCK_HIDDEN_COUNTS[10]} more in Lost`);
+    // Every group's count: the cards drawn in its stages plus the cards not drawn.
+    for (const g of GROUPS) {
+      let total = 0;
+      for (let k = g.first; k <= g.last; k++) total += MOCK_CARDS.filter((c) => c.stage === k).length + MOCK_HIDDEN_COUNTS[k];
+      expect(html).toContain(`<span class="fd-sgc">${total}</span>`);
+    }
+    expect(STAGES).toHaveLength(MOCK_HIDDEN_COUNTS.length);
   });
 
   it("has no trash icon on Payment Due and Lost cards", () => {
@@ -55,6 +61,19 @@ describe("PipelinePage markup", () => {
     const card = (name: string) => html.slice(html.indexOf(`aria-label="${name}"`), html.indexOf("</article>", html.indexOf(`aria-label="${name}"`)));
     expect(card("Maria Alvarez")).toContain(">Job done</button>");
     expect(card("Harlan Realty")).toContain(">Job done</button>");
+  });
+
+  it("shows the amount on every card that has one, and none on a card without", () => {
+    const card = (name: string) => html.slice(html.indexOf(`aria-label="${name}"`), html.indexOf("</article>", html.indexOf(`aria-label="${name}"`)));
+    for (const c of MOCK_CARDS) {
+      if (c.amount) expect(card(c.name)).toContain(`<p class="fd-km"><b>${c.amount}</b>`);
+      else expect(card(c.name)).not.toContain("<b>");
+    }
+    expect(card("Derek Olsen")).toContain("<b>$18,400</b>");
+  });
+
+  it("marks every card with the id of its search row, so a link can find it", () => {
+    for (const row of searchRows) expect(html).toContain(`data-row-id="${row.id}"`);
   });
 
   it("starts with no move marker", () => {

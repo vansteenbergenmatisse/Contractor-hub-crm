@@ -50,9 +50,10 @@ function motion(s: BoardState): string {
   return s.bumps % 2 ? "-a" : "-b";
 }
 
-// Does the quote of this card still need a service and a price?
+// Does the quote of this card still need a service and a price? Only a quote in the "need" state
+// does. A card without an amount still offers Send quote; its send document then says "No price yet".
 export function needsPrice(card: MockCard): boolean {
-  return card.quote === "need" || !card.amount;
+  return card.quote === "need";
 }
 
 function tagsFor(card: MockCard, st: number, home: boolean): [Tag | null, Tag | null] {

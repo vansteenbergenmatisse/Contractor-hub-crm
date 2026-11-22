@@ -1,5 +1,6 @@
 // Public API of the calendar feature. Other code imports from "@/features/calendar" only.
 export { CalendarPage } from "./components/CalendarPage";
+export { CalendarPageFromUrl } from "./components/CalendarPageFromUrl";
 export { CalendarActions } from "./components/CalendarActions";
 export { MOCK_STOPS } from "./mock";
 
@@ -11,5 +12,5 @@ export {
 } from "./api/dates";
 export { CANDIDATE_STARTS, NEW_LEN, freeTimes } from "./api/free-times";
 export { dayAtX, dropStart, slotAtY } from "./api/grid";
-export { addOptions, bookingLink, buildView, daySummary, rescheduleOptions, siteOf } from "./api/view";
+export { addOptions, bookingLink, buildView, confirmSafeButton, daySummary, rescheduleOptions, siteOf } from "./api/view";
 export type { CalendarAction, CalendarBusiness, CalendarState, Placement, Stop, StopKind } from "./types";

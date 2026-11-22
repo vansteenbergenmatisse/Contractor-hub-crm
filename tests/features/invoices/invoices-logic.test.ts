@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   INVOICE_DUE_DAYS,
+  OVER_WEEK_DAYS,
   addDaysIso,
+  canSend,
+  fixFieldA11y,
+  rowFillNo,
   buildMockInvoices,
   businessCard,
   chipFor,
@@ -298,5 +302,67 @@ describe("search rows", () => {
   });
   it("names an invoice with no customer name by its number", () => {
     expect(searchRows.find((r) => r.id === "invoice-1046")?.name).toBe("Invoice 1046");
+  });
+});
+
+describe("only a complete invoice can open the send timer", () => {
+  it("a ready invoice can be sent", () => {
+    expect(canSend(base)).toBe(true);
+  });
+  it("a draft that misses the price, the address or the name can not", () => {
+    expect(canSend({ ...base, st: "need", amt: 0 })).toBe(false);
+    expect(canSend({ ...base, st: "need", addr: "" })).toBe(false);
+    expect(canSend({ ...base, st: "need", name: "" })).toBe(false);
+  });
+  it("an invoice marked ready that still misses a field can not", () => {
+    expect(canSend({ ...base, st: "ready", amt: 0 })).toBe(false);
+    expect(canSend({ ...base, st: "ready", name: " " })).toBe(false);
+  });
+  it("a sent or paid invoice can not be sent again", () => {
+    expect(canSend({ ...base, st: "sent", dueOn: "2026-11-28" })).toBe(false);
+    expect(canSend({ ...base, st: "paid", paidOn: "2026-11-20" })).toBe(false);
+  });
+  it("every mock draft is blocked and every mock ready one is not", () => {
+    for (const inv of mock()) expect(canSend(inv)).toBe(inv.st === "ready");
+  });
+});
+
+describe("two separate 7-day numbers", () => {
+  const today = toIsoDay(NOW);
+  const sent: Invoice = { ...base, st: "sent" };
+  it("the due term is its own constant and drives the due day and the sheet", () => {
+    expect(INVOICE_DUE_DAYS).toBe(7);
+    expect(markSent(base, NOW).dueOn).toBe(addDaysIso(today, INVOICE_DUE_DAYS));
+    expect(sheetFor(base, NOW).due).toBe(`Due ${INVOICE_DUE_DAYS} days after you send it`);
+  });
+  it("full red starts after OVER_WEEK_DAYS days late", () => {
+    expect(OVER_WEEK_DAYS).toBe(7);
+    expect(chipFor({ ...sent, dueOn: addDaysIso(today, -OVER_WEEK_DAYS) }, NOW).tone).toBe("is-bad");
+    expect(chipFor({ ...sent, dueOn: addDaysIso(today, -(OVER_WEEK_DAYS + 1)) }, NOW).tone).toBe("is-hot");
+  });
+});
+
+describe("one filled button per view", () => {
+  const list = mock();
+  const first = list.find((i) => i.st === "ready")!;
+  const other = list.find((i) => i.st !== "ready")!;
+  it("on a computer the sheet's Send invoice is the filled one when the sheet shows a ready invoice", () => {
+    expect(rowFillNo(list, first, false, true)).toBeUndefined();
+  });
+  it("on a computer the first ready row is filled when the sheet shows another invoice or edits", () => {
+    expect(rowFillNo(list, other, false, true)).toBe(first.no);
+    expect(rowFillNo(list, first, true, true)).toBe(first.no);
+  });
+  it("on a phone the sheet is hidden behind the list, so the first ready row is filled", () => {
+    expect(rowFillNo(list, first, false, false)).toBe(first.no);
+  });
+});
+
+describe("the fix field points at its error", () => {
+  it("links the error when there is one", () => {
+    expect(fixFieldA11y(1049, "Enter the billing address.")).toEqual({ id: "fd-iv-1049", errorId: "fd-iv-1049-e", "aria-invalid": true, "aria-describedby": "fd-iv-1049-e" });
+  });
+  it("says nothing when there is no error", () => {
+    expect(fixFieldA11y(1049, "")).toEqual({ id: "fd-iv-1049", errorId: "fd-iv-1049-e", "aria-invalid": undefined, "aria-describedby": undefined });
   });
 });

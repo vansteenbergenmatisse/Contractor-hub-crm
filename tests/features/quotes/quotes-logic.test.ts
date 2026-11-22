@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  SEED_QUOTES, amountLabel, checkBuild, checkEdit, filterCounts, formatMoney, initialState, isVisible, mockBuildLines, parsePrice,
+  MAX_LINES, SEED_QUOTES, amountLabel, rowFillId, rowFromSearch, sheetBusiness, checkBuild, checkEdit, filterCounts, formatMoney, initialState, isVisible, mockBuildLines, parsePrice,
   quotesReducer, searchRows, sendRequest, statusText, totals, uploadName, type QuotesAction, type QuotesState,
 } from "@/features/quotes";
 
@@ -37,12 +37,15 @@ describe("build validation", () => {
     expect(checkBuild("Gutter repair", "x")).toMatchObject({ ok: false, field: "price", errors: { service: "" } });
     expect(checkBuild(" Gutter repair ", "950")).toEqual({ ok: true, service: "Gutter repair", low: 950 });
   });
-  it("the mock builder splits a price into lines that add up, and is deterministic", () => {
-    const lines = mockBuildLines("Gutter repair", 950);
-    expect(lines).toHaveLength(3);
-    expect(lines.reduce((a, l) => a + l.amount, 0)).toBe(950);
-    expect(mockBuildLines("Gutter repair", 950)).toEqual(lines);
+  it("the mock builder makes one line from what the owner typed and invents no other line or price", () => {
+    expect(mockBuildLines("Gutter repair", 950)).toEqual([{ text: "Gutter repair", amount: 950 }]);
+    expect(mockBuildLines("Full roof replacement", 18400)).toEqual([{ text: "Full roof replacement", amount: 18400 }]);
     expect(mockBuildLines("Fix", 100)).toEqual([{ text: "Fix", amount: 100 }]);
+  });
+  it("a typed range builds one line shown as the range", () => {
+    const s = run(fresh(), { type: "build", id: "q1", service: "Gutter repair", low: 800, high: 1200, lines: mockBuildLines("Gutter repair", 800) });
+    expect(get(s, "q1").lines).toEqual([{ text: "Gutter repair", amount: 800 }]);
+    expect(sendRequest(get(s, "q1"), () => {}).doc.lines).toEqual([["Gutter repair", "$800 to $1,200"]]);
   });
 });
 
@@ -87,6 +90,14 @@ describe("edit", () => {
   const draft = { name: "Derek Olsen", lines: [{ text: "A", amount: "100" }, { text: "B", amount: "$2,000.50" }] };
   it("accepts good fields", () => {
     expect(checkEdit(draft)).toEqual({ ok: true, name: "Derek Olsen", lines: [{ text: "A", amount: 100 }, { text: "B", amount: 2000.5 }] });
+  });
+  it("holds at most MAX_LINES lines", () => {
+    expect(MAX_LINES).toBe(3);
+    const line = { text: "A", amount: "100" };
+    expect(checkEdit({ name: "Derek Olsen", lines: Array.from({ length: MAX_LINES }, () => line) }).ok).toBe(true);
+    expect(checkEdit({ name: "Derek Olsen", lines: Array.from({ length: MAX_LINES + 1 }, () => line) })).toEqual({
+      ok: false, field: `t${MAX_LINES}`, message: `A quote holds at most ${MAX_LINES} lines.`,
+    });
   });
   it("names the bad field", () => {
     expect(checkEdit({ ...draft, name: " " })).toMatchObject({ ok: false, field: "name", message: "Enter the customer name." });
@@ -152,5 +163,53 @@ describe("search rows", () => {
     expect(searchRows).toHaveLength(7);
     expect(searchRows.every((r) => r.page === "quotes" && r.href === "/quotes")).toBe(true);
     expect(searchRows[0]).toMatchObject({ name: "Derek Olsen", sub: "Full roof replacement · $18,400" });
+  });
+});
+
+describe("one filled button per view", () => {
+  const ready = "q0";
+  it("on a computer the sheet's send button is the filled one when the sheet shows a quote that waits", () => {
+    expect(rowFillId(fresh().quotes, get(fresh(), ready), false, true)).toBeUndefined();
+  });
+  it("on a computer the first waiting row is filled when the sheet shows another kind of quote, or edits", () => {
+    expect(rowFillId(fresh().quotes, get(fresh(), "q2"), false, true)).toBe(ready);
+    expect(rowFillId(fresh().quotes, get(fresh(), ready), true, true)).toBe(ready);
+  });
+  it("on a phone the list hides the sheet, so the first waiting row is filled", () => {
+    expect(rowFillId(fresh().quotes, get(fresh(), ready), false, false)).toBe(ready);
+  });
+  it("no quote waits: no filled row", () => {
+    const s = run(fresh(), { type: "sent", id: ready });
+    expect(rowFillId(s.quotes, get(s, ready), false, false)).toBeUndefined();
+  });
+});
+
+describe("opening a row from a link (?row=)", () => {
+  it("a quote that needs a price is selected so the owner can type it", () => {
+    expect(rowFromSearch("?row=quote-q1", fresh().quotes)).toEqual({ id: "q1", see: false });
+  });
+  it("a built quote opens its sheet", () => {
+    expect(rowFromSearch("?row=quote-q0", fresh().quotes)).toEqual({ id: "q0", see: true });
+    expect(rowFromSearch("?x=1&row=quote-q3", fresh().quotes)).toEqual({ id: "q3", see: true });
+  });
+  it("an unknown or missing row does nothing", () => {
+    expect(rowFromSearch("?row=quote-q99", fresh().quotes)).toBeNull();
+    expect(rowFromSearch("", fresh().quotes)).toBeNull();
+    expect(rowFromSearch("?row=q0", fresh().quotes)).toBeNull();
+  });
+  it("the select action picks a row without opening the sheet", () => {
+    const s = run(fresh(), { type: "select", id: "q1" });
+    expect(s.selectedId).toBe("q1");
+    expect(s.doc).toBe(false);
+  });
+});
+
+describe("the business on the sheet", () => {
+  const NONE = { business_name: "", business_address: "", business_phone_number: "", business_email: "", business_hours: "", business_website_url: "" };
+  it("falls back to the frame's name and initials when the business has no name", () => {
+    expect(sheetBusiness(NONE, { name: "Your business", init: "YB" })).toMatchObject({ name: "Your business", init: "YB", addr: "", phone: "" });
+  });
+  it("uses the custom value name when there is one", () => {
+    expect(sheetBusiness({ ...NONE, business_name: "Sample Co" }, { name: "Other", init: "OT" })).toMatchObject({ name: "Sample Co", init: "SC" });
   });
 });

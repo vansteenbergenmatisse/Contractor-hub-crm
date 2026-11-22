@@ -31,9 +31,19 @@ describe("PaymentsPage", () => {
     expect(html).toMatch(/fd-chip is-warn/);
   });
 
-  it("says online payments are not available yet and links to /settings", () => {
+  it("says online payments are not available yet and links to the Connections section of Settings", () => {
     expect(html).toContain("Not available yet");
-    expect(html).toMatch(/<a[^>]*href="\/settings"[^>]*>Connect in Settings<\/a>/);
+    expect(html).toMatch(/<a[^>]*href="\/settings\?section=connections"[^>]*>Connect in Settings<\/a>/);
+  });
+
+  it("shows Not available yet as a chip next to the sentence, with no switch", () => {
+    expect(html).toMatch(/<p class="fd-ppb is-warn" role="status">[\s\S]*<b class="fd-chip is-plain">Not available yet<\/b><span>Online payments are not connected\./);
+    const banner = html.slice(html.indexOf('class="fd-ppb'), html.indexOf("</p>", html.indexOf('class="fd-ppb')));
+    expect(banner).not.toMatch(/role="switch"|type="checkbox"/);
+  });
+
+  it("marks every row with the id of its search row", () => {
+    for (const r of searchRows) expect(html).toContain(`data-row-id="${r.id}"`);
   });
 
   it("offers Call, Remind now and Mark paid per open invoice, no Undo and no empty state", () => {

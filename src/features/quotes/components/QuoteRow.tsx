@@ -41,7 +41,7 @@ export function QuoteRow(p: QuoteRowProps) {
   };
 
   return (
-    <div className={"fd-rw" + (isVisible(q, p.filter) ? "" : " is-off") + (p.selected ? " is-sel" : "")} id={`fd-qt-${q.id}`} tabIndex={-1}>
+    <div className={"fd-rw" + (isVisible(q, p.filter) ? "" : " is-off") + (p.selected ? " is-sel" : "")} id={`fd-qt-${q.id}`} data-row-id={`quote-${q.id}`} tabIndex={-1}>
       <div className="fd-rm">
         <span className="fd-av" aria-hidden="true">{initialsOf(q.name)}</span>
         <div className="fd-rbx">

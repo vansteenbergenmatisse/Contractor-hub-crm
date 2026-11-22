@@ -53,3 +53,18 @@ describe("free time picking", () => {
     expect(freeTimes({ stops: wall, kind: "E", now: NOW })).toEqual([]);
   });
 });
+
+describe("free time edges", () => {
+  it("looks two weeks out: with the next 8 days fully booked it still finds a time more than 7 days away", () => {
+    const wall = Array.from({ length: 8 }, (_, k) => ({ id: `w${k}`, week: Math.floor((5 + k) / 7), day: (5 + k) % 7, start: 0, len: 22 }));
+    const out = freeTimes({ stops: wall, kind: "E", now: NOW, count: 1 });
+    expect(out).toEqual([{ week: 1, day: 6, start: 4 }]); // 8 days after Friday Nov 20
+  });
+
+  it("never offers a slot that starts exactly now", () => {
+    const nine = new Date(2026, 10, 20, 9, 0); // Friday 9:00 AM = start 4
+    expect(freeTimes({ stops: [], kind: "E", now: nine, count: 1 })).toEqual([{ week: 0, day: 5, start: 8 }]);
+    const early = new Date(2026, 10, 20, 8, 59);
+    expect(freeTimes({ stops: [], kind: "E", now: early, count: 1 })).toEqual([{ week: 0, day: 5, start: 4 }]);
+  });
+});

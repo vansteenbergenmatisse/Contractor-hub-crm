@@ -121,14 +121,44 @@ export function runLabel(a: Automation): string {
 }
 
 // The business details a text may use, from the signed-in sub-account ("" when it has no value).
-// `review_url` is its Google review link. Other {tokens} stay as they are.
+// `review_url` is its Google review link. Other {tokens} stay as they are. The seasonal offer and the
+// referral reward are optional: the shell's business values do not carry them yet.
 export type AutomationBusiness = {
   business_name: string;
   business_owner_name: string;
   business_main_keyword: string;
   business_phone_number: string;
   review_url: string;
+  seasonal_offer_text?: string;
+  referral_reward_text?: string;
 };
+
+// {seasonal offer} and {referral reward}: the tenant's text, or a plain note that it is not set (never
+// raw braces, never a made-up offer). A quoted token keeps its quotes only around a real value.
+function fillOffers(text: string, business: AutomationBusiness): string {
+  const one = (out: string, token: string, value: string | undefined, missing: string) => {
+    const v = (value ?? "").trim();
+    return out.replace(new RegExp(`"\\{${token}\\}"|\\{${token}\\}`, "g"), (m) => (v ? (m.startsWith('"') ? `"${v}"` : v) : missing));
+  };
+  const withOffer = one(text, "seasonal offer", business.seasonal_offer_text, "(no seasonal offer set)");
+  return one(withOffer, "referral reward", business.referral_reward_text, "(no referral reward set)");
+}
+
+// The Does line of a row as shown.
+export function doesText(does: string, business: AutomationBusiness): string {
+  return fillOffers(does, business);
+}
+
+// After the editor closes: the row to return to. The edited row, or the row a new automation made;
+// null for a cancelled new one, a removed row, or when nothing was open.
+export function returnTarget(prevEdit: string | null, prevItems: Automation[], items: Automation[]): string | null {
+  if (prevEdit === null) return null;
+  if (prevEdit === NEW_TARGET) {
+    const before = new Set(prevItems.map((a) => a.id));
+    return items.find((a) => !before.has(a.id))?.id ?? null;
+  }
+  return items.some((a) => a.id === prevEdit && !a.gone) ? prevEdit : null;
+}
 
 // A missing name reads "our team"; a missing keyword is left out; a missing review link keeps its token.
 export function fillBusiness(text: string, business: AutomationBusiness): string {
@@ -145,6 +175,6 @@ export function fillBusiness(text: string, business: AutomationBusiness): string
 export function testLine(msg: string, business: AutomationBusiness): string {
   const phone = business.business_phone_number.trim();
   const base = `Would text the business phone${phone ? `, ${phone}` : ""}. Nothing is sent in this preview.`;
-  const text = fillBusiness(msg, business).trim();
+  const text = fillBusiness(fillOffers(msg, business), business).trim();
   return text ? `${base} The text reads: ${text}` : base;
 }

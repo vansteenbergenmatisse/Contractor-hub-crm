@@ -4,7 +4,8 @@ import { useCallback, useMemo, useReducer } from "react";
 import { useRouter } from "next/navigation";
 import { useShell } from "@/features/app-shell";
 import { boardReducer, initialBoard } from "../api/board";
-import { sendDocFor, sendTotal } from "../api/send";
+import { calendarHref, quoteHref } from "../api/links";
+import { pressPlan } from "../api/press";
 import { LAST_STAGE } from "../api/stages";
 import { MOCK_CARDS, MOCK_HIDDEN_COUNTS } from "../mock";
 import { groupCounts, stageCounts } from "../api/view";
@@ -52,22 +53,13 @@ export function usePipelineBoard() {
 
   const press = useCallback(
     (view: CardView) => {
-      const { i, card, primary } = view;
-      if (primary.kind === "move") moveTo(i, primary.to);
-      else if (primary.kind === "add-price") router.push("/quotes");
-      else {
-        const kind = primary.kind === "send-quote" ? "Quote" : "Invoice";
-        sendTimer({
-          kind,
-          name: card.name,
-          total: sendTotal(card),
-          doc: sendDocFor(card, kind),
-          // A card moved by a send has no Undo.
-          onDone: () => dispatch({ type: "move", i, to: primary.to, bySend: true }),
-        });
-      }
+      const plan = pressPlan(view);
+      if (plan.type === "dispatch") dispatch(plan.action);
+      else if (plan.type === "navigate") router.push(plan.href);
+      // A card moved by a send has no Undo: `plan.done` carries bySend.
+      else sendTimer({ ...plan.request, onDone: () => dispatch(plan.done) });
     },
-    [moveTo, router, sendTimer],
+    [router, sendTimer],
   );
 
   const lose = useCallback(
@@ -77,8 +69,8 @@ export function usePipelineBoard() {
     [askReason],
   );
 
-  const openCalendar = useCallback(() => router.push("/calendar"), [router]);
-  const openQuote = useCallback(() => router.push("/quotes"), [router]);
+  const openCalendar = useCallback((name: string) => router.push(calendarHref(name)), [router]);
+  const openQuote = useCallback((name: string) => router.push(quoteHref(name)), [router]);
 
   return {
     state,

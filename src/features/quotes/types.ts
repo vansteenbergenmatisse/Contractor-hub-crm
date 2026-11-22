@@ -43,6 +43,7 @@ export type QuotesState = {
 export type QuotesAction =
   | { type: "filter"; filter: QuoteFilter }
   | { type: "see"; id: string }
+  | { type: "select"; id: string }
   | { type: "shut" }
   | { type: "build"; id: string; service: string; low: number; high?: number; lines: QuoteLine[] }
   | { type: "attach"; id: string; file: string }

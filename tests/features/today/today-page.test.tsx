@@ -44,6 +44,8 @@ describe("TodayPage markup", () => {
     expect(html).toContain('aria-label="New leads: 4 today, 13 this week. Open leads"');
     expect(html).toContain('aria-label="Appointments: 4 today, next at 11:00 AM. Open the calendar"');
     expect(html).toContain('aria-label="Invoices to send: 4. Open Invoices"');
+    expect(html).toMatch(/aria-label="Jobs this week: [^"]*\. Open the pipeline"/);
+    expect(html).not.toContain("job stages");
   });
 
   it("lists the six to-dos with one filled button on the top row only", () => {
@@ -128,6 +130,13 @@ describe("CalendarCard", () => {
     const out = renderToStaticMarkup(<CalendarCard stops={STOPS} state={initialState(TODOS)} />);
     expect(out).toContain('aria-label="Directions to Linda Park"');
     expect(out).toContain('rel="noopener noreferrer"');
+  });
+
+  it("shows Directions only for a stop with an address, opening a new tab safely", () => {
+    const out = renderToStaticMarkup(<CalendarCard stops={[{ ...STOPS[0], address: "" }, { ...STOPS[1], address: "  " }, STOPS[2]]} state={initialState(TODOS)} />);
+    expect((out.match(/class="fd-link fd-dir"/g) ?? []).length).toBe(1);
+    expect(out).toContain(`aria-label="Directions to ${STOPS[2].name}"`);
+    expect(out).toMatch(/class="fd-link fd-dir" href="https:\/\/maps\.google\.com\/\?q=[^"]+" target="_blank" rel="noopener noreferrer"/);
   });
 
   it("has no stops without error (empty list)", () => {

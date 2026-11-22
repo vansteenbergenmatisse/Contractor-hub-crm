@@ -1,8 +1,9 @@
 "use client";
 
-import { Fragment } from "react";
-import { PageAction, usePushed } from "@/features/app-shell";
-import { groupByFolder, totals } from "../api/automations";
+import { Fragment, useEffect, useRef } from "react";
+import { PageAction, useBusiness, useBusinessValues, usePushed } from "@/features/app-shell";
+import { doesText, groupByFolder, returnTarget, totals } from "../api/automations";
+import { focusEditor, isPhone, returnToRow } from "../hooks/editor-focus";
 import { useAutomations } from "../hooks/use-automations";
 import { AutomationEditor } from "./AutomationEditor";
 import { AutomationRow } from "./AutomationRow";
@@ -19,13 +20,31 @@ export function AutomationsPage() {
   const removed = state.last ? state.items.find((x) => x.id === state.last && x.gone) : undefined;
   const target = state.edit && !a.isNew ? state.items.find((x) => x.id === state.edit) ?? null : null;
 
-  // On a phone the editor is a pushed detail: tab bar and action bar step aside.
+  const values = useBusinessValues();
+  const biz = { ...values, review_url: useBusiness().googleReviewUrl ?? "" };
+
+  // On a phone the editor is a pushed detail: tab bar and action bar step aside, so Save is the one
+  // filled button on that screen.
   usePushed(open);
+
+  // Opening the editor puts the cursor in the name field; closing it goes back to the edited row.
+  const prev = useRef({ edit: state.edit, items: state.items });
+  useEffect(() => {
+    const p = prev.current;
+    prev.current = { edit: state.edit, items: state.items };
+    if (p.edit === state.edit) return;
+    const phone = isPhone(window);
+    if (state.edit !== null) focusEditor(document, phone);
+    else {
+      const id = returnTarget(p.edit, p.items, state.items);
+      if (id) returnToRow(document, id, phone);
+    }
+  }, [state.edit, state.items]);
 
   return (
     <div className={`fd-au${open ? " is-edit" : ""}`}>
       <PageAction>
-        <button type="button" className="fd-btn is-fill fx-accb" onClick={a.make}>
+        <button type="button" className="fd-btn fx-accb" onClick={a.make}>
           <svg {...icon}><path d="M12 5v14M5 12h14" /></svg>New automation
         </button>
       </PageAction>
@@ -62,6 +81,7 @@ export function AutomationsPage() {
                   <AutomationRow
                     key={x.id}
                     a={x}
+                    does={doesText(x.does, biz)}
                     selected={state.edit === x.id}
                     asking={state.conf === x.id}
                     onToggle={() => a.toggle(x.id)}

@@ -1,4 +1,4 @@
-import { waitClass, isWaiting, SOURCE_LABEL } from "../api/leads-logic";
+import { waitClass, isWaiting, rowWhen, SOURCE_LABEL, waitText } from "../api/leads-logic";
 import type { Lead, LeadStatus } from "../types";
 import { ChannelIcon } from "./ChannelIcon";
 import { WaitChip } from "./WaitChip";
@@ -22,8 +22,8 @@ type Props = {
 
 export function LeadRow({ lead, status, main, onCall, onReply, onBook }: Props) {
   const waiting = isWaiting(status);
-  const [tone, label] = waiting ? [waitClass(lead.mins), status === "reply" ? "Reply" : "Call back"] : STATUS_CHIP[status as keyof typeof STATUS_CHIP];
-  const chipText = waiting ? `${label} · waiting ${lead.when}` : label;
+  const [tone, label] = waiting ? [waitClass(lead.minutesWaiting), status === "reply" ? "Reply" : "Call back"] : STATUS_CHIP[status as keyof typeof STATUS_CHIP];
+  const chipText = waiting ? `${label} · waiting ${waitText(lead.minutesWaiting)}` : label;
   const mainClass = `fd-btn ${main ? "is-fill" : "is-plain"}`;
   return (
     <div className="fd-rw">
@@ -34,7 +34,7 @@ export function LeadRow({ lead, status, main, onCall, onReply, onBook }: Props) 
             <span className="fd-rn">{lead.name}</span>
             <WaitChip className={`fd-chip ${tone}`}>{chipText}</WaitChip>
           </p>
-          <p className="fd-rsb"><b className="fd-srw">{SOURCE_LABEL[lead.source]}</b><span>{lead.need} · {lead.when}</span></p>
+          <p className="fd-rsb"><b className="fd-srw">{SOURCE_LABEL[lead.source]}</b><span>{lead.need} · {rowWhen(lead)}</span></p>
           <p className="fd-rad"><ChannelIcon name="pin" size={14} /><span>{lead.address}</span></p>
         </div>
       </div>

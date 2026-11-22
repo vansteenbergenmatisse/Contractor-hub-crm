@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { addLeadMode, filterKeyIndex, rowWhen, waitText } from "../../../src/features/leads/api/leads-logic";
 import {
   createInitialState,
   filterCounts,
@@ -231,5 +232,63 @@ describe("search rows", () => {
     }
     expect(searchRows[0]).toMatchObject({ name: "Maria Alvarez" });
     expect(new Set(searchRows.map((r) => r.id)).size).toBe(searchRows.length);
+  });
+});
+
+describe("wait words from minutes (the backend sends minutes, never a label)", () => {
+  it.each([
+    [0, "0 min"], [14, "14 min"], [59, "59 min"], [60, "1 hr"], [119, "1 hr"], [120, "2 hrs"], [1439, "23 hrs"],
+    [1440, "1 day"], [2879, "1 day"], [2880, "2 days"],
+  ])("%i minutes reads %s", (minutes, text) => {
+    expect(waitText(minutes)).toBe(text);
+  });
+
+  it("the mock leads carry minutes waiting and no ready-made wait label", () => {
+    for (const l of MOCK_LEADS) {
+      expect(typeof l.minutesWaiting, l.name).toBe("number");
+      expect(l, l.name).not.toHaveProperty("when");
+      expect(l, l.name).not.toHaveProperty("mins");
+    }
+  });
+
+  it("the row's time is the wait for a waiting lead and the arrival for the others", () => {
+    const by = (id: string) => MOCK_LEADS.find((l) => l.id === id)!;
+    expect(rowWhen(by("ld-1"))).toBe("14 min");
+    expect(rowWhen(by("ld-2"))).toBe("1 hr");
+    expect(rowWhen(by("ld-3"))).toBe("2 days");
+    expect(rowWhen(by("ld-4"))).toBe("2 hrs");
+    expect(rowWhen(by("ld-5"))).toBe("Yesterday");
+  });
+});
+
+describe("who waits longest: a tie", () => {
+  it("picks the first in the list when two leads wait the same minutes", () => {
+    const base = MOCK_LEADS[0];
+    const leads = [
+      { ...base, id: "t1", name: "Ann First", minutesWaiting: 90, status: "call" as const },
+      { ...base, id: "t2", name: "Bob Second", minutesWaiting: 90, status: "reply" as const },
+    ];
+    const s = summarize(leads, createInitialState(leads));
+    expect(s.target).toEqual({ id: "t1", kind: "call" });
+    expect(s.b).toBe("Ann waits longest: 1 hr.");
+  });
+});
+
+describe("filter keys", () => {
+  it("arrows wrap around, Home goes to the first and End to the last, other keys do nothing", () => {
+    expect(filterKeyIndex("ArrowRight", 3, 4)).toBe(0);
+    expect(filterKeyIndex("ArrowDown", 1, 4)).toBe(2);
+    expect(filterKeyIndex("ArrowLeft", 0, 4)).toBe(3);
+    expect(filterKeyIndex("ArrowUp", 2, 4)).toBe(1);
+    expect(filterKeyIndex("Home", 2, 4)).toBe(0);
+    expect(filterKeyIndex("End", 1, 4)).toBe(3);
+    expect(filterKeyIndex("a", 1, 4)).toBe(-1);
+  });
+});
+
+describe("Add a lead on a phone or a computer", () => {
+  it("opens the bottom sheet on a phone and goes to the side form on a computer", () => {
+    expect(addLeadMode(true)).toBe("sheet");
+    expect(addLeadMode(false)).toBe("form");
   });
 });

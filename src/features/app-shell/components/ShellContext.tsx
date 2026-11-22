@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useId, type ReactNode } from "react";
 import type { Business, ReasonRequest, SendTimerRequest } from "../types";
+import type { BusinessPatch } from "../api/business";
 import { businessValues } from "../api/business";
 
 // What the shell offers to a page: the action bar above the tab bar, "this screen is a pushed
@@ -17,6 +18,9 @@ export type ShellApi = {
   openFeedback: () => void;
   // Count of conversations that need a reply, for the Inbox badge. Mock until Phase 3.
   setInboxCount: (n: number) => void;
+  // Puts edited business details on screen for this browser session (Settings). "" or null blanks
+  // a field; derived fields (initials, tag, site) follow. Nothing is saved or sent.
+  updateBusiness: (patch: BusinessPatch) => void;
 };
 
 export const ShellContext = createContext<ShellApi | null>(null);

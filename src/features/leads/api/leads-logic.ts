@@ -15,6 +15,38 @@ export function waitClass(mins: number): "is-warn" | "is-bad" | "is-hot" {
   return `is-${waitLevel(mins)}`;
 }
 
+// The wait in words, from minutes: 14 min, 1 hr, 5 hrs, 1 day, 2 days. Copied from the Inbox's
+// waitText on purpose (features do not import each other's internals); keep the two the same.
+export function waitText(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  if (minutes < 1440) {
+    const hours = Math.floor(minutes / 60);
+    return `${hours} ${hours === 1 ? "hr" : "hrs"}`;
+  }
+  const days = Math.floor(minutes / 1440);
+  return `${days} ${days === 1 ? "day" : "days"}`;
+}
+
+// The time on the row's second line: how long a waiting lead waits, else when the lead came in.
+export function rowWhen(lead: Lead): string {
+  return lead.minutesWaiting > 0 ? waitText(lead.minutesWaiting) : (lead.received ?? "");
+}
+
+// Keys on the filter control (a radio group): arrows move and wrap, Home and End jump. -1: not ours.
+export function filterKeyIndex(key: string, index: number, n: number): number {
+  if (key === "ArrowRight" || key === "ArrowDown") return (index + 1) % n;
+  if (key === "ArrowLeft" || key === "ArrowUp") return (index + n - 1) % n;
+  if (key === "Home") return 0;
+  if (key === "End") return n - 1;
+  return -1;
+}
+
+// "Add a lead": a bottom sheet on a phone; on a computer the form is always beside the list, so the
+// button only takes you there.
+export function addLeadMode(phone: boolean): "sheet" | "form" {
+  return phone ? "sheet" : "form";
+}
+
 // A lead waits on you when it needs a call back or a reply.
 export function isWaiting(status: LeadStatus): boolean {
   return status === "call" || status === "reply";
@@ -88,12 +120,12 @@ export function leadsReducer(state: LeadsState, action: LeadsAction): LeadsState
 // An added lead has just arrived, so it counts as waiting under 1 hour.
 export function filterCounts(leads: readonly Lead[], state: LeadsState): Record<WaitFilter, number> {
   const counts: Record<WaitFilter, number> = { all: leads.length + state.added.length, warn: state.added.length, bad: 0, hot: 0 };
-  for (const l of leads) if (isWaiting(state.status[l.id])) counts[waitLevel(l.mins)]++;
+  for (const l of leads) if (isWaiting(state.status[l.id])) counts[waitLevel(l.minutesWaiting)]++;
   return counts;
 }
 
 export function visibleLeads(leads: readonly Lead[], state: LeadsState): Lead[] {
-  return leads.filter((l) => state.filter === "all" || (isWaiting(state.status[l.id]) && waitLevel(l.mins) === state.filter));
+  return leads.filter((l) => state.filter === "all" || (isWaiting(state.status[l.id]) && waitLevel(l.minutesWaiting) === state.filter));
 }
 
 export function visibleAdded(state: LeadsState): AddedLead[] {
@@ -113,14 +145,14 @@ export function summarize(leads: readonly Lead[], state: LeadsState): Summary {
   const n = waiting.length + state.added.length;
   const a = n === 1 ? "1 lead waits on you." : `${n} leads wait on you.`;
   let oldest: Lead | null = null;
-  for (const l of waiting) if (!oldest || l.mins > oldest.mins) oldest = l;
+  for (const l of waiting) if (!oldest || l.minutesWaiting > oldest.minutesWaiting) oldest = l;
   if (oldest) {
     const first = oldest.name.split(" ")[0];
     const reply = state.status[oldest.id] === "reply";
     return {
-      tone: waitLevel(oldest.mins),
+      tone: waitLevel(oldest.minutesWaiting),
       a,
-      b: n === 1 ? `${first} waits ${oldest.when}.` : `${first} waits longest: ${oldest.when}.`,
+      b: n === 1 ? `${first} waits ${waitText(oldest.minutesWaiting)}.` : `${first} waits longest: ${waitText(oldest.minutesWaiting)}.`,
       button: `${reply ? "Reply to" : "Call"} ${first}`,
       target: { id: oldest.id, kind: reply ? "reply" : "call" },
     };

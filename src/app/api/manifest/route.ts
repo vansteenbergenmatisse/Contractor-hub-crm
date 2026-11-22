@@ -1,5 +1,4 @@
-import { headers } from "next/headers";
-import { currentUserFromHeaders } from "@/features/auth";
+import { getRequestUser } from "../../session";
 import { buildManifest, EMPTY_BRAND, getBrandService } from "@/features/brand";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +8,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   let brand = EMPTY_BRAND;
   try {
-    const user = await currentUserFromHeaders(await headers());
+    const user = await getRequestUser();
     if (user?.tenantId) brand = await getBrandService().getBrand(user.tenantId);
   } catch {
     brand = EMPTY_BRAND;

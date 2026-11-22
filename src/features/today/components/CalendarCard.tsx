@@ -22,9 +22,12 @@ export function CalendarCard({ stops, state }: { stops: readonly Stop[]; state: 
                 </p>
                 <p className="fd-ss"><span className={`fd-kind is-${stop.kind}`}>{stop.kind === "job" ? "Job" : "Estimate"}</span> {stop.address}</p>
               </div>
-              <a className="fd-link fd-dir" href={mapsUrl(stop.address)} target="_blank" rel="noopener noreferrer" aria-label={`Directions to ${stop.name}`}>
-                <Glyph name="pin" size={17} strokeWidth={1.9} /><span className="fd-lg">Directions</span>
-              </a>
+              {/* Directions only when there is an address to go to. */}
+              {stop.address.trim() ? (
+                <a className="fd-link fd-dir" href={mapsUrl(stop.address)} target="_blank" rel="noopener noreferrer" aria-label={`Directions to ${stop.name}`}>
+                  <Glyph name="pin" size={17} strokeWidth={1.9} /><span className="fd-lg">Directions</span>
+                </a>
+              ) : null}
             </li>
           );
         })}

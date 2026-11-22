@@ -32,3 +32,10 @@ describe("joinParts", () => {
     expect(joinParts(["x", "y"], ", ")).toBe("x, y");
   });
 });
+
+describe("fillFacts: values with dollar patterns", () => {
+  it("keeps $& and $' in a value as literal text", () => {
+    const out = fillFacts("Book here: {link}.", { ...base, business: "A", person: "B", values: { link: "https://x.test/p?a=$&b=$'c" } });
+    expect(out).toBe("Book here: https://x.test/p?a=$&b=$'c.");
+  });
+});

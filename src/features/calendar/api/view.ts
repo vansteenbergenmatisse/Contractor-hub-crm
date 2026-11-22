@@ -186,6 +186,11 @@ export function buildView(state: CalendarState, now: Date, business: CalendarBus
   };
 }
 
+// The button that gets the cursor when the delete question opens: the filled, safe one.
+export function confirmSafeButton(confirm: CalendarViewModel["confirm"]): "reschedule" | "cancel" {
+  return confirm.canReschedule ? "reschedule" : "cancel";
+}
+
 function rescheduleOptionsFor(state: CalendarState, now: Date, stop: Stop): Placement[] {
   return freeTimes({ stops: liveStops(state).map((x) => ({ ...x, ...x.place })), kind: stop.kind, len: stop.len, now, ignoreId: stop.id, avoid: placementOf(state, stop) });
 }

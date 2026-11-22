@@ -14,6 +14,8 @@ vi.mock("@/features/app-shell", () => ({
   useShell: () => ({ sendTimer: vi.fn(), askReason: vi.fn(), setPushed: vi.fn(), setAction: vi.fn() }),
   usePushed: () => {},
   useBusinessValues: () => current.values,
+  // The frame's fallback name and initials when the business has no name (like buildBusiness).
+  useBusiness: () => (current.values.business_name ? { name: current.values.business_name, init: "TR" } : { name: "Your business", init: "YB" }),
   REASONS: ["Ask again later", "Said no", "Chose a competitor", "Not a fit", "Opted out"],
 }));
 
@@ -40,7 +42,9 @@ describe("QuotesPage markup", () => {
   it("lists every quote with its status and one filled approve button", () => {
     for (const q of SEED_QUOTES) expect(html).toContain(q.name);
     expect(html).toContain("Needs service and price");
-    expect((html.match(/is-fill/g) ?? []).length).toBe(2); // list button and sheet button of the same quote
+    // One filled button per view: the sheet beside the list shows the waiting quote, so the row's button is plain.
+    expect((html.match(/is-fill/g) ?? []).length).toBe(1);
+    expect(html).toMatch(/<section class="fd-pnl fd-doc"[\s\S]*class="fd-btn is-fill"/);
     expect(html).toContain("Opened 3 times today. Call now.");
   });
   it("shows the build form only for a quote that needs a price, with labels", () => {
@@ -64,6 +68,16 @@ describe("QuotesPage markup", () => {
     for (const bad of ["Northway", "Mike", "undefined", "null", "Test Roofing", "Summit St"]) expect(empty).not.toContain(bad);
     expect(empty).not.toContain("> · <");
     expect(empty).not.toMatch(/fd-dcs">\s*·/);
+  });
+  it("shows the frame's initials and name on the sheet when the business has no name, never a blank logo", () => {
+    current.values = NONE;
+    const empty = renderToStaticMarkup(<QuotesPage />);
+    current.values = VALUES;
+    expect(empty).toContain('<span class="fd-logo" aria-hidden="true"><span class="fd-h">YB</span></span>');
+    expect(empty).toContain('<p class="fd-dcb">Your business</p>');
+  });
+  it("marks every row with the id of its search row", () => {
+    for (const q of SEED_QUOTES) expect(html).toContain(`data-row-id="quote-${q.id}"`);
   });
   it("starts on the list, not on the sheet", () => {
     expect(html).toContain('class="fd-dv"');

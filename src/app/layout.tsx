@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
-import { headers } from "next/headers";
-import { currentUserFromHeaders } from "@/features/auth";
 import { brandStyle, EMPTY_BRAND, getBrandService } from "@/features/brand";
+import { getRequestUser } from "./session";
 import "./globals.css";
 
 // Brand at first paint: a signed-in tenant user gets their sub-account's colors printed on <html>
@@ -9,7 +8,7 @@ import "./globals.css";
 // Signed-out pages, admins and any lookup failure get the design's default colors and no app link.
 async function loadBrand() {
   try {
-    const user = await currentUserFromHeaders(await headers());
+    const user = await getRequestUser();
     if (!user?.tenantId) return { brand: EMPTY_BRAND, tenant: false };
     return { brand: await getBrandService().getBrand(user.tenantId), tenant: true };
   } catch {

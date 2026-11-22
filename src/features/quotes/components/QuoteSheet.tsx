@@ -85,7 +85,7 @@ export function QuoteSheet(p: QuoteSheetProps) {
       ) : (
         <div className="fd-sheet">
           <div className="fd-dch">
-            <span className="fd-logo" aria-hidden="true">{b.init}</span>
+            <span className="fd-logo" aria-hidden="true"><span className="fd-h">{b.init}</span></span>
             <div>
               {b.name ? <p className="fd-dcb">{b.name}</p> : null}
               {b.addr ? <p className="fd-dcs">{b.addr}</p> : null}

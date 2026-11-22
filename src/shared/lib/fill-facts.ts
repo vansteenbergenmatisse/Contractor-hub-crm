@@ -35,7 +35,8 @@ export function fillFacts(text: string, f: FactTokens): string {
   for (const [token, value] of Object.entries(f.values ?? {})) {
     if (!out.includes(`{${token}}`)) continue;
     if (!value) left = true;
-    out = out.replaceAll(`{${token}}`, value);
+    // A function replacer: a `$&` or `$'` inside a value (legal in a URL) must stay literal text.
+    out = out.replaceAll(`{${token}}`, () => value);
   }
   return left ? out.replace(/ +([,.!?;:])/g, "$1").replace(/ {2,}/g, " ").trim() : out;
 }

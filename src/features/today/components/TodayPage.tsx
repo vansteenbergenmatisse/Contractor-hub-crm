@@ -25,7 +25,7 @@ export function TodayPage({ ownerFirst }: { ownerFirst?: string }) {
   const tiles: TileView[] = [
     { page: "leads", label: "New leads", value: leadsToday, unit: "today", sub: `${LEADS.length} this week`, aria: `New leads: ${leadsToday} today, ${LEADS.length} this week. Open leads` },
     { page: "calendar", label: "Appointments", value: STOPS.length, unit: "today", sub: stop ? `Next at ${stop.time}` : "None left today", aria: `Appointments: ${STOPS.length} today${stop ? `, next at ${stop.time}` : ""}. Open the calendar` },
-    { page: "pipeline", label: "Jobs this week", value: JOBS_TILE.value, sub: `${JOBS_TILE.today} today`, aria: `Jobs this week: ${JOBS_TILE.value}, ${JOBS_TILE.today} today. Open the job stages in the pipeline` },
+    { page: "pipeline", label: "Jobs this week", value: JOBS_TILE.value, sub: `${JOBS_TILE.today} today`, aria: `Jobs this week: ${JOBS_TILE.value}, ${JOBS_TILE.today} today. Open the pipeline` },
     { page: "invoices", label: "Invoices to send", value: INVOICES_TILE.value, sub: `${INVOICES_TILE.ready} is ready now`, aria: `Invoices to send: ${INVOICES_TILE.value}. Open Invoices` },
   ];
 

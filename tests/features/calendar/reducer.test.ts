@@ -186,3 +186,23 @@ describe("booking link copy", () => {
     expect(run(start(), { type: "copyLink" }).linkCopied).toBe(true);
   });
 });
+
+describe("opening a stop from the URL (?row=<id>)", () => {
+  it("opens the stop's detail and goes to its week and day", () => {
+    const sam = MOCK_STOPS.find((s) => s.name === "Sam Whitaker")!; // next week, Monday
+    const s = run(start(), { type: "openRow", id: sam.id });
+    expect(s).toMatchObject({ selId: sam.id, wk: 1, sd: 1, picking: false, confirmId: null });
+  });
+
+  it("follows a moved stop to where it is now", () => {
+    const s = run(start(), { type: "move", id: grace.id, to: { week: 2, day: 3, start: 4 } }, { type: "closeDetail" }, { type: "nav", wk: 0, sd: 5 }, { type: "openRow", id: grace.id });
+    expect(s).toMatchObject({ selId: grace.id, wk: 2, sd: 3 });
+  });
+
+  it("does nothing for an unknown or a deleted stop", () => {
+    const s = start();
+    expect(run(s, { type: "openRow", id: "nope" })).toBe(s);
+    const gone = run(start(), { type: "askDelete", id: grace.id }, { type: "confirmDelete" });
+    expect(run(gone, { type: "openRow", id: grace.id })).toBe(gone);
+  });
+});

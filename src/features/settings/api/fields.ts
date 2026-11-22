@@ -1,4 +1,5 @@
 import type { ColorGroup, Connection, Field, SectionKey } from "../types";
+import { isSettingsKeyAllowed } from "./allowlist";
 
 // Folder 01_Business_essentials (build prompt section 5). Keys never change.
 export const ESSENTIAL_FIELDS: Field[] = [
@@ -63,9 +64,10 @@ export const ESSENTIAL_KEYS: string[] = ESSENTIAL_FIELDS.map((f) => f.key);
 export const COLOR_KEYS: string[] = COLOR_GROUPS.flatMap((g) => g.fields.map((f) => f.key));
 // Keys the sub-account has that the design does not list (for example business_address_city or
 // request_a_job_booking_link). They show under their own key in Business details; only values change.
+// Only allowlisted keys show (the server filters too): a secret custom value never becomes a field.
 export function extraKeys(values: Record<string, string>): string[] {
   const known = new Set([...ESSENTIAL_KEYS, ...COLOR_KEYS]);
-  return Object.keys(values).filter((k) => !known.has(k));
+  return Object.keys(values).filter((k) => !known.has(k) && isSettingsKeyAllowed(k));
 }
 
 // A readable label made from the key itself ("business_address_city" gives "Business address city").

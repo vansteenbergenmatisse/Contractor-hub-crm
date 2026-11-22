@@ -8,8 +8,9 @@ import { CalendarHeader } from "./CalendarHeader";
 
 // The Calendar page content. The shell adds the `fd-view` wrapper, the top bars and the tab bar.
 // `now` is for tests; the page otherwise reads the visitor's clock on the client. `business` (tests)
-// overrides the signed-in business's booking link, website and hours.
-export function CalendarPage({ now, business }: { now?: Date; business?: CalendarBusiness }) {
+// overrides the signed-in business's booking link, website and hours. `row` is a stop id from the URL
+// (?row=<id>): that stop opens.
+export function CalendarPage({ now, business, row }: { now?: Date; business?: CalendarBusiness; row?: string | null }) {
   const biz = useBusiness();
   const values = useBusinessValues();
   const own: CalendarBusiness = business ?? {
@@ -25,5 +26,5 @@ export function CalendarPage({ now, business }: { now?: Date; business?: Calenda
       </div>
     );
   }
-  return <CalendarBoard now={clock} business={own} />;
+  return <CalendarBoard now={clock} business={own} row={row ?? null} />;
 }

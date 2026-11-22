@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useBusinessValues, usePushed, useShell } from "@/features/app-shell";
-import { checkBuild, filterCounts, firstReadyId, sendRequest, totals, uploadName } from "../api/quotes";
+import { useBusiness, useBusinessValues, usePushed, useShell } from "@/features/app-shell";
+import { checkBuild, filterCounts, rowFillId, rowFromSearch, sendRequest, totals, uploadName } from "../api/quotes";
 import { sheetBusiness } from "../api/sheet-business";
 import { useQuotes } from "../hooks/use-quotes";
+import { useWide } from "../hooks/use-wide";
 import { WIN_TILE, mockBuildLines } from "../mock";
 import type { QuoteFilter } from "../types";
 import { QuoteRow } from "./QuoteRow";
@@ -21,7 +22,8 @@ const FILTERS: ReadonlyArray<{ key: QuoteFilter; label: string }> = [
 // quote Sent on screen.
 export function QuotesPage() {
   const shell = useShell();
-  const business = sheetBusiness(useBusinessValues());
+  const business = sheetBusiness(useBusinessValues(), useBusiness());
+  const wide = useWide();
   const [state, dispatch] = useQuotes();
   const fileInput = useRef<HTMLInputElement>(null);
   const uploadFor = useRef<string | null>(null);
@@ -38,9 +40,27 @@ export function QuotesPage() {
   const selected = state.quotes.find((q) => q.id === state.selectedId) ?? state.quotes[0];
   const sums = totals(state.quotes);
   const counts = filterCounts(state.quotes);
-  const filledId = firstReadyId(state.quotes);
+  const filledId = rowFillId(state.quotes, selected, state.editing, wide);
 
   const see = (id: string) => { dispatch({ type: "see", id }); setSeen((n) => n + 1); };
+  // A link from another page (?row=quote-<id>, for example Add price or See quote on the Pipeline)
+  // selects that quote once, when the page opens.
+  useEffect(() => {
+    const pick = rowFromSearch(window.location.search, state.quotes);
+    if (!pick) return;
+    const timer = setTimeout(() => {
+      if (pick.see) { see(pick.id); return; }
+      dispatch({ type: "select", id: pick.id });
+      setTimeout(() => {
+        const field = document.getElementById(`fd-qt-pr-${pick.id}`);
+        field?.scrollIntoView?.({ block: "center" });
+        field?.focus({ preventScroll: true });
+      }, 0);
+    }, 0);
+    return () => clearTimeout(timer);
+    // Runs once on open; later changes of the list must not re-select the linked row.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const shut = () => { const id = state.selectedId; dispatch({ type: "shut" }); setTimeout(() => document.getElementById(`fd-qt-${id}`)?.focus(), 0); };
   const approve = (id: string) => {
     const q = state.quotes.find((x) => x.id === id);

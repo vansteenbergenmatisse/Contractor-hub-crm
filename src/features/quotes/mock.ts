@@ -21,17 +21,11 @@ export const SEED_QUOTES: readonly Quote[] = [
 // The "Quotes you win" tile. A fixed sample until Phase 3 counts real accepted quotes.
 export const WIN_TILE = { value: "3 of 10", label: "Quotes you win" } as const;
 
-// MOCK: stands in for "the AI builds the quote". It calls no model and no network. It splits the typed
-// price into canned lines for the typed service. The real builder (a model call on the server) is Phase 3.
+// MOCK: stands in for "the AI builds the quote". It calls no model and no network. Like the design, it
+// makes one line from what the owner typed: the service and the price (a range shows on the sheet as
+// the range). It never invents a line or a price (build prompt rule 11). The real builder is Phase 3.
 export function mockBuildLines(service: string, low: number): QuoteLine[] {
-  if (low < 300) return [{ text: service, amount: low }];
-  const labor = Math.round(low * 0.4);
-  const materials = Math.round(low * 0.5);
-  return [
-    { text: `${service}, labor`, amount: labor },
-    { text: `${service}, materials`, amount: materials },
-    { text: "Cleanup and haul away", amount: Math.round((low - labor - materials) * 100) / 100 },
-  ];
+  return [{ text: service, amount: low }];
 }
 
 // Rows for the shared search. Hrefs open this page.

@@ -5,6 +5,8 @@ const svg = { width: 13, height: 13, viewBox: "0 0 24 24", fill: "none", stroke:
 
 type Props = {
   a: Automation;
+  // The Does line as shown (offer and reward filled in); defaults to the row's own text.
+  does?: string;
   selected: boolean;
   asking: boolean;
   onToggle: () => void;
@@ -15,7 +17,7 @@ type Props = {
 };
 
 // One workflow row: name, who acts, runs this week, When / Does / Stops, the switch and the buttons.
-export function AutomationRow({ a, selected, asking, onToggle, onEdit, onAsk, onRemove, onKeep }: Props) {
+export function AutomationRow({ a, does, selected, asking, onToggle, onEdit, onAsk, onRemove, onKeep }: Props) {
   return (
     <div className={`fd-rw${selected ? " is-sel" : ""}`} id={`fd-au-${a.id}`}>
       <div className="fd-rm">
@@ -32,7 +34,7 @@ export function AutomationRow({ a, selected, asking, onToggle, onEdit, onAsk, on
           </div>
           <dl className="fd-wds">
             <div><dt>When</dt><dd><span className="fd-h">{WHEN[a.when]}</span></dd></div>
-            <div><dt>Does</dt><dd><span className="fd-h">{a.does}</span></dd></div>
+            <div><dt>Does</dt><dd><span className="fd-h">{does ?? a.does}</span></dd></div>
             <div><dt>Stops</dt><dd><span className="fd-h">{STOP[a.stop]}</span></dd></div>
           </dl>
         </div>
@@ -41,7 +43,7 @@ export function AutomationRow({ a, selected, asking, onToggle, onEdit, onAsk, on
         <button type="button" className={`fd-swb${a.on ? " is-on" : ""}`} role="switch" aria-checked={a.on} aria-label={a.name} onClick={onToggle}>
           <i aria-hidden="true" /><span><span className="fd-h">{a.on ? "On" : "Off"}</span></span>
         </button>
-        <button type="button" className={`fd-btn is-plain${asking ? " is-off" : ""}`} onClick={onEdit}>Edit</button>
+        <button type="button" className={`fd-btn is-plain${asking ? " is-off" : ""}`} id={`fd-au-edit-${a.id}`} onClick={onEdit}>Edit</button>
         <button type="button" className={`fd-btn is-danger${asking ? " is-off" : ""}`} onClick={onAsk}>Remove</button>
         <span className={`fd-rask${asking ? "" : " is-off"}`}>Remove it?</span>
         <button type="button" className={`fd-btn is-danger${asking ? "" : " is-off"}`} onClick={onRemove}>Yes, remove</button>

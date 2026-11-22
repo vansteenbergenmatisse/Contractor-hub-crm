@@ -20,10 +20,18 @@ const HOURS = ["7 AM", "8 AM", "9 AM", "10 AM", "11 AM", "12 PM", "1 PM", "2 PM"
 const DESKTOP = 1024;
 
 // The page body for a known `now`. All state is local and mock: nothing is fetched, saved or sent.
-export function CalendarBoard({ now, business }: { now: Date; business: CalendarBusiness }) {
-  const [state, dispatch] = useReducer(calendarReducer, undefined, () => initialState(MOCK_STOPS, now));
+export function CalendarBoard({ now, business, row = null }: { now: Date; business: CalendarBusiness; row?: string | null }) {
+  // A stop named in the URL (?row=<id>) opens on the first render, and again when the URL names another.
+  const [state, dispatch] = useReducer(calendarReducer, undefined, () => {
+    const first = initialState(MOCK_STOPS, now);
+    return row ? calendarReducer(first, { type: "openRow", id: row }) : first;
+  });
+  useEffect(() => {
+    if (row) dispatch({ type: "openRow", id: row });
+  }, [row]);
   const v = buildView(state, now, business);
   const gridRef = useRef<HTMLDivElement>(null);
+  const undoRef = useRef<HTMLButtonElement>(null);
   usePushed(v.detail.open);
 
   // A new day or week starts at the top of the page.
@@ -98,9 +106,9 @@ export function CalendarBoard({ now, business }: { now: Date; business: Calendar
       </div>
 
       <p className="fd-csyncl">
-        <span className="fd-chip fd-csync is-plain"><Glyph name="check" size={13} strokeWidth={2.2} className="i-o" />Not available yet</span>
+        <span className="fd-chip fd-csync is-plain">Not available yet</span>
         <span className="fd-csynct">
-          Which calendar this syncs with.{" "}
+          The calendar this syncs with shows here once it can be read.{" "}
           <span className="fd-wd">Drag a stop to move it. Double-click a free time to add an estimate.</span>
           <span className="fd-wm">Tap a stop to move it.</span>
         </span>
@@ -118,8 +126,9 @@ export function CalendarBoard({ now, business }: { now: Date; business: Calendar
         onReschedule={() => dispatch({ type: "rescheduleInstead" })}
         onYes={() => dispatch({ type: "confirmDelete" })}
         onNo={() => dispatch({ type: "cancelDelete" })}
+        undoRef={undoRef}
       />
-      <p className={`fd-cdl${v.undoDelete.open ? "" : " is-off"}`} role="status"><span>{v.undoDelete.text}</span><button type="button" className="fd-link" onClick={() => dispatch({ type: "undoDelete" })}>Undo</button></p>
+      <p className={`fd-cdl${v.undoDelete.open ? "" : " is-off"}`} role="status"><span>{v.undoDelete.text}</span><button ref={undoRef} type="button" className="fd-link" onClick={() => dispatch({ type: "undoDelete" })}>Undo</button></p>
       <p className={`fd-cdl fd-cns${v.added ? "" : " is-off"}`}>
         <span>{v.added?.text ?? ""}</span>
         <button type="button" className="fd-btn is-danger" onClick={() => sel && dispatch({ type: "askDelete", id: sel })}><Glyph name="trash" />Delete</button>

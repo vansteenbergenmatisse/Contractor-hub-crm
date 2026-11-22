@@ -69,8 +69,17 @@ describe("InvoicesPage markup", () => {
     expect(html.indexOf("fx-emp")).toBeLessThan(html.indexOf('class="fd-lst"'));
     expect(html).toContain("Show all invoices");
   });
-  it("puts the filled button on the first ready row, and on the sheet's one button", () => {
-    expect((html.match(/class="fd-btn is-fill"/g) ?? []).length).toBe(2);
+  it("has one filled button per view: the sheet beside the list shows a ready invoice, so its button is the filled one", () => {
+    expect((html.match(/class="fd-btn is-fill"/g) ?? []).length).toBe(1);
+    expect(html).toMatch(/<section class="fd-pnl fd-doc"[\s\S]*class="fd-btn is-fill"/);
+  });
+  it("gives the sheet a focus target and each View button an id to return to", () => {
+    expect(html).toContain('id="fd-iv-sheet" tabindex="-1"');
+    for (const no of [1049, 1048, 1047, 1046, 1045, 1044, 1042, 1041]) expect(html).toContain(`id="fd-iv-v${no}"`);
+  });
+  it("marks every row with the id of its search row and every fix error with an id", () => {
+    for (const no of [1049, 1048, 1047, 1046, 1045, 1044, 1042, 1041]) expect(html).toContain(`data-row-id="invoice-${no}"`);
+    expect((html.match(/id="fd-iv-\d+-e"/g) ?? []).length).toBe(3);
   });
   it("hides Send until ready and Mark paid until sent", () => {
     expect((html.match(/class="fd-btn is-off"/g) ?? []).length).toBeGreaterThanOrEqual(7);
