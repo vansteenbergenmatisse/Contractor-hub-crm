@@ -1,4 +1,5 @@
 import { parseEnv } from "@/shared/config";
+import { decryptUserContext, findEmbedCandidate, resolveEmbedUser } from "@/features/embed";
 import { searchLocationUsers } from "@/features/highlevel";
 import { createAuth, createInvitedUser, type Auth } from "./auth";
 import { createGuards } from "./guards";
@@ -18,6 +19,17 @@ import {
 import { createLogEmailSender } from "./email-sender";
 import { prismaAuthDatabase } from "../db/auth-database";
 
+// The /embed sign-in: decrypt HighLevel's user data with the shared secret and find the CRM user.
+// The HighLevel env is read here, per call, so local dev and the build need no HighLevel values.
+export async function resolveEmbedUserId(payload: string): Promise<string | null> {
+  try {
+    const context = decryptUserContext(payload, parseEnv("highlevel").GHL_APP_SHARED_SECRET);
+    return await resolveEmbedUser(context, { findCandidate: findEmbedCandidate });
+  } catch {
+    return null;
+  }
+}
+
 // Built on first use, never at import: `next build` needs no env and no database.
 let instance: Auth | undefined;
 
@@ -30,6 +42,7 @@ export function getAuth(): Auth {
       secret: env.BETTER_AUTH_SECRET,
       baseURL: env.BETTER_AUTH_URL,
       emailSender: createLogEmailSender(),
+      embedLogin: { resolveUserId: resolveEmbedUserId },
     });
   }
   return instance;

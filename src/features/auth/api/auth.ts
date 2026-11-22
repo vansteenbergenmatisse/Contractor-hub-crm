@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import type { EmailSender } from "./email-sender";
+import { embedLoginPlugin, type EmbedLoginOptions } from "./embed-login";
 import { normalizeEmail } from "./invite-check";
 import { isRole, MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, type Role } from "../types";
 
@@ -15,6 +16,8 @@ export type CreateAuthOptions = {
   secret: string;
   baseURL: string;
   emailSender: EmailSender;
+  // Sign-in from inside HighLevel (the /embed page). Left out, the endpoint does not exist.
+  embedLogin?: EmbedLoginOptions;
 };
 
 export function createAuth(options: CreateAuthOptions) {
@@ -23,6 +26,9 @@ export function createAuth(options: CreateAuthOptions) {
     secret: options.secret,
     baseURL: options.baseURL,
     trustedOrigins: [options.baseURL],
+    plugins: options.embedLogin
+      ? [embedLoginPlugin({ ...options.embedLogin, appOrigin: new URL(options.baseURL).origin })]
+      : [],
     emailAndPassword: {
       enabled: true,
       disableSignUp: true,
