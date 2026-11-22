@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, type CSSProperties, type MouseEvent } from "react";
-import { PageAction, usePushed, Icon, useKeptReducer, useRowFocus } from "@/features/app-shell";
+import { PageAction, Icon, ROW_PICK_EVENT, useHorizontalSwipe, useKeptReducer, useRowFocus } from "@/features/app-shell";
 import { dayAtX, slotAtY } from "../api/grid";
 import { calendarReducer, initialState } from "../api/state";
 import { buildView } from "../api/view";
@@ -34,7 +34,24 @@ export function CalendarBoard({ now, business, row = null }: { now: Date; busine
   const v = buildView(state, now, business);
   const gridRef = useRef<HTMLDivElement>(null);
   const undoRef = useRef<HTMLButtonElement>(null);
-  usePushed(v.detail.open);
+  const daysRef = useRef<HTMLDivElement>(null);
+  // An open stop keeps the tab bar and the action bar: Calendar is not a pushed screen in the design.
+
+  // The same search result picked again (the URL does not change): the stop opens again (design `uxOpen`).
+  useEffect(() => {
+    if (!row) return;
+    const onPick = (event: Event) => {
+      if ((event as CustomEvent<unknown>).detail === row) dispatch({ type: "openRow", id: row });
+    };
+    window.addEventListener(ROW_PICK_EVENT, onPick);
+    return () => window.removeEventListener(ROW_PICK_EVENT, onPick);
+  }, [row, dispatch]);
+
+  // Phone: swipe the day strip left for the week after, right for the week before (design `uxSwipe2`).
+  useHorizontalSwipe(daysRef, {
+    onSwipeLeft: () => dispatch({ type: "nav", wk: state.wk + 1, sd: state.sd }),
+    onSwipeRight: () => dispatch({ type: "nav", wk: state.wk - 1, sd: state.sd }),
+  });
 
   // A new day or week starts at the top of the page.
   useEffect(() => {
@@ -71,11 +88,21 @@ export function CalendarBoard({ now, business, row = null }: { now: Date; busine
     onDrop: useCallback((id: string, day: number, start: number) => dispatch({ type: "move", id, to: { week: state.wk, day, start } }), [state.wk, dispatch]),
   });
 
+  // A free time in the computer week grid (not a stop, not the panel): design `uxCal`.
+  const onFreeTime = (event: MouseEvent<HTMLDivElement>): boolean => {
+    if (state.view !== "week" || window.innerWidth < DESKTOP) return false;
+    return !(event.target as HTMLElement).closest("button, .fd-ev, .fd-cdet, input");
+  };
+  // One click on a free time closes the open stop (not while the add sheet is open).
+  const onGridClick = (event: MouseEvent<HTMLDivElement>) => {
+    if (!onFreeTime(event) || drag.consumeClick()) return;
+    if (state.selId && !state.add) dispatch({ type: "closeDetail" });
+  };
+
   // Double-click a free time in the week (computer) opens New estimate with that time first.
   const onGridDoubleClick = (event: MouseEvent<HTMLDivElement>) => {
     const grid = gridRef.current;
-    if (!grid || state.view !== "week" || window.innerWidth < DESKTOP) return;
-    if ((event.target as HTMLElement).closest(".fd-ev")) return;
+    if (!grid || !onFreeTime(event)) return;
     const rect = grid.getBoundingClientRect();
     const style = getComputedStyle(grid);
     const day = dayAtX(event.clientX, rect.left, style.gridTemplateColumns.split(" ").map(parseFloat));
@@ -103,7 +130,9 @@ export function CalendarBoard({ now, business, row = null }: { now: Date; busine
 
   return (
     <div className={v.calCls}>
-      <PageAction>
+      {/* The phone action bar steps aside while the add sheet is open (design `uxAcc`). Hidden, not
+          removed: its Estimate/Job button stays in the page, so the sheet gives focus back to it. */}
+      <PageAction hidden={!!state.add}>
         <CalendarActions
           onPrevWeek={() => dispatch({ type: "nav", wk: state.wk - 1, sd: state.sd })}
           onNextWeek={() => dispatch({ type: "nav", wk: state.wk + 1, sd: state.sd })}
@@ -132,7 +161,9 @@ export function CalendarBoard({ now, business, row = null }: { now: Date; busine
       </div>
 
       <p className="fd-csyncl">
-        <span className="fd-chip fd-csync is-plain">Not available yet</span>
+        {/* The design's chip markup for this spot. The tinted pill is its synced state (is-ok + check); with
+            no synced calendar to read it stays the design's own not-synced look, is-plain. */}
+        <span className="fd-chip fd-csync is-plain"><Glyph name="check" size={13} strokeWidth={2.2} className="i-o" /><span className="fd-h">Not available yet</span></span>
         <span className="fd-csynct">
           Connect your calendar in Settings.{" "}
           <span className="fd-wd">Drag a stop to move it. Double-click a free time to add an estimate.</span>
@@ -165,7 +196,7 @@ export function CalendarBoard({ now, business, row = null }: { now: Date; busine
       <AddSheet add={v.add} name={state.addName} onName={(name) => dispatch({ type: "setAddName", name })} onPick={pickAdd} onClose={() => dispatch({ type: "closeAdd" })} />
 
       <section className="fd-cbody fd-in" style={{ "--i": 2 } as CSSProperties} aria-label="The calendar">
-        <div className="fd-cdays">
+        <div ref={daysRef} className="fd-cdays">
           <span className="fd-cgut" aria-hidden="true" />
           {v.days.map((d) => (
             <button key={d.index} type="button" className={d.cls} aria-pressed={d.pressed} aria-label={d.label} onClick={() => dispatch({ type: "selectDay", day: d.index })}>
@@ -174,7 +205,7 @@ export function CalendarBoard({ now, business, row = null }: { now: Date; busine
           ))}
         </div>
         <p className="fd-ctitle" aria-live="polite"><b>{v.dayTitle}</b><span>{v.daySummary}</span></p>
-        <div ref={gridRef} className={v.gridCls} onDoubleClick={onGridDoubleClick}>
+        <div ref={gridRef} className={v.gridCls} onClick={onGridClick} onDoubleClick={onGridDoubleClick}>
           {HOURS.map((h, k) => {
             const row = 2 * k + 1;
             // The design hides the 10 AM label under its now line; a different attribute value keeps it when the line is elsewhere.

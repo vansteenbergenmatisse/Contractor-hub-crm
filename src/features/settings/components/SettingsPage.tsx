@@ -3,25 +3,17 @@
 import type { ReactNode } from "react";
 import { COLOR_GROUPS, CONNECTIONS, ESSENTIAL_FIELDS, SECTIONS, SOON_ITEMS, SWITCHES, labelOfKey } from "../api/fields";
 import type { SettingsState } from "../api/state";
-import { connectionChip, UNKNOWN_CONNECTIONS } from "../api/connections";
-import { isHexColor } from "../api/live-save";
+import { MOCK_CONNECTIONS } from "../api/connections";
 import { useSettings } from "../hooks/use-settings";
+import { useSignOut } from "../hooks/use-sign-out";
 import type { ConnectionStatus, Field, SectionKey } from "../types";
+import { ConnectionRow } from "./ConnectionRow";
+import { svgProps } from "./svg-props";
+import { ValueField } from "./ValueField";
 
 // Page CONTENT for /settings. It renders inside the shell's `.fd-view[data-pg]` wrapper. The design's
 // CSS keys off data-sec, data-open and data-q on a `.fd-view`, so this component renders a nested
 // `.fd-view` that carries them (the shell's wrapper stays untouched).
-
-const svgProps = {
-  viewBox: "0 0 24 24",
-  fill: "none",
-  stroke: "currentColor",
-  strokeWidth: 2,
-  strokeLinecap: "round" as const,
-  strokeLinejoin: "round" as const,
-  "aria-hidden": true as const,
-  focusable: "false" as const,
-};
 
 const NAV_ICONS: Record<SectionKey, ReactNode> = {
   biz: (<><path d="M4 20V6l8-3 8 3v14" /><path d="M9 20v-5h6v5" /></>),
@@ -31,70 +23,11 @@ const NAV_ICONS: Record<SectionKey, ReactNode> = {
   soon: (<><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>),
 };
 
-function ChipIcons() {
-  return (
-    <>
-      <svg className="i-w" width="13" height="13" {...svgProps} strokeWidth={2.2}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
-      <svg className="i-b" width="13" height="13" {...svgProps} strokeWidth={2.2}><circle cx="12" cy="12" r="9" /><path d="M12 7.5v5M12 16.2v.3" /></svg>
-      <svg className="i-o" width="13" height="13" {...svgProps} strokeWidth={2.2}><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
-    </>
-  );
-}
-
-type ValueFieldProps = {
-  field: Field;
-  value: string;
-  saved: string;
-  error: string | null;
-  swatch?: boolean;
-  onChange: (key: string, value: string) => void;
-};
-
-// The swatch shows the saved color when it is a hex color (only a hex color reaches the style
-// attribute). Otherwise it shows the color the app applies now: its CSS variable on <html>, which
-// holds the client's color or the app's own default.
-function swatchStyle(key: string, saved: string): React.CSSProperties {
-  return { background: isHexColor(saved) ? saved : `var(--${key.replaceAll("_", "-")})` };
-}
-
-function ValueField({ field, value, saved, error, swatch, onChange }: ValueFieldProps) {
-  const errId = `cv-${field.key}-err`;
-  return (
-    <div className="fd-cvf">
-      <label className="fd-ll" htmlFor={`cv-${field.key}`}>
-        {field.label}
-        <span className="fd-cvk">custom_values.{field.key}</span>
-      </label>
-      <div className="fd-cvi">
-        {swatch ? <span className="fd-swt" style={swatchStyle(field.key, saved)} aria-hidden="true" /> : null}
-        <input
-          className="fd-lin"
-          id={`cv-${field.key}`}
-          type="text"
-          autoComplete="off"
-          spellCheck={false}
-          value={value}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={error ? errId : undefined}
-          onChange={(e) => onChange(field.key, e.target.value)}
-        />
-      </div>
-      {/* The message also shows at the field (the alert at the top of the section is the design's). */}
-      {error ? (
-        <p className="fd-lerr" id={errId}>
-          <svg width="16" height="16" {...svgProps}><circle cx="12" cy="12" r="9" /><path d="M12 7.5v5M12 16.2v.3" /></svg>
-          <span>{error}</span>
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
 // `initialValues` is the signed-in sub-account's custom values (key to value), already filtered by the
 // server allowlist. When given, it replaces the sample values: keys it lacks show empty fields, and
 // allowed keys the design does not list show too. `initialSection` comes from `?section=` in the URL.
-// `connections` is each row's status in CONNECTIONS order; without it every row is "unknown" (no API
-// reads the status yet), so no row claims to be connected.
+// `connections` is each row's status in CONNECTIONS order; without it the marked MOCK statuses of
+// api/connections.ts apply (rows the system cannot read say "Not available yet").
 type Props = {
   initial?: SettingsState;
   initialValues?: Record<string, string>;
@@ -102,16 +35,16 @@ type Props = {
   connections?: readonly ConnectionStatus[];
 };
 
-export function SettingsPage({ initial, initialValues, initialSection, connections = UNKNOWN_CONNECTIONS }: Props) {
-  const { state, dispatch, filter, extras } = useSettings(initial, initialValues, initialSection);
+export function SettingsPage({ initial, initialValues, initialSection, connections = MOCK_CONNECTIONS }: Props) {
+  const { state, dispatch, filter, extras, phone } = useSettings(initial, initialValues, initialSection, connections);
+  const signOut = useSignOut();
   const { values, draft, err } = state;
   const show = (id: string) => filter.items[id];
   const edit = (key: string, value: string) => dispatch({ type: "edit", key, value });
-  const fieldProps = (f: Field) => ({ field: f, value: draft[f.key] ?? "", saved: values[f.key] ?? "", error: err?.key === f.key ? err.message : null, onChange: edit });
+  const fieldProps = (f: Field) => ({ field: f, value: draft[f.key] ?? "", saved: values[f.key] ?? "", invalid: err?.key === f.key, onChange: edit });
 
   const bizFields = [...ESSENTIAL_FIELDS, ...extras.map((key) => ({ key, label: labelOfKey(key) }))].filter((f) => show(`cv-${f.key}`));
-  const showSt2 = filter.sections.choice || filter.sections.soon;
-
+  
   return (
     <div
       className="fd-view"
@@ -172,7 +105,7 @@ export function SettingsPage({ initial, initialValues, initialSection, connectio
       <div className="fx-stbody">
         <p className={`fd-okl${state.ok ? "" : " is-off"}`} role="status">
           <svg width="16" height="16" {...svgProps} strokeWidth={2.2}><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
-          <span>Saved on this screen. It is not written to HighLevel yet.</span>
+          <span>Saved. Every page uses the new values.</span>
         </p>
         <p className={`fd-lerr fd-ste${err ? "" : " is-off"}`} id="fd-st-err" role="alert">
           <svg width="16" height="16" {...svgProps}><circle cx="12" cy="12" r="9" /><path d="M12 7.5v5M12 16.2v.3" /></svg>
@@ -190,7 +123,7 @@ export function SettingsPage({ initial, initialValues, initialSection, connectio
         {filter.sections.colors ? (
           <section className="fd-pnl fd-in" style={{ "--i": 2 } as React.CSSProperties} aria-labelledby="fd-st-2">
             <h2 className="fd-pnh" id="fd-st-2">Brand colors</h2>
-            <p className="fd-pns">Folder 02_Branding. Four groups. Type a color like #2E7D32 and press Save changes. The swatches show the saved colors.</p>
+            <p className="fd-pns">Folder 02_Branding. Four groups. Type a color like #2E7D32 and press Save changes. Every page takes the color of each key.</p>
             <button
               type="button"
               className="fd-btn is-plain fd-cvt"
@@ -201,9 +134,9 @@ export function SettingsPage({ initial, initialValues, initialSection, connectio
               <span className="fd-h">{state.cols ? "Hide the color fields" : "Change the brand colors"}</span>
             </button>
             <div className={`fd-cvg${state.cols ? "" : " is-off"}`} id="fd-st-col">
+              {/* The group headings stay while searching, as in the design; only fields hide. */}
               {COLOR_GROUPS.map((g) => {
                 const fields = g.fields.filter((f) => show(`cv-${f.key}`));
-                if (!fields.length) return null;
                 return [
                   <h3 className="fd-cgh" key={`h-${g.heading}`}>{g.heading}</h3>,
                   ...fields.map((f) => <ValueField key={f.key} {...fieldProps(f)} swatch />),
@@ -213,128 +146,85 @@ export function SettingsPage({ initial, initialValues, initialSection, connectio
           </section>
         ) : null}
 
-        {filter.sections.biz || filter.sections.colors ? (
-          <div className="fd-cvsv fd-in" style={{ "--i": 3 } as React.CSSProperties}>
-            <button type="button" className="fd-btn is-fill fd-lgo fd-cvs" onClick={() => dispatch({ type: "save" })}>Save changes</button>
-            <p className="fd-pns fd-hint">The names of the keys never change. Only their values do.</p>
-          </div>
-        ) : null}
+        {/* Always there, as in the design: CSS hides it on the sections without fields. */}
+        <div className="fd-cvsv fd-in" style={{ "--i": 3 } as React.CSSProperties}>
+          <button type="button" className="fd-btn is-fill fd-lgo fd-cvs" onClick={() => dispatch({ type: "save" })}>Save changes</button>
+          <p className="fd-pns fd-hint">The names of the keys never change. Only their values do.</p>
+        </div>
 
         {filter.sections.conn ? (
           <section className="fd-stsec fd-in" style={{ "--i": 4 } as React.CSSProperties} aria-labelledby="fd-st-4">
             <h2 className="fd-pnh" id="fd-st-4">Connections</h2>
             <p className="fd-pns fd-sts">What is linked to your dashboard. A row that is not connected shows its steps.</p>
             <div className="fd-lst">
-              {CONNECTIONS.map((c, i) => {
-                if (!show(`conn-${i}`)) return null;
-                const st = connections[i] ?? { state: "unknown" };
-                const on = st.state === "connected";
-                const chip = connectionChip(st);
-                const phone = i === 0 ? (values.business_phone_number ?? "").trim() : "";
-                const open = !on || !!state.how[i];
-                return (
-                  <div className="fd-rw" key={c.name}>
-                    <div className="fd-rm">
-                      <div className="fd-rbx">
-                        <p className="fd-rn">{c.name}</p>
-                        <p className="fd-rsb">
-                          {phone ? <><span className="fd-h">{phone}</span>. </> : null}
-                          {c.sub}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="fd-rac">
-                      <span className={`fd-chip ${chip.ok ? "is-ok" : "is-plain"}`}>
-                        <ChipIcons />
-                        <span className="fd-h">{chip.text}</span>
-                      </span>
-                      <button
-                        type="button"
-                        className={`fd-btn is-plain${on ? "" : " is-off"}`}
-                        aria-expanded={open}
-                        onClick={() => dispatch({ type: "how", index: i })}
-                      >
-                        <span className="fd-h">{state.how[i] ? "Hide" : "How it works"}</span>
-                      </button>
-                    </div>
-                    {on && st.a2pVerified ? (
-                      <div className="fd-rex fd-trust">
-                        <p className="fd-trh">
-                          <svg width="15" height="15" {...svgProps} strokeWidth={2.4}><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
-                          A2P verified. Your texts get delivered.
-                        </p>
-                      </div>
-                    ) : null}
-                    <div className={`fd-rex fd-how${open ? "" : " is-off"}`}>
-                      <p className="fd-hneed"><b>You need:</b> {c.need}</p>
-                      <ol className="fd-steps">{c.steps.map((s) => <li key={s}>{s}</li>)}</ol>
-                      <p className="fd-pns fd-hint">Done when this row says Connected.</p>
-                      {!on ? (
-                        state.asked[i] ? (
-                          <p className="fd-pns fd-hint" role="status">Noted on this screen. The request is not sent to Forge Forward yet.</p>
-                        ) : (
-                          <button type="button" className="fd-btn" onClick={() => dispatch({ type: "ask", index: i })}>
-                            Ask Forge Forward to connect
-                          </button>
-                        )
-                      ) : null}
-                    </div>
-                  </div>
-                );
-              })}
+              {CONNECTIONS.map((c, i) =>
+                show(`conn-${i}`) ? (
+                  <ConnectionRow
+                    key={c.name}
+                    connection={c}
+                    status={connections[i] ?? { state: "unknown" }}
+                    phone={i === 0 ? phone : ""}
+                    a2p={i === 0}
+                    how={!!state.how[i]}
+                    asked={!!state.asked[i]}
+                    onHow={() => dispatch({ type: "how", index: i })}
+                    onAsk={() => dispatch({ type: "ask", index: i })}
+                  />
+                ) : null,
+              )}
             </div>
           </section>
         ) : null}
 
-        {showSt2 ? (
-          <div className="fd-cols fd-st2 fd-in" style={{ "--i": 5 } as React.CSSProperties}>
-            {filter.sections.choice ? (
-              <section aria-labelledby="fd-st-3">
-                <h2 className="fd-pnh" id="fd-st-3">Your choices</h2>
-                <p className="fd-pns fd-sts">Each switch works at once.</p>
-                <div className="fd-lst">
-                  {SWITCHES.map((label, i) =>
-                    show(`sw-${i}`) ? (
-                      <div className="fd-rw" key={label}>
-                        <div className="fd-rm"><div className="fd-rbx"><p className="fd-rn">{label}</p></div></div>
-                        <div className="fd-rac">
-                          <button
-                            type="button"
-                            className={`fd-swb${state.sw[i] ? " is-on" : ""}`}
-                            role="switch"
-                            aria-checked={state.sw[i]}
-                            aria-label={label}
-                            onClick={() => dispatch({ type: "switch", index: i as 0 | 1 })}
-                          >
-                            <i aria-hidden="true" />
-                            <span><span className="fd-h">{state.sw[i] ? "On" : "Off"}</span></span>
-                          </button>
-                        </div>
+        <div className="fd-cols fd-st2 fd-in" style={{ "--i": 5 } as React.CSSProperties}>
+          {filter.sections.choice ? (
+            <section aria-labelledby="fd-st-3">
+              <h2 className="fd-pnh" id="fd-st-3">Your choices</h2>
+              <p className="fd-pns fd-sts">Each switch works at once.</p>
+              <div className="fd-lst">
+                {SWITCHES.map((label, i) =>
+                  show(`sw-${i}`) ? (
+                    <div className="fd-rw" key={label}>
+                      <div className="fd-rm"><div className="fd-rbx"><p className="fd-rn">{label}</p></div></div>
+                      <div className="fd-rac">
+                        <button
+                          type="button"
+                          className={`fd-swb${state.sw[i] ? " is-on" : ""}`}
+                          role="switch"
+                          aria-checked={state.sw[i]}
+                          aria-label={label}
+                          onClick={() => dispatch({ type: "switch", index: i as 0 | 1 })}
+                        >
+                          <i aria-hidden="true" />
+                          <span><span className="fd-h">{state.sw[i] ? "On" : "Off"}</span></span>
+                        </button>
                       </div>
-                    ) : null,
-                  )}
-                </div>
-              </section>
-            ) : null}
-            {filter.sections.soon ? (
-              <section aria-labelledby="fd-st-5">
-                <h2 className="fd-pnh" id="fd-st-5">Not available yet</h2>
-                <p className="fd-pns fd-sts">We do not have these features yet.</p>
-                <div className="fd-lst">
-                  {SOON_ITEMS.map((label, i) =>
-                    show(`soon-${i}`) ? (
-                      <div className="fd-rw" key={label}>
-                        <div className="fd-rm"><div className="fd-rbx"><p className="fd-rn">{label}</p></div></div>
-                        <div className="fd-rac"><span className="fd-chip is-plain">Not available yet</span></div>
-                      </div>
-                    ) : null,
-                  )}
-                </div>
-              </section>
-            ) : null}
-          </div>
-        ) : null}
+                    </div>
+                  ) : null,
+                )}
+              </div>
+            </section>
+          ) : null}
+          {filter.sections.soon ? (
+            <section aria-labelledby="fd-st-5">
+              <h2 className="fd-pnh" id="fd-st-5">Not available yet</h2>
+              <p className="fd-pns fd-sts">We do not have these features yet.</p>
+              <div className="fd-lst">
+                {SOON_ITEMS.map((label, i) =>
+                  show(`soon-${i}`) ? (
+                    <div className="fd-rw" key={label}>
+                      <div className="fd-rm"><div className="fd-rbx"><p className="fd-rn">{label}</p></div></div>
+                      <div className="fd-rac"><span className="fd-chip is-plain">Not available yet</span></div>
+                    </div>
+                  ) : null,
+                )}
+              </div>
+            </section>
+          ) : null}
+        </div>
       </div>
+
+      <button type="button" className="fd-btn is-plain fd-lgo fd-stout" onClick={() => void signOut()}>Sign out</button>
     </div>
   );
 }

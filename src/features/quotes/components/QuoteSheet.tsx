@@ -1,11 +1,10 @@
 "use client";
 
-import { useState } from "react";
 import { amountLabel, canApprove, canEdit, canUpload, checkEdit, formatMoney } from "../api/quotes";
 import { joinParts } from "@/shared/lib/join-parts";
-import type { SheetBusiness } from "../api/sheet-business";
+import { hasBusinessHeader, type SheetBusiness } from "../api/sheet-business";
 import type { EditDraft, Quote, QuoteLine } from "../types";
-import { SheetLogo } from "./SheetLogo";
+import { BrandLogo } from "@/shared/ui/brand-logo";
 import { StatusChip } from "./StatusChip";
 
 const svg = { fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true, focusable: "false" } as const;
@@ -16,6 +15,11 @@ export type QuoteSheetProps = {
   quote: Quote;
   business: SheetBusiness;
   editing: boolean;
+  // The edit fields and their error (kept state, so an edit survives a page change).
+  draft: EditDraft;
+  error: string;
+  onDraft: (draft: EditDraft) => void;
+  onError: (message: string) => void;
   onShut: () => void;
   onEdit: () => void;
   onCancel: () => void;
@@ -25,29 +29,25 @@ export type QuoteSheetProps = {
   onApprove: () => void;
 };
 
-const draftOf = (q: Quote): EditDraft => ({ name: q.name, lines: q.lines.map((l) => ({ text: l.text, amount: String(l.amount) })) });
-
 // The quote as the customer gets it, with a few fields when the owner edits it.
 export function QuoteSheet(p: QuoteSheetProps) {
   const { quote: q, business: b } = p;
-  const [draft, setDraft] = useState<EditDraft>(() => draftOf(q));
-  const [error, setError] = useState("");
+  const { draft, error } = p;
 
-  const start = () => { setDraft(draftOf(q)); setError(""); p.onEdit(); setTimeout(() => document.getElementById("fd-qe-name")?.focus(), 0); };
+  const start = () => { p.onEdit(); setTimeout(() => document.getElementById("fd-qe-name")?.focus(), 0); };
   const save = () => {
     const check = checkEdit(draft);
-    if (!check.ok) { setError(check.message); document.getElementById(`fd-qe-${check.field}`)?.focus(); return; }
-    setError("");
+    if (!check.ok) { p.onError(check.message); document.getElementById(`fd-qe-${check.field}`)?.focus(); return; }
     p.onSave(check.name, check.lines);
   };
   const setLine = (k: number, key: "text" | "amount", value: string) =>
-    setDraft((d) => ({ ...d, lines: d.lines.map((l, i) => (i === k ? { ...l, [key]: value } : l)) }));
+    p.onDraft({ ...draft, lines: draft.lines.map((l, i) => (i === k ? { ...l, [key]: value } : l)) });
 
   const range = Boolean(q.high);
   const shownLines = q.file ? [] : q.lines;
 
   return (
-    <section className="fd-pnl fd-doc" aria-label="The quote the customer gets" aria-live="polite" id={SHEET_ID} tabIndex={-1}>
+    <section className="fd-pnl fd-doc" aria-label="The quote the customer gets" aria-live="polite" id={SHEET_ID} tabIndex={-1} style={{ outline: "none" }}>
       <button type="button" className="fd-link fd-aback" onClick={p.onShut}>
         <svg className="fd-flip" width={16} height={16} viewBox="0 0 24 24" {...svg} strokeWidth={2.2}><path d="m9 6 6 6-6 6" /></svg>Back to the list
       </button>
@@ -64,7 +64,7 @@ export function QuoteSheet(p: QuoteSheetProps) {
       {p.editing ? (
         <div className="fd-she">
           <label className="fd-ll" htmlFor="fd-qe-name">Customer name</label>
-          <input className="fd-lin" id="fd-qe-name" type="text" autoComplete="off" value={draft.name} onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))} />
+          <input className="fd-lin" id="fd-qe-name" type="text" autoComplete="off" value={draft.name} onChange={(e) => p.onDraft({ ...draft, name: e.target.value })} />
           {draft.lines.map((line, k) => (
             <div className="fd-shl" key={k}>
               <div className="fd-ivf">
@@ -80,20 +80,22 @@ export function QuoteSheet(p: QuoteSheetProps) {
           {error ? <p className="fd-lerr" role="alert"><svg width={16} height={16} viewBox="0 0 24 24" {...svg}><circle cx="12" cy="12" r="9" /><path d="M12 7.5v5M12 16.2v.3" /></svg><span>{error}</span></p> : null}
           <div className="fd-rac fd-pna">
             <button type="button" className="fd-btn" onClick={save}>Save</button>
-            <button type="button" className="fd-btn is-plain" onClick={() => { setError(""); p.onCancel(); }}>Cancel</button>
+            <button type="button" className="fd-btn is-plain" onClick={p.onCancel}>Cancel</button>
           </div>
         </div>
       ) : (
         <div className="fd-sheet">
-          <div className="fd-dch">
-            <SheetLogo url={b.logo} initials={b.init} />
-            <div>
-              {b.name ? <p className="fd-dcb">{b.name}</p> : null}
-              {b.addr ? <p className="fd-dcs">{b.addr}</p> : null}
-              {joinParts([b.phone, b.email]) ? <p className="fd-dcs">{joinParts([b.phone, b.email])}</p> : null}
-              {joinParts([b.site, b.hours]) ? <p className="fd-dcs">{joinParts([b.site, b.hours])}</p> : null}
+          {hasBusinessHeader(b) ? (
+            <div className="fd-dch">
+              <BrandLogo url={b.logo} initials={b.init} hideWhenEmpty />
+              <div>
+                {b.name ? <p className="fd-dcb">{b.name}</p> : null}
+                {b.addr ? <p className="fd-dcs">{b.addr}</p> : null}
+                {joinParts([b.phone, b.email]) ? <p className="fd-dcs">{joinParts([b.phone, b.email])}</p> : null}
+                {joinParts([b.site, b.hours]) ? <p className="fd-dcs">{joinParts([b.site, b.hours])}</p> : null}
+              </div>
             </div>
-          </div>
+          ) : null}
           <p className="fd-dcn"><span><span className="fd-h">Quote</span></span><StatusChip quote={q} plain /></p>
           <p className="fd-dcs">{q.service}</p>
           <p className="fd-dcl">Quote for</p>

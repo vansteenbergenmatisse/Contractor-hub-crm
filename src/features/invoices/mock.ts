@@ -1,7 +1,7 @@
 // MOCK DATA (Phase 2). The design's sample invoices. Replaced in Phase 3 by the sub-account's
 // invoices. Names, addresses and amounts are sample values, never real customers or facts.
 import type { SearchRow } from "@/features/app-shell";
-import { addDaysIso, formatMoney, toIsoDay } from "./api/invoices";
+import { addDaysIso, invoiceSearchRows, toIsoDay } from "./api/invoices";
 import type { Invoice } from "./types";
 
 type Seed = Omit<Invoice, "justNow" | "dueOn" | "paidOn"> & {
@@ -34,11 +34,5 @@ export function buildMockInvoices(now: Date): Invoice[] {
   }));
 }
 
-// What the global search can find on this page. Static: no dates, so safe on the server layout.
-export const searchRows: SearchRow[] = SEEDS.map((s) => ({
-  id: `invoice-${s.no}`,
-  page: "invoices",
-  name: s.name || `Invoice ${s.no}`,
-  sub: `Invoice ${s.no} · ${s.svc}${s.amt > 0 ? ` · ${formatMoney(s.amt)}` : ""}`,
-  href: "/invoices",
-}));
+// What the global search can find on this page before it has opened. Static: no dates, so safe on the server layout.
+export const searchRows: SearchRow[] = invoiceSearchRows(SEEDS);

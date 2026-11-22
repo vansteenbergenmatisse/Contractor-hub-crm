@@ -60,10 +60,21 @@ export type BusinessPatch = Pick<
 >;
 
 const text = (values: CustomValues, key: string) => (values[key] ?? "").trim();
-const https = (values: CustomValues, key: string) => {
-  const v = text(values, key);
-  return /^https:\/\/\S+$/i.test(v) ? v : null;
-};
+// A link is used only when the URL parser accepts it as https, and then in its parsed form (`href`,
+// which percent-encodes quotes and spaces), the same as the server's brand path. The raw text never
+// reaches a CSS `url("...")` or an href.
+export function safeHttpsUrl(raw: string | undefined): string | null {
+  const v = (raw ?? "").trim();
+  if (!v) return null;
+  let url: URL;
+  try {
+    url = new URL(v);
+  } catch {
+    return null;
+  }
+  return url.protocol === "https:" ? url.href : null;
+}
+const https = (values: CustomValues, key: string) => safeHttpsUrl(values[key]);
 
 // The shell's business details from the custom values, for this browser session. Only filled-in
 // values are sent: an empty value is left out, so it never overrides what the shell shows (an empty

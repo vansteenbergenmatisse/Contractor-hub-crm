@@ -52,6 +52,9 @@ export function isWaiting(status: LeadStatus): boolean {
   return status === "call" || status === "reply";
 }
 
+// How many hand-added leads the list shows (the newest first).
+export const MAX_ADDED = 3;
+
 const NO_ERRORS: FormErrors = { name: "", phone: "", email: "" };
 const EMPTY_FORM: FormValues = { name: "", phone: "", email: "", addr: "", need: "" };
 
@@ -59,7 +62,7 @@ export function createInitialState(leads: readonly Lead[]): LeadsState {
   const status: Record<string, LeadStatus> = {};
   for (const l of leads) status[l.id] = l.status;
   return {
-    status, initial: { ...status }, filter: "all", added: [], auto: false, old: "idle", sheet: false,
+    status, initial: { ...status }, filter: "all", added: [], nAdd: 0, auto: false, old: "idle", sheet: false,
     form: { ...EMPTY_FORM }, errors: { ...NO_ERRORS }, focus: null,
   };
 }
@@ -105,12 +108,13 @@ export function leadsReducer(state: LeadsState, action: LeadsAction): LeadsState
       if (focus) return { ...state, errors, focus: { field: focus, tick: (state.focus?.tick ?? 0) + 1 } };
       const f = state.form;
       const added: AddedLead = {
-        id: `added-${state.added.length + 1}`,
+        id: `added-${state.nAdd + 1}`,
         name: f.name.trim(),
         sub: [f.need.trim() || "New lead", f.phone.trim(), f.email.trim(), f.addr.trim()].filter(Boolean).join(" · "),
       };
       return {
-        ...state, sheet: false, filter: "all", added: [added, ...state.added], form: { ...EMPTY_FORM },
+        // The list keeps the newest 3 hand-added leads (design logic 804 `.slice(0, 3)`).
+        ...state, sheet: false, filter: "all", added: [added, ...state.added].slice(0, MAX_ADDED), nAdd: state.nAdd + 1, form: { ...EMPTY_FORM },
         errors: { ...NO_ERRORS }, focus: null,
       };
     }

@@ -197,7 +197,16 @@ describe("SendTimerView", () => {
     const html = renderToStaticMarkup(
       <SendTimerView request={request([])} business={business} state={startTimer()} handlers={sendDialogHandlers(setup().controller)} />,
     );
-    expect(html).toMatch(/<div class="fd-dch"><span class="fd-logo"[^>]*><span>SR<\/span><\/span><div><p class="fd-dcb">Sample Roofing<\/p><\/div><\/div>/);
+    expect(html).toMatch(/<div class="fd-dch"><span class="fd-logo"[^>]*><span class="fd-h">SR<\/span><\/span><div><p class="fd-dcb">Sample Roofing<\/p><\/div><\/div>/);
+  });
+
+  it("has no business block when the tenant has neither a logo nor a name (no 'Your business')", () => {
+    const html = renderToStaticMarkup(
+      <SendTimerView request={request([])} business={buildBusiness({})} state={startTimer()} handlers={sendDialogHandlers(setup().controller)} />,
+    );
+    expect(html).not.toContain("fd-dch");
+    expect(html).not.toContain("fd-logo");
+    expect(html).not.toContain("Your business");
   });
 
   it("shows the count and hides the sheet until View", () => {

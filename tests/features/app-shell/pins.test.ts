@@ -54,7 +54,9 @@ describe("business pins", () => {
   });
 
   it("pickPatch keeps only the fields a patch may set", () => {
-    expect(pickPatch({ name: "A", init: "ZZ", evil: 1 } as unknown as BusinessPatch)).toEqual({ name: "A" });
+    expect(pickPatch({ name: "A", init: "ZZ", evil: 1 } as unknown as BusinessPatch)).toStrictEqual({ name: "A" });
+    expect(patchBusiness(base, pickPatch({ email: "a@b.test" })).name).toBe("Sample Roofing");
+    expect(patchBusiness(base, pickPatch({ email: "a@b.test" })).phone).toBe("+1 555 0100");
   });
 
   it("a blank owner in a patch keeps the signed-in person's name (no 'Owner / Owner' after Save)", () => {

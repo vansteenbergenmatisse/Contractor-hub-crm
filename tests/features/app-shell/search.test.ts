@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pushRecent, scoreRow, searchRows, type SearchRow } from "@/features/app-shell";
+import { mergeSearchRows, pushRecent, scoreRow, searchRows, type SearchRow } from "@/features/app-shell";
 
 const row = (id: string, page: SearchRow["page"], name: string, sub = ""): SearchRow => ({ id, page, name, sub, href: `/${page}` });
 const rows = [
@@ -61,5 +61,22 @@ describe("pushRecent", () => {
     expect(r).toEqual(["f", "e", "d", "c", "b"]);
     expect(pushRecent(r, "D")).toEqual(["D", "f", "e", "c", "b"]);
     expect(pushRecent(r, "  ")).toEqual(r);
+  });
+});
+
+describe("mergeSearchRows", () => {
+  const base: SearchRow[] = [
+    { id: "l1", page: "leads", name: "A", sub: "old", href: "/leads" },
+    { id: "q1", page: "quotes", name: "B", sub: "No price yet", href: "/quotes" },
+  ];
+  it("uses a page's own rows in place of the layout's, and keeps the rest", () => {
+    const out = mergeSearchRows(base, { leads: [{ id: "l1", page: "leads", name: "A", sub: "new", href: "/leads" }] });
+    expect(out.map((r) => `${r.id}:${r.sub}`).sort()).toEqual(["l1:new", "q1:No price yet"]);
+  });
+  it("an empty list for a page means that page has no rows now", () => {
+    expect(mergeSearchRows(base, { leads: [] }).map((r) => r.id)).toEqual(["q1"]);
+  });
+  it("ignores rows a page hands in under another page", () => {
+    expect(mergeSearchRows(base, { leads: [{ id: "x", page: "quotes", name: "X", sub: "", href: "/quotes" }] }).map((r) => r.id)).toEqual(["q1"]);
   });
 });

@@ -5,8 +5,9 @@ import { highlight, nextScope, pushRecent, rowHref, searchPlacement, searchRows,
 import { createFocusReturn } from "../api/focus";
 import { detectMac } from "../api/keys";
 import { useWindowWidth } from "../hooks/use-window-width";
+import { useFxLayer } from "../hooks/use-fx-layer";
+import { inFxLayer } from "../api/fx-portal";
 import type { SearchRow } from "../types";
-import { Icon } from "./Icon";
 
 type Scope = "all" | SearchRow["page"];
 const SCOPES: ReadonlyArray<readonly [Scope, string]> = [
@@ -28,7 +29,8 @@ function anchorBox(): { top: number; right: number } | null {
 // Below 1024px it is a full-screen sheet (`is-ph`: field at the bottom, following the keyboard);
 // on a computer it sits under the top Search field. Phase 2 searches the mock rows the layout hands
 // in; Phase 3 asks the backend. `viewportWidth` and `isMac` stand in where there is no window
-// (server render, tests). Opening a result hands `onOpen` the row with `?row=<id>` on its link.
+// (server render, tests). It is drawn in the shared `#fx` layer. The field's own clear button (type
+// search) and Escape clear the text, as in the design. Opening a result hands `onOpen` the row with `?row=<id>` on its link.
 // `recent` and `onRecentChange` keep the recent searches outside the sheet (the shell holds them,
 // so they survive closing and opening search); without them the sheet keeps its own list.
 export function SearchSheet({ rows, onClose, onOpen, viewportWidth, isMac, recent: heldRecent, onRecentChange }: {
@@ -53,18 +55,21 @@ export function SearchSheet({ rows, onClose, onOpen, viewportWidth, isMac, recen
   const phone = placement.phone;
   const mac = isMac ?? detectMac();
 
+  const layer = useFxLayer();
+
   // Focus the field; give focus back to the opener on close (not when a result was opened).
   useEffect(() => {
+    if (!layer) return;
     back.remember(document.activeElement);
     input.current?.focus();
     return () => back.restore();
-  }, [back]);
+  }, [back, layer]);
 
   // Phone: the field sits at the bottom, so the sheet follows the keyboard (visual viewport).
   useEffect(() => {
     const vv = typeof window === "undefined" ? null : window.visualViewport;
     const box = dialog.current;
-    if (!phone || !vv || !box) return;
+    if (!phone || !vv || !box || !layer) return;
     const fit = () => {
       box.style.top = `${vv.offsetTop}px`;
       box.style.height = `${vv.height}px`;
@@ -80,7 +85,7 @@ export function SearchSheet({ rows, onClose, onOpen, viewportWidth, isMac, recen
       box.style.height = "";
       box.style.bottom = "";
     };
-  }, [phone]);
+  }, [phone, layer]);
 
   const groups = useMemo(() => searchRows(rows, term, scope), [rows, term, scope]);
   const typed = term.trim() !== "";
@@ -163,11 +168,6 @@ export function SearchSheet({ rows, onClose, onOpen, viewportWidth, isMac, recen
             }
           }}
         />
-        {phone && term ? (
-          <button type="button" className="fd-link" aria-label="Clear search" onClick={() => { setTerm(""); setActive(0); input.current?.focus(); }}>
-            <Icon name="close" size={16} strokeWidth={2} />
-          </button>
-        ) : null}
       </span>
       <button type="button" className="fx-scx" onClick={onClose}>Cancel</button>
     </div>
@@ -175,8 +175,8 @@ export function SearchSheet({ rows, onClose, onOpen, viewportWidth, isMac, recen
 
   const chevron = <svg className="fx-soc" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="m9 6 6 6-6 6" /></svg>;
 
-  return (
-    <div id="fx" className="fd-app brand-scope fx-root">
+  return inFxLayer(
+    <>
       <div className="fx-scrim fx-sscrim" onClick={onClose} />
       <div
         ref={dialog}
@@ -232,6 +232,7 @@ export function SearchSheet({ rows, onClose, onOpen, viewportWidth, isMac, recen
         </div>
         {phone ? null : <p className="fx-shint"><kbd className="fx-k">{shortcutHint(mac)}</kbd><span>shows every keyboard shortcut</span></p>}
       </div>
-    </div>
+    </>,
+    layer,
   );
 }

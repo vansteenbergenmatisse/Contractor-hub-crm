@@ -96,15 +96,29 @@ export function totals(items: Automation[]) {
   return { on, off: l.length - on, all: l.length };
 }
 
-// Rows grouped by HighLevel workflow folder, in folder order, then "Made by you". Removed rows and
-// empty folders do not show.
+// Rows grouped by HighLevel workflow folder, in folder order, then "Made by you". The folder headings
+// are static, as in the design: a folder whose rows were all removed keeps its heading. "Made by you"
+// shows only while it holds a live row, and an unknown folder only with live rows.
 export function groupByFolder(items: Automation[]): FolderGroup[] {
   const l = live(items);
-  const order: string[] = [...MOCK_FOLDERS, MADE_BY_YOU];
-  const extra = [...new Set(l.map((a) => a.folder))].filter((f) => !order.includes(f));
-  return [...order, ...extra]
+  const fixed = MOCK_FOLDERS.map((folder) => ({ folder, items: l.filter((a) => a.folder === folder) }));
+  const known: string[] = [...MOCK_FOLDERS];
+  const extra = [MADE_BY_YOU, ...new Set(l.map((a) => a.folder).filter((f) => !known.includes(f) && f !== MADE_BY_YOU))]
     .map((folder) => ({ folder, items: l.filter((a) => a.folder === folder) }))
     .filter((g) => g.items.length > 0);
+  return [...fixed, ...extra];
+}
+
+// What a swipe and the row menu can do on a row, as the design reads them off the row's visible
+// buttons (logic uxActs / uxItems): the switch (named after the row), Edit and Remove; while the row
+// asks "Remove it?", the switch, Keep and Yes, remove. Swipe right presses the switch; there is no
+// "Mark done" on this page, so swipe left does nothing.
+export type RowActionSpec = { label: string; key: "toggle" | "edit" | "ask" | "keep" | "remove"; tone?: "danger"; swipe?: "right" };
+export function rowActionSpecs(a: Automation, asking: boolean): RowActionSpec[] {
+  const toggle: RowActionSpec = { label: a.name, key: "toggle", swipe: "right" };
+  return asking
+    ? [toggle, { label: "Keep", key: "keep" }, { label: "Yes, remove", key: "remove", tone: "danger" }]
+    : [toggle, { label: "Edit", key: "edit" }, { label: "Remove", key: "ask", tone: "danger" }];
 }
 
 export function whoLabel(who: Who): string {
@@ -176,10 +190,9 @@ export function fillBusiness(text: string, business: AutomationBusiness): string
   });
 }
 
-// "Send me a test": the line shown on screen. Nothing is sent.
-export function testLine(msg: string, business: AutomationBusiness): string {
+// "Send me a test": the line shown on screen, in the design's words. Nothing is sent. A missing
+// business phone shows no number (no made-up value).
+export function testLine(business: Pick<AutomationBusiness, "business_phone_number">): string {
   const phone = business.business_phone_number.trim();
-  const base = `Would text the business phone${phone ? `, ${phone}` : ""}. Nothing is sent in this preview.`;
-  const text = fillBusiness(fillOffers(msg, business), business).trim();
-  return text ? `${base} The text reads: ${text}` : base;
+  return phone ? `Test text sent to ${phone}.` : "Test text sent.";
 }

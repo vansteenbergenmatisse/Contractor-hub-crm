@@ -6,6 +6,7 @@ import {
   firstNeedId,
   isWaiting,
   leadsReducer,
+  liveSearchRows,
   MOCK_LEADS,
   searchRows,
   sourceRows,
@@ -164,6 +165,18 @@ describe("Add a lead", () => {
     expect(new Set(s.added.map((a) => a.id)).size).toBe(2);
   });
 
+  it("keeps the newest 3 hand-added leads on screen, as the design does, and counts every add as Added by you", () => {
+    let s = fresh();
+    for (const name of ["One", "Two", "Three", "Four"]) s = run(fill(s, { name, phone: "6145550100" }), { type: "submit" });
+    expect(s.added.map((a) => a.name)).toEqual(["Four", "Three", "Two"]);
+    expect(s.nAdd).toBe(4);
+    expect(new Set(s.added.map((a) => a.id)).size).toBe(3);
+    expect(s.added[0].id).toBe("added-4");
+    // All shows 8 sample leads plus the 3 kept (11), as in the design.
+    expect(filterCounts(MOCK_LEADS, s)).toEqual({ all: 11, warn: 4, bad: 1, hot: 1 });
+    expect(visibleAdded(s)).toHaveLength(3);
+  });
+
   it("closing clears the errors and keeps what was typed", () => {
     let s = run(fresh(), { type: "openAdd" }, { type: "field", field: "name", value: "Pat" }, { type: "submit" });
     expect(s.errors.phone).not.toBe("");
@@ -290,5 +303,15 @@ describe("Add a lead on a phone or a computer", () => {
   it("opens the bottom sheet on a phone and goes to the side form on a computer", () => {
     expect(addLeadMode(true)).toBe("sheet");
     expect(addLeadMode(false)).toBe("form");
+  });
+});
+
+describe("live search rows", () => {
+  it("lists the hand-added leads on top, then the sample leads", () => {
+    const s = run(fill(fresh(), { name: "Pat Lee", phone: "6145550100", need: "Gutters" }), { type: "submit" });
+    const rows = liveSearchRows(s.added);
+    expect(rows[0]).toEqual({ id: "added-1", page: "leads", name: "Pat Lee", sub: "Added by you · Gutters · 6145550100", href: "/leads" });
+    expect(rows.slice(1)).toEqual(searchRows);
+    expect(liveSearchRows([])).toEqual(searchRows);
   });
 });

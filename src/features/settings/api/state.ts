@@ -62,7 +62,8 @@ export function settingsReducer(s: SettingsState, a: SettingsAction): SettingsSt
     case "search":
       return { ...s, q: a.q };
     case "edit":
-      return { ...s, draft: { ...s.draft, [a.key]: a.value }, ok: false };
+      // As in the design, typing leaves the "Saved" line and the error as they are; only Save changes them.
+      return { ...s, draft: { ...s.draft, [a.key]: a.value } };
     case "toggleCols":
       return { ...s, cols: !s.cols };
     case "switch": {

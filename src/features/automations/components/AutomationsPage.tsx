@@ -71,9 +71,6 @@ export function AutomationsPage() {
             <svg {...icon}><path d="M12 5v14M5 12h14" /></svg>New automation
           </button>
           <div className="fd-lst">
-            {groups.length === 0 && (
-              <p className="fd-pns">No automations here. Press Undo above or make a new one.</p>
-            )}
             {groups.map((g) => (
               <Fragment key={g.folder}>
                 <p className="fd-lgh">{g.folder}</p>

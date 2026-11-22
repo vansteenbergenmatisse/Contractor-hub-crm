@@ -36,7 +36,10 @@ export type LeadsState = {
   status: Record<string, LeadStatus>;
   initial: Record<string, LeadStatus>;
   filter: WaitFilter;
+  // The hand-added leads on screen: the newest 3, as in the design.
   added: AddedLead[];
+  // Every lead added by hand on this screen (the sources panel's "Added by you" counts them all).
+  nAdd: number;
   auto: boolean;
   old: OldState;
   sheet: boolean;

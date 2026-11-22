@@ -110,3 +110,23 @@ export const shortcutHint = (isMac: boolean): string => (isMac ? "⌘?" : "Ctrl 
 export function flashStyle(rect: { left: number; top: number; width: number; height: number }) {
   return { left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px` };
 }
+
+// The rows search looks in: the layout's rows, with each page that registered its own current rows
+// (useSearchRows) using those instead.
+export function mergeSearchRows(
+  base: readonly SearchRow[],
+  byPage: Partial<Record<SearchRow["page"], readonly SearchRow[]>>,
+): SearchRow[] {
+  const out = base.filter((row) => !Object.prototype.hasOwnProperty.call(byPage, row.page));
+  for (const group of SEARCH_GROUPS) {
+    const rows = byPage[group.key];
+    if (rows) out.push(...rows.filter((row) => row.page === group.key));
+  }
+  return out;
+}
+
+// True when two row lists hold the same rows in the same order.
+export function sameRows(a: readonly SearchRow[] | undefined, b: readonly SearchRow[]): boolean {
+  if (!a || a.length !== b.length) return false;
+  return a.every((row, i) => row.id === b[i].id && row.page === b[i].page && row.name === b[i].name && row.sub === b[i].sub && row.href === b[i].href);
+}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  deliveryLabel, doneLabel, filterCounts, initialState, inboxReducer, isVisible, replyLabel, rowSnippet, rowTime,
+  conversationOfRow, deliveryLabel, shownSent, SENT_SLOTS, doneLabel, filterCounts, initialState, inboxReducer, isVisible, replyLabel, rowSnippet, rowTime,
   rowWaitLabel, summarize, visibleCount, waitingCount,
 } from "../../../src/features/inbox/api/state";
 import { waitLevelClass } from "../../../src/features/inbox/api/wait";
@@ -8,6 +8,7 @@ import { bookingLinkOf, fillText, replyName, siteOf } from "../../../src/feature
 import { toSearchRows } from "../../../src/features/inbox/api/search-rows";
 import { INBOX_WAITING_COUNT, MOCK_CONVERSATIONS as C } from "../../../src/features/inbox/mock";
 import { searchRows } from "@/features/inbox";
+import { scoreRow } from "@/features/app-shell";
 import type { Conversation, InboxAction, InboxState } from "../../../src/features/inbox/types";
 
 const biz = { name: "Sample Roofing", first: "Pat", site: "sample.example", bookingLink: "sample.example/book" };
@@ -133,10 +134,16 @@ describe("labels", () => {
   it("never writes a made-up or empty fact into a text", () => {
     const all = C.map((c) => [fillText(c.snippet, none), ...c.thread.map((m) => ("text" in m ? fillText(m.text, none) : ""))].join("\n")).join("\n");
     for (const bad of ["Northway", "Mike", "undefined", "null", "{name}", "{first}", " ,", " ()", "  "]) expect(all).not.toContain(bad);
-    expect(fillText("Hi {name}, {first} from {name}", none)).toBe("Hi our team, our team");
-    expect(fillText("{first} calls you soon.", none)).toBe("Our team calls you soon.");
-    expect(fillText("Reminder: {first} from {name} visits.", none)).toBe("Reminder: our team visits.");
+    for (const bad of ["our team", "Our team", "Your business", "Owner"]) expect(all).not.toContain(bad);
+    // The design's sentence with the missing value left out: no dangling words, no stray punctuation.
+    expect(fillText("Hi Maria, this is {name}. Sorry we missed your call. How can we help?", none)).toBe("Hi Maria. Sorry we missed your call. How can we help?");
+    expect(fillText("Hi Jordan, thanks for reaching out to {name}. What is the address?", none)).toBe("Hi Jordan, thanks for reaching out. What is the address?");
+    expect(fillText("Hi Ellen, thanks for your request. We got it. {first} calls you soon.", none)).toBe("Hi Ellen, thanks for your request. We got it. We call you soon.");
+    expect(fillText("Reminder: {first} from {name} visits tomorrow at 11:00 AM. Reply C to confirm.", none)).toBe("Reminder: we visit tomorrow at 11:00 AM. Reply C to confirm.");
     expect(fillText("Reminder: {first} from {name} visits.", { ...none, first: "Pat" })).toBe("Reminder: Pat visits.");
+    expect(fillText("Reminder: {first} from {name} visits.", { ...none, name: "Sample Roofing" })).toBe("Reminder: Sample Roofing visits.");
+    expect(fillText("Hi Maria, this is {name}. {first} calls.", { ...none, first: "Pat" })).toBe("Hi Maria. Pat calls.");
+    expect(fillText("We got it. {first} calls you soon.", { ...none, name: "Sample Roofing" })).toBe("We got it. We call you soon.");
   });
   it("picks the booking link: the real one, else the website's /book, else nothing", () => {
     expect(bookingLinkOf("https://book.example/job", "site.example")).toBe("https://book.example/job");
@@ -163,7 +170,70 @@ describe("search rows", () => {
   it("has one row per conversation pointing at the inbox", () => {
     expect(searchRows).toHaveLength(9);
     expect(searchRows.every((r) => r.page === "inbox" && r.href === "/inbox")).toBe(true);
-    expect(toSearchRows([C[0]])[0]).toMatchObject({ name: "Maria Alvarez", sub: "Call · Roof leak repair · New Lead" });
+    expect(toSearchRows([C[0]])[0]).toMatchObject({ name: "Maria Alvarez", sub: "Call · Water is coming through my kitchen ceiling. Can someone come today?" });
+  });
+  it("indexes the newest message as the row shows it, so message text is found (design uxIndex)", () => {
+    const hits = searchRows.filter((r) => scoreRow(r, "1042") > 0);
+    expect(hits.map((r) => r.name)).toEqual(["Bright Daycare"]);
+    expect(hits[0].sub).toBe("Email · System: Second reminder: invoice 1042 for $9,400 is now 14 days late.");
+  });
+  it("fills business facts and shows the owner's own reply when given the live state", () => {
+    const rows = toSearchRows(C, biz, run(start(), { type: "open", id: "c2" }, { type: "send", text: "Saturday works" }));
+    expect(rows.find((r) => r.name === "Ellen Novak")?.sub).toBe("Web form · System: Hi Ellen, thanks for your request. We got it. Pat calls you soon.");
+    expect(rows.find((r) => r.name === "Jordan Reyes")?.sub).toBe("Text · You: Saturday works");
+  });
+});
+
+describe("reducer guards (mutation survivors P01, P03, P04)", () => {
+  it("show ignores an unknown id and does not count a swap for the open conversation", () => {
+    const s = run(start(), { type: "open", id: C[0].id });
+    expect(inboxReducer(s, { type: "show", id: "nope", hidden: false })).toBe(s);
+    expect(inboxReducer(s, { type: "show", id: C[0].id, hidden: false }).swaps).toBe(s.swaps);
+  });
+  it("conversationOfRow needs the inbox- prefix", () => {
+    expect(conversationOfRow(`today-${C[0].id}`, C)).toBeNull();
+    expect(conversationOfRow(`inbox-${C[0].id}`, C)).toBe(C[0]);
+  });
+});
+
+describe("kept reply draft", () => {
+  it("keeps the draft while the same conversation stays open, clears it when another opens or on send", () => {
+    let s = run(start(), { type: "open", id: "c2" }, { type: "draft", text: "On my" });
+    expect(s.draft).toBe("On my");
+    expect(run(s, { type: "open", id: "c2" }).draft).toBe("On my");
+    expect(run(s, { type: "toList" }).draft).toBe("On my");
+    expect(run(s, { type: "open", id: "c3" }).draft).toBe("");
+    expect(run(s, { type: "replyTo", id: "c3" }).draft).toBe("");
+    expect(run(s, { type: "show", id: "c3", hidden: false }).draft).toBe("");
+    s = run(s, { type: "send", text: s.draft });
+    expect(s.draft).toBe("");
+    expect(s.sent.c2).toEqual(["On my"]);
+  });
+  it("a draft change is not an event (it does not scroll or animate)", () => {
+    const s = run(start(), { type: "open", id: "c2" });
+    const t = run(s, { type: "draft", text: "x" });
+    expect(t.event).toBe(s.event);
+    expect(t.bumps).toBe(s.bumps);
+    expect(inboxReducer(t, { type: "draft", text: "x" })).toBe(t);
+  });
+});
+
+describe("row Mark done / Flag for reply (swipe left, row menu)", () => {
+  it("toggles that row's wait, not the open conversation's", () => {
+    const s = run(start(), { type: "open", id: "c1" }, { type: "toggleNeed", id: "c3" });
+    expect(s.needs.c3).toBe(false);
+    expect(s.needs.c1).toBe(true);
+    expect(s.event).toBe("done");
+    expect(run(s, { type: "toggleNeed", id: "c3" }).needs.c3).toBe(true);
+    expect(inboxReducer(s, { type: "toggleNeed", id: "nope" })).toBe(s);
+  });
+});
+
+describe("sent messages shown in a thread", () => {
+  it("shows only the newest 4, as the design's 4 slots", () => {
+    expect(SENT_SLOTS).toBe(4);
+    expect(shownSent(["1", "2", "3", "4", "5", "6"])).toEqual(["3", "4", "5", "6"]);
+    expect(shownSent(["1", "2"])).toEqual(["1", "2"]);
   });
 });
 

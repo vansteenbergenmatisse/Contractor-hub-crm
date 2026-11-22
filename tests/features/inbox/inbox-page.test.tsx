@@ -90,7 +90,9 @@ describe("InboxPage markup", () => {
     const empty = renderToStaticMarkup(<InboxPage />);
     current.business = buildBusiness({ name: "Test Roofing Co", owner: "Sam Tester", websiteUrl: "https://www.test-roofing.example", bookingJobUrl: "https://book.test-roofing.example/job" });
     for (const bad of ["Northway", "Mike", "undefined", "null", "{name}", "{first}", "{site}", "{booking link}", "Your business", ">Owner<"]) expect(empty).not.toContain(bad);
-    expect(empty).toContain("this is our team.");
+    expect(empty).not.toContain("our team");
+    expect(empty).not.toContain("Our team");
+    expect(empty).toContain("Hi Maria. Sorry we missed your call.");
     expect(empty).not.toContain(">Booking link</button>");
     expect(empty).toContain(">Thanks</button>");
   });

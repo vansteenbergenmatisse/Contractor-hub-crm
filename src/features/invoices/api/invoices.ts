@@ -1,4 +1,4 @@
-import type { SendTimerRequest } from "@/features/app-shell";
+import type { SearchRow, SendTimerRequest } from "@/features/app-shell";
 import type {
   BusinessCard,
   BusinessValues,
@@ -127,8 +127,27 @@ export function markSent(inv: Invoice, now: Date): Invoice {
 
 export function markPaid(inv: Invoice, now: Date): Invoice {
   if (inv.st !== "sent") return inv;
-  return { ...inv, st: "paid", justNow: true, paidOn: toIsoDay(now) };
+  return { ...inv, st: "paid", justNow: true, paidOn: toIsoDay(now), sentJustNow: inv.justNow };
 }
+
+// Undo of a Mark paid made on this screen (Payments): back to sent, with the chip it had.
+export function unmarkPaid(inv: Invoice): Invoice {
+  if (inv.st !== "paid" || inv.sentJustNow === undefined) return inv;
+  const { sentJustNow, ...rest } = inv;
+  return { ...rest, st: "sent", justNow: sentJustNow, paidOn: null };
+}
+
+// Kept-state patches other pages dispatch through useInvoicesKept (functions of the latest state).
+export const markPaidPatch = (no: number, now: Date) => (s: { invoices: Invoice[] }) => ({
+  invoices: s.invoices.map((i) => (i.no === no ? markPaid(i, now) : i)),
+});
+export const unmarkPaidPatch = (no: number) => (s: { invoices: Invoice[] }) => ({
+  invoices: s.invoices.map((i) => (i.no === no ? unmarkPaid(i) : i)),
+});
+export const markSentPatch = (no: number, now: Date) => (s: { invoices: Invoice[] }) => ({
+  invoices: s.invoices.map((i) => (i.no === no ? markSent(i, now) : i)),
+  sel: no,
+});
 
 // ---- filters and counts ----------------------------------------------------------------------
 const groupOf = (st: InvoiceStatus): Exclude<Filter, "all"> => (st === "need" || st === "ready" ? "todo" : st);
@@ -163,7 +182,8 @@ export function sheetFor(inv: Invoice, now: Date): SheetView {
   const late = inv.st === "sent" && inv.dueOn ? daysLate(inv.dueOn, now) : 0;
   let due: string;
   if (inv.st === "need" || inv.st === "ready") due = `Due ${INVOICE_DUE_DAYS} days after you send it`;
-  else if (inv.st === "sent") due = `Due ${inv.dueOn ? formatDay(inv.dueOn) : ""}${late > 0 ? `, ${lateText(late)}` : ""}`.trim();
+  // As the design: "Due in 7 days" right after a send, the lateness once late, else the due day.
+  else if (inv.st === "sent") due = inv.justNow ? `Due in ${INVOICE_DUE_DAYS} days` : late > 0 ? lateText(late) : `Due ${inv.dueOn ? formatDay(inv.dueOn) : ""}`.trim();
   else due = inv.justNow ? "Paid today" : `Paid ${inv.paidOn ? formatDay(inv.paidOn) : ""}`.trim();
   const price = inv.amt > 0 ? formatMoney(inv.amt) : "Price missing";
   return {
@@ -200,6 +220,11 @@ export function businessCard(values: BusinessValues, logo: string | null = null)
   };
 }
 
+// The sheet's header row (logo tile, name, contact lines) and its divider show only when there is
+// something to put in it. With no business values at all the sheet starts at its title.
+export const hasBusinessHeader = (b: BusinessCard): boolean =>
+  Boolean(b.logo || b.name || b.addr || b.phone || b.email || b.site || b.hours);
+
 // What "Send invoice" asks the shell for. The shell counts 20 seconds; at 0 it runs onDone.
 export function sendRequest(inv: Invoice, onDone: () => void): SendTimerRequest {
   const total = formatMoney(inv.amt);
@@ -211,3 +236,14 @@ export function sendRequest(inv: Invoice, onDone: () => void): SendTimerRequest 
     onDone,
   };
 }
+
+// The rows the shared search finds on this page, from the invoices as they are now (a name or a price
+// filled in shows). The layout seeds the same rows from the sample data until the page has opened.
+export const invoiceSearchRows = (list: ReadonlyArray<Pick<Invoice, "no" | "name" | "svc" | "amt">>): SearchRow[] =>
+  list.map((inv) => ({
+    id: `invoice-${inv.no}`,
+    page: "invoices",
+    name: inv.name || `Invoice ${inv.no}`,
+    sub: `Invoice ${inv.no} · ${inv.svc}${inv.amt > 0 ? ` · ${formatMoney(inv.amt)}` : ""}`,
+    href: "/invoices",
+  }));

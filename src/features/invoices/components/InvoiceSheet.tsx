@@ -1,7 +1,7 @@
 import { joinParts } from "@/shared/lib/join-parts";
-import { canSend as canSendInvoice, sheetFor } from "../api/invoices";
+import { canSend as canSendInvoice, hasBusinessHeader, sheetFor } from "../api/invoices";
 import { SHEET_ID, type InvoicesState } from "../hooks/use-invoices";
-import { SheetLogo } from "./SheetLogo";
+import { BrandLogo } from "@/shared/ui/brand-logo";
 import type { BusinessCard } from "../types";
 
 const ALERT = (
@@ -18,7 +18,7 @@ export function InvoiceSheet({ s, biz }: { s: InvoicesState; biz: BusinessCard }
   const { editing, form, setForm } = s;
   const canSend = canSendInvoice(inv) && !editing;
   return (
-    <section className="fd-pnl fd-doc" aria-label="The invoice the customer gets" aria-live="polite" id={SHEET_ID} tabIndex={-1}>
+    <section className="fd-pnl fd-doc" aria-label="The invoice the customer gets" aria-live="polite" id={SHEET_ID} tabIndex={-1} style={{ outline: "none" }}>
       <button type="button" className="fd-link fd-aback" onClick={s.shut}>
         <svg className="fd-flip" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="m9 6 6 6-6 6" /></svg>
         Back to the list
@@ -31,15 +31,17 @@ export function InvoiceSheet({ s, biz }: { s: InvoicesState; biz: BusinessCard }
         </button>
       </div>
       <div className={`fd-sheet${editing ? " is-off" : ""}`}>
-        <div className="fd-dch">
-          <SheetLogo url={biz.logo} initials={biz.init} />
-          <div>
-            {biz.name ? <p className="fd-dcb"><span className="fd-h">{biz.name}</span></p> : null}
-            {biz.addr ? <p className="fd-dcs"><span className="fd-h">{biz.addr}</span></p> : null}
-            {joinParts([biz.phone, biz.email]) ? <p className="fd-dcs"><span className="fd-h">{joinParts([biz.phone, biz.email])}</span></p> : null}
-            {joinParts([biz.site, biz.hours]) ? <p className="fd-dcs"><span className="fd-h">{joinParts([biz.site, biz.hours])}</span></p> : null}
+        {hasBusinessHeader(biz) ? (
+          <div className="fd-dch">
+            <BrandLogo url={biz.logo} initials={biz.init} hideWhenEmpty />
+            <div>
+              {biz.name ? <p className="fd-dcb"><span className="fd-h">{biz.name}</span></p> : null}
+              {biz.addr ? <p className="fd-dcs"><span className="fd-h">{biz.addr}</span></p> : null}
+              {joinParts([biz.phone, biz.email]) ? <p className="fd-dcs"><span className="fd-h">{joinParts([biz.phone, biz.email])}</span></p> : null}
+              {joinParts([biz.site, biz.hours]) ? <p className="fd-dcs"><span className="fd-h">{joinParts([biz.site, biz.hours])}</span></p> : null}
+            </div>
           </div>
-        </div>
+        ) : null}
         <p className="fd-dcn">
           <span><span className="fd-h">{v.title}</span></span>
           <span className={`fd-chip ${v.chip.tone}`}><span className="fd-h">{v.chip.text}</span></span>

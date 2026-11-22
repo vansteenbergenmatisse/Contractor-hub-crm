@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, type Dispatch } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useKeptReducer } from "@/features/app-shell";
+import { ROW_PICK_EVENT, useKeptReducer } from "@/features/app-shell";
 import { createInitialState, leadsReducer } from "../api/leads-logic";
 import { MOCK_LEADS } from "../mock";
 import type { LeadsAction, LeadsState } from "../types";
@@ -14,17 +14,32 @@ export function useLeads(): [LeadsState, Dispatch<LeadsAction>] {
 }
 
 // `?row=<lead id>` from the search: when the filter hides that lead, show all leads again (as the
-// design does), on open and whenever `?row=` changes while the page is open.
-export function useRevealLead(shownIds: readonly string[], dispatch: Dispatch<LeadsAction>) {
+// design does), on open, whenever `?row=` changes while the page is open, and on every pick of a
+// result (the shell's ROW_PICK_EVENT), also the same result picked again after the owner changed the
+// filter (design logic `uxOpen` acts on every pick). A lead already shown keeps the filter.
+// `knownIds`: every lead of this page, the hand-added ones included.
+export function useRevealLead(shownIds: readonly string[], knownIds: readonly string[], dispatch: Dispatch<LeadsAction>) {
   const row = useSearchParams().get("row");
-  const shown = useRef(shownIds);
+  const latest = useRef({ shownIds, knownIds, dispatch });
   useEffect(() => {
-    shown.current = shownIds;
+    latest.current = { shownIds, knownIds, dispatch };
+  });
+  const reveal = useRef((id: string | null) => {
+    const { shownIds: shown, knownIds: known, dispatch: send } = latest.current;
+    if (!id || shown.includes(id) || !known.includes(id)) return;
+    send({ type: "filter", filter: "all" });
   });
   useEffect(() => {
-    if (!row || shown.current.includes(row) || !MOCK_LEADS.some((l) => l.id === row)) return;
-    dispatch({ type: "filter", filter: "all" });
-  }, [row, dispatch]);
+    reveal.current(row);
+  }, [row]);
+  useEffect(() => {
+    const onPick = (event: Event) => {
+      const id = (event as CustomEvent<unknown>).detail;
+      if (typeof id === "string") reveal.current(id);
+    };
+    window.addEventListener(ROW_PICK_EVENT, onPick);
+    return () => window.removeEventListener(ROW_PICK_EVENT, onPick);
+  }, []);
 }
 
 // The shell's New lead button links to /leads?add=1. Run "Add a lead" for it (the sheet on a phone,

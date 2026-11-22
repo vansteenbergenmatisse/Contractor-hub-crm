@@ -54,12 +54,11 @@ describe("validateValues", () => {
     expect(validateValues(base())).toBeNull();
   });
 
-  it("refuses every color key that is not a 6 digit hex and names the field by its label", () => {
+  it("refuses every color key that is not a 6 digit hex and names the key, in the design's words", () => {
     for (const key of COLOR_KEYS) {
       const p = validateValues({ ...base(), [key]: "green" });
       expect(p?.key).toBe(key);
-      expect(p?.message).toBe(`${labelOfKey(key)} needs a color like #2E7D32.`);
-      expect(p?.message).not.toContain("custom_values.");
+      expect(p?.message).toBe(`custom_values.${key} needs a color like #2E7D32.`);
       expect(p?.section).toBe("colors");
     }
     expect(validateValues({ ...base(), sub_color: "#abc" })?.key).toBe("sub_color");
@@ -76,7 +75,7 @@ describe("validateValues", () => {
     for (const key of ["business_logo", "business_favicon_url", "business_main_background_video_or_image"]) {
       const p = validateValues({ ...base(), [key]: "http://example.com/a.png" });
       expect(p?.key).toBe(key);
-      expect(p?.message).toBe(`${labelOfKey(key)} needs a link that starts with https://.`);
+      expect(p?.message).toBe(`custom_values.${key} needs a link that starts with https://.`);
     }
   });
 
@@ -85,8 +84,7 @@ describe("validateValues", () => {
     expect(validateValues({ ...base(), main_color: "#767676", text_on_main_color: "#FFFFFF" })).toBeNull();
     const p = validateValues({ ...base(), main_color: "#777777", text_on_main_color: "#FFFFFF" });
     expect(p?.key).toBe("main_color");
-    expect(p?.message).toContain("Main color");
-    expect(p?.message).not.toContain("custom_values.");
+    expect(p?.message).toBe("The text on your main color is hard to read. Make main_color darker.");
     expect(p?.section).toBe("colors");
   });
 
@@ -97,7 +95,7 @@ describe("validateValues", () => {
     expect(validateValues({ ...base(), main_color: "#a16b33", text_on_main_color: "#FFFFFF" })).toBeNull();
     const p = validateValues({ ...base(), main_color: "#816f99", text_on_main_color: "#FFFFFF" });
     expect(p?.key).toBe("main_color");
-    expect(p?.message).toContain("Main color");
+    expect(p?.message).toContain("main_color");
   });
 
   it("checks the main color against text_on_main_color, not against background_color", () => {
@@ -130,9 +128,9 @@ describe("validateValues against the saved values (only what the owner changed)"
     expect(s.values.main_color).toBe("#1565C0");
   });
 
-  it("refuses a changed color that is not a 6 digit hex, by its label", () => {
+  it("refuses a changed color that is not a 6 digit hex, naming its key", () => {
     const p = validateValues({ ...empty, main_hover_color: "blue" }, empty);
-    expect(p).toMatchObject({ key: "main_hover_color", section: "colors", message: "Main, pressed needs a color like #2E7D32." });
+    expect(p).toMatchObject({ key: "main_hover_color", section: "colors", message: "custom_values.main_hover_color needs a color like #2E7D32." });
     expect(validateValues({ ...empty, sub_color: "#abc" }, empty)?.key).toBe("sub_color");
   });
 
@@ -156,7 +154,7 @@ describe("validateValues against the saved values (only what the owner changed)"
 
   it("refuses a changed link that is not https", () => {
     expect(validateValues({ ...empty, business_logo: "http://x.example/a.png" }, empty)).toMatchObject({
-      key: "business_logo", message: "Logo (link to the image) needs a link that starts with https://.",
+      key: "business_logo", message: "custom_values.business_logo needs a link that starts with https://.",
     });
   });
 
@@ -166,6 +164,9 @@ describe("validateValues against the saved values (only what the owner changed)"
     expect(validateValues({ ...empty, main_color: "#777777" }, empty)).toBeNull();
     const low = { ...saved, main_color: "#777777" };
     expect(validateValues({ ...low, business_email: "a@b.example" }, low)).toBeNull();
+    // Only the text on the main color changes, to a color too close to the main color.
+    const ok = { business_name: "Test Co", main_color: "#2E7D32", text_on_main_color: "#FFFFFF" };
+    expect(validateValues({ ...ok, text_on_main_color: "#33AA33" }, ok)?.key).toBe("main_color");
   });
 });
 
@@ -207,6 +208,20 @@ describe("bad value on save", () => {
     expect(s.focus).toEqual({ key: "border_color", n: 2 });
   });
 
+  it("typing leaves the Saved line and the error as they are; only Save changes them (as in the design)", () => {
+    let s = settingsReducer(initialState(base()), { type: "save" });
+    expect(s.ok).toBe(true);
+    s = settingsReducer(s, { type: "edit", key: "business_email", value: "a@b.example" });
+    expect(s.ok).toBe(true);
+    let bad = settingsReducer(initialState(base()), { type: "edit", key: "border_color", value: "nope" });
+    bad = settingsReducer(bad, { type: "save" });
+    bad = settingsReducer(bad, { type: "edit", key: "border_color", value: "#D0DAE2" });
+    expect(bad.err?.key).toBe("border_color");
+    bad = settingsReducer(bad, { type: "save" });
+    expect(bad.err).toBeNull();
+    expect(bad.ok).toBe(true);
+  });
+
   it("a good save stores the values and clears the error", () => {
     let s = settingsReducer(initialState(base()), { type: "edit", key: "main_color", value: "#1B5E20" });
     s = settingsReducer(s, { type: "save" });
@@ -245,6 +260,17 @@ describe("settings search", () => {
     expect(f.sections.conn).toBe(true);
     for (let i = 0; i < 6; i++) expect(f.items[`conn-${i}`]).toBe(true);
     expect(f.sections.biz).toBe(false);
+  });
+
+  it("matches the whole row text of a connection, as the design does (status, steps, need)", () => {
+    expect(filterSettings("a2p").items["conn-0"]).toBe(true);
+    expect(filterSettings("admin rights").items["conn-2"]).toBe(true);
+    expect(filterSettings("done when this row says").sections.conn).toBe(true);
+    // The live row text (chip, phone number) comes from the page.
+    const f = filterSettings("not connected", [], { "conn-3": "Instagram Not connected" });
+    expect(f.items["conn-3"]).toBe(true);
+    expect(f.items["conn-0"]).toBe(false);
+    expect(filterSettings("not available yet").items["soon-0"]).toBe(true);
   });
 
   it("reports no match", () => {

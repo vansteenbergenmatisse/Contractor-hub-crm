@@ -1,6 +1,11 @@
-import { chipFor, fixFieldA11y, formatMoney, initialsOf, matchesFilter, missingField } from "../api/invoices";
+"use client";
+
+import { useRowGestures } from "@/features/app-shell";
+import { chipFor, fixFieldA11y, formatMoney, matchesFilter, missingField } from "../api/invoices";
+import { invoiceRowActions } from "../api/row-actions";
 import { viewButtonId, type InvoicesState } from "../hooks/use-invoices";
 import type { Invoice, MissingField } from "../types";
+import { InvoiceAvatar } from "./InvoiceAvatar";
 import { StatusChip } from "./StatusChip";
 
 const FIELD: Record<MissingField, { label: string; placeholder?: string; inputMode?: "decimal" }> = {
@@ -9,28 +14,22 @@ const FIELD: Record<MissingField, { label: string; placeholder?: string; inputMo
   name: { label: "Name on the invoice" },
 };
 
-function Avatar({ name }: { name: string }) {
-  if (name) return <span className="fd-av" aria-hidden="true">{initialsOf(name)}</span>;
-  return (
-    <span className="fd-av" aria-hidden="true">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
-        <rect x="3" y="5" width="18" height="14" rx="2" /><circle cx="9" cy="11" r="2.2" />
-        <path d="M5.8 16c.5-1.6 1.7-2.4 3.2-2.4s2.7.8 3.2 2.4M15 10h3.5M15 13.5h3.5" />
-      </svg>
-    </span>
-  );
-}
-
 export function InvoiceRow({ inv, s }: { inv: Invoice; s: InvoicesState }) {
   const chip = chipFor(inv, s.now);
   const miss = inv.st === "need" ? missingField(inv) : null;
   const err = s.fixError[inv.no] ?? "";
   const a11y = fixFieldA11y(inv.no, err);
-  const cls = `fd-rw${matchesFilter(s.filter, inv.st) ? "" : " is-off"}${s.selected?.no === inv.no ? " is-sel" : ""}`;
+  const shown = matchesFilter(s.filter, inv.st);
+  const cls = `fd-rw${shown ? "" : " is-off"}${s.selected?.no === inv.no ? " is-sel" : ""}`;
+  const gestures = useRowGestures<HTMLDivElement>({
+    label: inv.name || "No name yet",
+    actions: invoiceRowActions(inv, { filled: s.isFirstReady(inv.no), onView: () => s.view(inv.no), onSend: () => s.send(inv.no), onPaid: () => s.paid(inv.no), onMake: () => s.make(inv.no) }),
+    disabled: !shown,
+  });
   return (
-    <div className={cls} id={`fd-iv-r${inv.no}`} data-row-id={`invoice-${inv.no}`}>
+    <div {...gestures} className={cls} id={`fd-iv-r${inv.no}`} data-row-id={`invoice-${inv.no}`} tabIndex={0}>
       <div className="fd-rm">
-        <Avatar name={inv.name} />
+        <InvoiceAvatar name={inv.name} />
         <div className="fd-rbx">
           <p className="fd-rn"><span className="fd-h">{inv.name || "No name yet"}</span></p>
           <p className="fd-rsb">{`Invoice ${inv.no} · `}<span className="fd-h">{inv.svc}</span></p>

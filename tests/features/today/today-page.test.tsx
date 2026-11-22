@@ -161,7 +161,9 @@ describe("Greeting and money", () => {
   });
 
   it("renders the money cards with late chips carrying a word", () => {
-    const out = renderToStaticMarkup(<MoneyCards />);
+    // A fixed "now": without one the server render leaves the due days out (they depend on the
+    // browser's time zone and appear after hydration).
+    const out = renderToStaticMarkup(<MoneyCards now={new Date()} />);
     expect(out).toContain("14 days late");
     expect(out).toContain('role="img"');
   });

@@ -106,6 +106,9 @@ describe("InvoicesPage markup", () => {
     expect(empty).toContain("Pay online with the link in this message.");
     // Neither a logo nor a name: no empty colored tile.
     expect(empty).not.toContain('class="fd-logo');
+    // No business values at all: no empty header row (and so no divider) above the title.
+    expect(empty).not.toContain('class="fd-dch"');
+    expect(html).toContain('class="fd-dch"');
   });
   it("shows the initials tile when the business has a name", () => {
     expect(html).toContain('<span class="fd-logo" aria-hidden="true"><span class="fd-h">TR</span></span>');

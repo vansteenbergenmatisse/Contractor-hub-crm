@@ -1,38 +1,23 @@
 "use client";
 
-import { useState } from "react";
 import { owedRows } from "../api/selectors";
+import { useClientNow } from "../hooks/use-client-now";
 import { BOOKED, MONEY_OWED, QUOTES_OUT } from "../mock";
-import type { MiniRow } from "../types";
-import { Chip } from "./Chip";
 import { Glyph } from "./Glyph";
+import { MiniList } from "./MiniList";
+import { MoneyHead } from "./MoneyHead";
 
-function Mini({ rows }: { rows: readonly MiniRow[] }) {
-  return (
-    <ul className="fd-mini">
-      {rows.map((row) => (
-        <li key={row.name}>
-          <span className="fd-mn">{row.name}</span>
-          {row.late ? <Chip tone="bad" icon="alert">{row.late}</Chip> : <span className="fd-mq">{row.note}</span>}
-          <span className="fd-ma">{row.amount}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function Head({ id, title }: { id: string; title: string }) {
-  return <div className="fd-mh"><h2 className="fd-ml" id={id}>{title}</h2><Glyph name="chevron" size={15} /></div>;
-}
-
-export function MoneyCards() {
-  // The same "today" the Invoices page dates its sample invoices from.
-  const [now] = useState(() => new Date());
+// `now` is for tests; the page passes nothing.
+export function MoneyCards({ now: fixed }: { now?: Date } = {}) {
+  // The same "today" the Invoices page dates its sample invoices from. Null on the server and while
+  // hydrating, so the due days ("Due Nov 22", "6 days late") never differ between the server's and the
+  // browser's time zone: they show right after hydration.
+  const now = useClientNow(fixed);
   const owed = owedRows(MONEY_OWED.rows, now);
   return (
     <div className="fd-money">
       <section className="fd-card fd-fill fd-in" style={{ "--i": 8 } as React.CSSProperties} aria-labelledby="fd-m1">
-        <Head id="fd-m1" title="Booked this week" />
+        <MoneyHead id="fd-m1" title="Booked this week" />
         <p className="fd-mv">{BOOKED.total}</p>
         <p className="fd-up"><Glyph name="trend" size={15} />{BOOKED.trend}</p>
         <div className="fd-bars" role="img" aria-label={BOOKED.aria}>
@@ -42,15 +27,15 @@ export function MoneyCards() {
         </div>
       </section>
       <section className="fd-card fd-in" style={{ "--i": 9 } as React.CSSProperties} aria-labelledby="fd-m2">
-        <Head id="fd-m2" title="Quotes out" />
+        <MoneyHead id="fd-m2" title="Quotes out" />
         <p className="fd-mv">{QUOTES_OUT.total}</p>
-        <Mini rows={QUOTES_OUT.rows} />
+        <MiniList rows={QUOTES_OUT.rows} />
         <p className="fd-mf">{QUOTES_OUT.foot}</p>
       </section>
       <section className="fd-card fd-in" style={{ "--i": 10 } as React.CSSProperties} aria-labelledby="fd-m3">
-        <Head id="fd-m3" title="Money owed" />
+        <MoneyHead id="fd-m3" title="Money owed" />
         <p className="fd-mv">{MONEY_OWED.total}</p>
-        <Mini rows={owed} />
+        <MiniList rows={owed} />
         <p className="fd-mf">{MONEY_OWED.foot}</p>
       </section>
     </div>

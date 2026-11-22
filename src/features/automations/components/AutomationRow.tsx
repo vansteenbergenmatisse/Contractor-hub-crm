@@ -1,5 +1,8 @@
+"use client";
+
+import { useRowGestures, type RowAction } from "@/features/app-shell";
 import type { Automation } from "../types";
-import { STOP, WHEN, runLabel, whoLabel } from "../api/automations";
+import { STOP, WHEN, rowActionSpecs, runLabel, whoLabel } from "../api/automations";
 
 const svg = { width: 13, height: 13, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2.2, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true, focusable: false } as const;
 
@@ -17,9 +20,14 @@ type Props = {
 };
 
 // One workflow row: name, who acts, runs this week, When / Does / Stops, the switch and the buttons.
+// Swipe right presses the switch; a long press, right-click or the menu key opens the row menu
+// (design uxActs / uxItems).
 export function AutomationRow({ a, does, selected, asking, onToggle, onEdit, onAsk, onRemove, onKeep }: Props) {
+  const run = { toggle: onToggle, edit: onEdit, ask: onAsk, remove: onRemove, keep: onKeep };
+  const actions: RowAction[] = rowActionSpecs(a, asking).map(({ key, ...spec }) => ({ ...spec, onAction: run[key] }));
+  const gestures = useRowGestures<HTMLDivElement>({ label: a.name, actions });
   return (
-    <div className={`fd-rw${selected ? " is-sel" : ""}`} id={`fd-au-${a.id}`}>
+    <div {...gestures} tabIndex={0} className={`fd-rw${selected ? " is-sel" : ""}`} id={`fd-au-${a.id}`}>
       <div className="fd-rm">
         <div className="fd-rbx">
           <div className="fd-rtg fd-auh">

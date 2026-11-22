@@ -19,6 +19,8 @@ export type Invoice = {
   // Local calendar days, "YYYY-MM-DD".
   dueOn: string | null;
   paidOn: string | null;
+  // Mark paid keeps whether the invoice was "Sent just now", so an Undo brings back the same chip.
+  sentJustNow?: boolean;
 };
 
 export type Tone = "is-warn" | "is-plain" | "is-ok" | "is-bad" | "is-hot";
@@ -47,3 +49,18 @@ export type SheetView = {
   total: string;
   chip: Chip;
 };
+
+// The kept state of the Invoices page (key "invoices"), shared with Payments and Today.
+export type InvoicesKeptState = {
+  now: Date;
+  invoices: Invoice[];
+  sel: number;
+  doc: boolean;
+  editing: boolean;
+  editError: string;
+  form: EditForm;
+  filter: Filter;
+  fixText: Record<number, string>;
+  fixError: Record<number, string>;
+};
+export type InvoicesPatch = Partial<InvoicesKeptState> | ((s: InvoicesKeptState) => Partial<InvoicesKeptState>);

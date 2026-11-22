@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
-import { useKeptReducer, useRowFocus, useShell } from "@/features/app-shell";
-import { canSend, editInvoice, fixMissing, markPaid, markSent, matchesFilter, rowFillNo, sendRequest } from "../api/invoices";
-import { buildMockInvoices } from "../mock";
+import { useRowFocus, useShell } from "@/features/app-shell";
+import { canSend, editInvoice, fixMissing, markPaidPatch, markSentPatch, rowFillNo, sendRequest } from "../api/invoices";
 import type { EditForm, Filter, Invoice } from "../types";
+import { useInvoiceLink } from "./use-invoice-link";
+import { useInvoicesKept } from "./use-invoices-kept";
 
 export const SHEET_ID = "fd-iv-sheet";
 export const viewButtonId = (no: number) => `fd-iv-v${no}`;
@@ -19,54 +19,23 @@ const isOneColumn = () => {
   try { return window.matchMedia("(min-width: 1024px) and (max-width: 1199px)").matches; } catch { return false; }
 };
 
-type State = {
-  now: Date;
-  invoices: Invoice[];
-  sel: number;
-  doc: boolean;
-  editing: boolean;
-  editError: string;
-  form: EditForm;
-  filter: Filter;
-  fixText: Record<number, string>;
-  fixError: Record<number, string>;
-};
-// A change is a patch of the state, or a function of the latest state (for the send timer's onDone,
-// which runs 20 seconds later).
-type Patch = Partial<State> | ((s: State) => Partial<State>);
-
-const reducer = (s: State, patch: Patch): State => ({ ...s, ...(typeof patch === "function" ? patch(s) : patch) });
-
-const init = (now: Date): State => {
-  const invoices = buildMockInvoices(now);
-  return {
-    now, invoices, sel: invoices[0]?.no ?? 0, doc: false, editing: false, editError: "",
-    form: { name: "", addr: "", svc: "", price: "" }, filter: "all", fixText: {}, fixError: {},
-  };
-};
-
 const swap = (list: Invoice[], next: Invoice) => list.map((i) => (i.no === next.no ? next : i));
 
 // All screen state of the invoices page. Local only: nothing is fetched, saved or sent. The state is
 // kept while the signed-in shell is mounted, so an invoice sent or paid stays that way across pages.
 export function useInvoices() {
   const shell = useShell();
-  const [state, set] = useKeptReducer("invoices", reducer, new Date(), init);
-  const { now, invoices, sel, doc, editing, editError, form, filter, fixText, fixError } = state;
+  const [state, set] = useInvoicesKept();
+  const { now, invoices, sel, doc, editing, editError, form, fixText, fixError } = state;
 
   const selected = invoices.find((i) => i.no === sel) ?? invoices[0];
   const fillNo = rowFillNo(invoices);
 
-  // A link (?row=invoice-<no>, from search) brings that row into view and flashes it (useRowFocus),
-  // on open and whenever the link changes while the page is open. A filter that hides the row is
-  // cleared first, as in the design.
-  const rowLink = useRowFocus(invoices.map((i) => `invoice-${i.no}`)) ?? "";
-  useEffect(() => {
-    const linked = invoices.find((i) => `invoice-${i.no}` === rowLink);
-    if (linked && !matchesFilter(filter, linked.st)) set({ filter: "all" });
-    // Runs when the link changes; a later filter press must not be undone.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rowLink]);
+  // A link (?row=invoice-<no>, from search) shows the row, with every row when a filter hides it,
+  // and useRowFocus scrolls to it and flashes it, on open, when the link changes and on a repeat pick.
+  // The list renders with `filter` (already "all" in the commit the flash measures the row).
+  const filter = useInvoiceLink(state, () => set({ filter: "all" }));
+  useRowFocus(invoices.map((i) => `invoice-${i.no}`));
 
   return {
     now, invoices, selected, doc, editing, editError, form, filter, fixText, fixError,
@@ -112,13 +81,13 @@ export function useInvoices() {
       const inv = invoices.find((i) => i.no === no);
       if (!inv || !canSend(inv)) return;
       shell.sendTimer(
-        sendRequest(inv, () => {
-          set((s) => ({ invoices: s.invoices.map((i) => (i.no === no ? markSent(i, new Date()) : i)), sel: no }));
-        }),
+        // markSent changes only a still-ready invoice, so a late onDone never undoes a change made
+        // during the count.
+        sendRequest(inv, () => set(markSentPatch(no, new Date()))),
       );
     },
     paid(no: number) {
-      set((s) => ({ invoices: s.invoices.map((i) => (i.no === no ? markPaid(i, new Date()) : i)), sel: no }));
+      set((s) => ({ ...markPaidPatch(no, new Date())(s), sel: no }));
     },
     startEdit() {
       if (!selected) return;

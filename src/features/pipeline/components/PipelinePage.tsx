@@ -1,6 +1,8 @@
 "use client";
 
-import { PageAction, useRowFocus } from "@/features/app-shell";
+import { useMemo, useRef } from "react";
+import { PageAction, useHorizontalSwipe, useRowFocus, useSearchRows } from "@/features/app-shell";
+import { buildSearchRows } from "../api/send";
 import { useRevealRow } from "../hooks/use-reveal-row";
 import { usePipelineBoard } from "../hooks/use-pipeline-board";
 import { STAGES } from "../api/stages";
@@ -17,22 +19,13 @@ import {
   stubView,
 } from "../api/view";
 import { MOCK_HIDDEN_COUNTS } from "../mock";
+import { Arrow } from "./Arrow";
 import { KanbanCard } from "./KanbanCard";
 import { MoveStub } from "./MoveStub";
 import { StageEmpty } from "./StageEmpty";
 import { StageHeader } from "./StageHeader";
 import { StageMore } from "./StageMore";
 import { StageMap } from "./StageMap";
-
-// A right chevron. The CSS turns it around inside a "Previous stage" button (.fd-sprev svg), so
-// that button points left at every width.
-function Arrow({ size }: { size: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
-      <path d="m9 6 6 6-6 6" />
-    </svg>
-  );
-}
 
 // The Pipeline page body: 11 stages in 4 groups. Computer: group tabs and columns. Phone: the list
 // of stages, tap one to see its cards. Moving a card changes its stage on screen only (Phase 2).
@@ -46,7 +39,14 @@ export function PipelinePage() {
   // A search result opens /pipeline?row=pipeline-N: open the stage the card is in now, then bring
   // the card into view. Only the cards of the open stage are offered, so the focus waits until
   // that stage shows.
-  useRevealRow(state.sg, b.pick);
+  useRevealRow(state, b.pick);
+  // Search finds every card in the stage it is in now.
+  const found = useMemo(() => buildSearchRows(cards, state.sg), [cards, state.sg]);
+  useSearchRows("pipeline", found);
+  // Phone, one stage open: a swipe left on the cards goes to the next stage, right to the one before
+  // (design logic `uxSwipe2`, which presses the stage bar's arrows).
+  const grid = useRef<HTMLDivElement | null>(null);
+  useHorizontalSwipe(grid, { onSwipeLeft: b.next, onSwipeRight: b.prev, enabled: state.open });
   useRowFocus(cards.flatMap((_, i) => (state.sg[i] === state.stg ? [`pipeline-${i}`] : [])));
 
   return (
@@ -54,13 +54,13 @@ export function PipelinePage() {
       {state.open ? (
         <PageAction>
           <span className="fx-accg">
-            <button type="button" className={"fd-ibtn fd-sprev" + (b.isFirst ? " is-dis" : "")} aria-label="Previous stage" disabled={b.isFirst} onClick={b.prev}>
+            <button type="button" className={"fd-ibtn fd-sprev" + (b.isFirst ? " is-dis" : "")} aria-label="Previous stage" aria-disabled={b.isFirst || undefined} onClick={b.prev}>
               <Arrow size={20} />
             </button>
             <span className="fx-accst" aria-live="polite">
               <b>{STAGES[state.stg].name}</b> <span>{counts[state.stg]}</span>
             </span>
-            <button type="button" className={"fd-ibtn" + (b.isLast ? " is-dis" : "")} aria-label="Next stage" disabled={b.isLast} onClick={b.next}>
+            <button type="button" className={"fd-ibtn" + (b.isLast ? " is-dis" : "")} aria-label="Next stage" aria-disabled={b.isLast || undefined} onClick={b.next}>
               <Arrow size={20} />
             </button>
           </span>
@@ -87,10 +87,10 @@ export function PipelinePage() {
           <span className="fd-kcn">{counts[state.stg]}</span>
         </p>
         <span className="fd-sarr">
-          <button type="button" className={"fd-ibtn fd-sprev" + (b.isFirst ? " is-dis" : "")} aria-label="Previous stage" disabled={b.isFirst} onClick={b.prev}>
+          <button type="button" className={"fd-ibtn fd-sprev" + (b.isFirst ? " is-dis" : "")} aria-label="Previous stage" aria-disabled={b.isFirst || undefined} onClick={b.prev}>
             <Arrow size={20} />
           </button>
-          <button type="button" className={"fd-ibtn" + (b.isLast ? " is-dis" : "")} aria-label="Next stage" disabled={b.isLast} onClick={b.next}>
+          <button type="button" className={"fd-ibtn" + (b.isLast ? " is-dis" : "")} aria-label="Next stage" aria-disabled={b.isLast || undefined} onClick={b.next}>
             <Arrow size={20} />
           </button>
         </span>
@@ -100,12 +100,12 @@ export function PipelinePage() {
         <div className="fd-kls" aria-hidden="true">
           {line.map((sel, j) => <i key={j} className={sel ? "is-sel" : ""} />)}
         </div>
-        <div className={gridClass(state)}>
+        <div ref={grid} className={gridClass(state)}>
           {STAGES.map((st) => (
             <StageHeader key={st.index} stage={st.index} className={headerClass(state, st.index)} count={counts[st.index]} countClassName={countClass(state, st.index)} />
           ))}
           {cards.map((_, i) => {
-            const view = cardView(state, cards, i, layout);
+            const view = cardView(state, cards, i, layout, b.quotes);
             return (
               <KanbanCard
                 key={i}

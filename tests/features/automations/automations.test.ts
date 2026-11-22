@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   MADE_BY_YOU, MAX_NEW, STOP, WAIT, WHEN, askRemove, closeEdit, doesText, draftOf, emptyDraft, fillBusiness, groupByFolder, initialState, keep,
-  openEdit, openNew, remove, returnTarget, runLabel, save, sendTest, testLine, toggle, totals, undo, whoLabel,
+  openEdit, openNew, remove, returnTarget, rowActionSpecs, runLabel, save, sendTest, testLine, toggle, totals, undo, whoLabel,
 } from "../../../src/features/automations/api/automations";
 import { mockAutomations } from "../../../src/features/automations/mock";
 
@@ -67,10 +67,22 @@ describe("grouping by HighLevel folder", () => {
     expect(g.map((x) => x.folder)).toEqual(["Lead Capture", "Instant Replies", "Follow-Up + Booking", "Reviews", "Campaigns", "AI Agents"]);
     expect(g.find((x) => x.folder === "Follow-Up + Booking")!.items).toHaveLength(9);
   });
-  it("hides an emptied folder and shows Made by you only when it has rows", () => {
+  it("keeps an emptied folder's heading (the design's static headings) and shows Made by you only when it has rows", () => {
     let s = fresh();
     s = remove(s, byName(s, "Lead capture").id);
-    expect(groupByFolder(s.items).map((x) => x.folder)).not.toContain("Lead Capture");
+    const lead = groupByFolder(s.items).find((x) => x.folder === "Lead Capture");
+    expect(lead).toBeDefined();
+    expect(lead!.items).toHaveLength(0);
+    expect(groupByFolder(s.items).map((x) => x.folder)).not.toContain(MADE_BY_YOU);
+    // every row removed: all six headings stay, Made by you stays hidden
+    let all = fresh();
+    for (const a of all.items) all = remove(all, a.id);
+    expect(groupByFolder(all.items).map((x) => x.folder)).toEqual(["Lead Capture", "Instant Replies", "Follow-Up + Booking", "Reviews", "Campaigns", "AI Agents"]);
+  });
+  it("hides Made by you again when its only row is removed", () => {
+    let s = save(openNew(fresh()), { ...emptyDraft(), name: "Spring offer" });
+    expect(groupByFolder(s.items).at(-1)!.folder).toBe(MADE_BY_YOU);
+    s = remove(s, s.items.at(-1)!.id);
     expect(groupByFolder(s.items).map((x) => x.folder)).not.toContain(MADE_BY_YOU);
   });
 });
@@ -202,14 +214,13 @@ const BIZ = {
 const NONE = { business_name: "", business_owner_name: "", business_main_keyword: "", business_phone_number: "", review_url: "" };
 
 describe("send me a test", () => {
-  it("shows the line on screen and sends nothing", () => {
+  it("shows the design's line with the business phone and sends nothing", () => {
     expect(sendTest(fresh()).test).toBe(true);
-    const line = testLine("Hi {first name}, {owner} from {business}.", BIZ);
-    expect(line).toContain("Would text the business phone");
-    expect(line).toContain(BIZ.business_phone_number);
-    expect(line).toContain(`${BIZ.business_owner_name} from ${BIZ.business_name}`);
-    expect(line).toContain("{first name}");
-    expect(line).toContain("Nothing is sent");
+    expect(testLine(BIZ)).toBe(`Test text sent to ${BIZ.business_phone_number}.`);
+    expect(testLine({ ...BIZ, business_phone_number: "  +1 (555) 010-0000 " })).toBe("Test text sent to +1 (555) 010-0000.");
+  });
+  it("with no business phone shows no made-up number and no dangling 'to'", () => {
+    expect(testLine(NONE)).toBe("Test text sent.");
   });
   it("fills business details only from the business it is given", () => {
     expect(fillBusiness("{main keyword} {unknown}", BIZ)).toBe("Roofing {unknown}");
@@ -222,11 +233,10 @@ describe("send me a test", () => {
       "Hi {first name}, would you leave {business} a quick review? {review link}",
       "{main keyword} help, {first name}",
     ];
-    const out = [...texts.map((x) => fillBusiness(x, NONE)), testLine(texts[0], NONE)].join("\n");
+    const out = [...texts.map((x) => fillBusiness(x, NONE)), testLine(NONE)].join("\n");
     for (const bad of ["Northway", "Mike", "undefined", "null", "  ", " ,", " ()", "this is  "]) expect(out).not.toContain(bad);
     expect(fillBusiness(texts[0], NONE)).toBe("Hi {first name}, this is our team. Thanks for reaching out. How can we help?");
     expect(fillBusiness(texts[1], NONE)).toBe("You are booked, {first name}. Our team comes {day} at {time}.");
-    expect(testLine("", NONE)).toBe("Would text the business phone. Nothing is sent in this preview.");
   });
 });
 
@@ -237,17 +247,22 @@ describe("seasonal offer and referral reward", () => {
   it("fills the offer and the reward when the business has them", () => {
     const biz = { ...BIZ, seasonal_offer_text: "10% off in spring", referral_reward_text: "You both get $25." };
     expect(doesText('Texts old leads your seasonal offer: "{seasonal offer}"', biz)).toBe('Texts old leads your seasonal offer: "10% off in spring"');
-    expect(testLine("Hi {first name}, {seasonal offer}", biz)).toContain("The text reads: Hi {first name}, 10% off in spring");
-    expect(testLine("Reply YES. {referral reward}", biz)).toContain("Reply YES. You both get $25.");
+    expect(doesText("Hi {first name}, {seasonal offer}", biz)).toBe("Hi {first name}, 10% off in spring");
+    expect(doesText("Reply YES. {referral reward}", biz)).toBe("Reply YES. You both get $25.");
   });
   it("leaves a missing offer or reward out: no raw braces, no placeholder note, no made-up value", () => {
     expect(doesText('Texts old leads your seasonal offer: "{seasonal offer}"', NONE)).toBe("Texts old leads your seasonal offer.");
-    const line = testLine("Hi {first name}, {seasonal offer}", NONE);
-    expect(line).toContain("The text reads: Hi {first name}");
+    const line = doesText("Hi {first name}, {seasonal offer}", NONE);
+    expect(line).toBe("Hi {first name}");
     expect(line).not.toMatch(/\{seasonal offer\}|no seasonal offer set|""/);
-    const reward = testLine("Hi {first name}, know someone? Reply YES. {referral reward}", NONE);
-    expect(reward).toContain("Reply YES.");
+    const reward = doesText("Hi {first name}, know someone? Reply YES. {referral reward}", NONE);
+    expect(reward).toBe("Hi {first name}, know someone? Reply YES.");
     expect(reward).not.toMatch(/\{referral reward\}|no referral reward set/);
+    // a missing reward after a comma reads as a full sentence (mutation P25)
+    expect(doesText("Thanks, {referral reward}", NONE)).toBe("Thanks.");
+    // a text with no offer or reward token is left exactly as it is: no period added (mutation P26)
+    expect(doesText("Hi {first name}", NONE)).toBe("Hi {first name}");
+    expect(doesText("Thanks, {first name}", NONE)).toBe("Thanks, {first name}");
     expect(doesText('Texts old leads your seasonal offer: "{seasonal offer}"', { ...NONE, seasonal_offer_text: "   " })).toBe("Texts old leads your seasonal offer.");
     expect(doesText("One text the day after.", NONE)).toBe("One text the day after.");
   });
@@ -272,5 +287,23 @@ describe("where the cursor goes back to after the editor closes", () => {
     const e = openEdit(fresh(), id);
     expect(returnTarget(e.edit, e.items, remove(e, id).items)).toBeNull();
     expect(returnTarget(null, e.items, e.items)).toBeNull();
+  });
+});
+
+describe("row swipe and menu actions (design uxActs / uxItems)", () => {
+  it("offers the switch (swipe right), Edit, and Remove last as the danger item", () => {
+    const a = byName(fresh(), "Owner ping");
+    expect(rowActionSpecs(a, false)).toEqual([
+      { label: "Owner ping", key: "toggle", swipe: "right" },
+      { label: "Edit", key: "edit" },
+      { label: "Remove", key: "ask", tone: "danger" },
+    ]);
+  });
+  it("while asking Remove it?, offers the switch, Keep and Yes, remove", () => {
+    const a = byName(fresh(), "Owner ping");
+    expect(rowActionSpecs(a, true).map((x) => [x.label, x.key, x.tone ?? "", x.swipe ?? ""])).toEqual([
+      ["Owner ping", "toggle", "", "right"], ["Keep", "keep", "", ""], ["Yes, remove", "remove", "danger", ""],
+    ]);
+    expect(rowActionSpecs(a, true).some((x) => (x.swipe as string | undefined) === "left")).toBe(false);
   });
 });

@@ -3,8 +3,11 @@ export { QuotesPage } from "./components/QuotesPage";
 export { QuoteSheet } from "./components/QuoteSheet";
 export { searchRows, SEED_QUOTES, mockBuildLines } from "./mock";
 export {
-  MAX_LINES, amountLabel, checkBuild, checkEdit, filterCounts, formatMoney, initialState, isVisible, parsePrice, quotesReducer,
-  rowFillId, rowFromSearch, sendRequest, statusText, totals, uploadName,
+  MAX_LINES, amountLabel, buildDraftOf, canApprove, checkBuild, checkEdit, chipClass, draftOf, filterCounts, formatMoney, initialState, isVisible,
+  parsePrice, quoteByName, quoteHref, quoteSearchRows, quotesReducer, rowFillId, rowFromSearch, sendRequest, statusText, sumLines, totals, uploadName,
 } from "./api/quotes";
-export { sheetBusiness } from "./api/sheet-business";
-export type { QuotesAction, QuotesState } from "./types";
+export { quoteRowActions } from "./api/row-actions";
+export type { QuoteRowHandlers } from "./api/row-actions";
+export { hasBusinessHeader, sheetBusiness } from "./api/sheet-business";
+export { QUOTES_KEY, useQuotesKept } from "./hooks/use-quotes";
+export type { BuildDraft, Quote, QuoteLine, QuoteOpen, QuoteStatus, QuotesAction, QuotesState } from "./types";

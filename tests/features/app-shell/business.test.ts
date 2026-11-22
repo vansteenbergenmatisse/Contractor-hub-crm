@@ -8,11 +8,13 @@ describe("buildBusiness", () => {
     });
   });
 
-  it("falls back to plain words for empty or blank values and never throws", () => {
+  it("leaves empty or blank values empty (no made-up words) and never throws", () => {
     const b = buildBusiness({ name: "  ", owner: null });
-    expect(b.name).toBe("Your business");
-    expect(b.owner).toBe("Owner");
-    expect(b.first).toBe("Owner");
+    expect(b.name).toBe("");
+    expect(b.init).toBe("");
+    expect(b.owner).toBe("");
+    expect(b.ownerInit).toBe("");
+    expect(b.first).toBe("");
     expect(b.tag).toBe("");
   });
 

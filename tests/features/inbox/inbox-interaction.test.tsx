@@ -4,7 +4,7 @@ import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { setInboxCount, current } = vi.hoisted(() => ({ setInboxCount: vi.fn(), current: { business: null as unknown } }));
+const { setInboxCount, current, kept } = vi.hoisted(() => ({ setInboxCount: vi.fn(), current: { business: null as unknown }, kept: { keys: new Set<string>() } }));
 vi.mock("@/features/app-shell", async (orig) => {
   const real = await orig<typeof import("@/features/app-shell")>();
   return {
@@ -13,6 +13,11 @@ vi.mock("@/features/app-shell", async (orig) => {
     usePushed: vi.fn(),
     useBusiness: () => current.business as import("@/features/app-shell").Business,
     useBusinessValues: () => real.businessValues(current.business as import("@/features/app-shell").Business),
+    // The real hook, recording the key the Inbox keeps its state under.
+    useKeptReducer: ((...args: Parameters<typeof real.useKeptReducer>) => {
+      kept.keys.add(args[0]);
+      return real.useKeptReducer(...args);
+    }) as typeof real.useKeptReducer,
   };
 });
 
@@ -46,6 +51,9 @@ describe("Inbox: Escape on a phone", () => {
     render(<InboxPage />);
     await user.click(row("Jordan Reyes"));
     expect(ix()).toHaveClass("is-open");
+    // focus away from the row first, so only the focus-return code can bring it back
+    composer().focus();
+    expect(row("Jordan Reyes")).not.toHaveFocus();
     await user.keyboard("{Escape}");
     expect(ix()).not.toHaveClass("is-open");
     expect(row("Jordan Reyes")).toHaveFocus();
@@ -122,7 +130,8 @@ describe("Inbox: badge and kept state", () => {
     render(<InboxPage />);
     expect(setInboxCount).toHaveBeenLastCalledWith(3);
     await user.click(row("Jordan Reyes"));
-    await user.type(composer(), "Saturday at 10 works{Enter}");
+    await user.type(composer(), "Saturday at 10 works");
+    await user.click(screen.getByRole("button", { name: "Send" }));
     expect(row("Jordan Reyes")).toHaveTextContent("You: Saturday at 10 works");
     expect(setInboxCount).toHaveBeenLastCalledWith(2);
   });
@@ -140,7 +149,8 @@ describe("Inbox: badge and kept state", () => {
     const user = userEvent.setup();
     render(<Pages />);
     await user.click(row("Jordan Reyes"));
-    await user.type(composer(), "Saturday at 10 works{Enter}");
+    await user.type(composer(), "Saturday at 10 works");
+    await user.click(screen.getByRole("button", { name: "Send" }));
     await user.click(screen.getByRole("button", { name: "switch page" }));
     expect(screen.getByText("other page")).toBeInTheDocument();
     setInboxCount.mockClear();

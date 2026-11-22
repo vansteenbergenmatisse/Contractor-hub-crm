@@ -62,7 +62,7 @@ describe("settingsValuesFrom (server allowlist)", () => {
   it("the deny rule refuses a secret-looking key even when the list would let it through", () => {
     const hostile = [
       "business_main_map_embed", "business_hours_token", "business_bank_account_number", "business_main_stripe_key",
-      "business_main_private_key", "business_main_credentials",
+      "business_main_private_key", "business_main_credentials", "0_business_name", "_business_name",
     ];
     const list = new Set([...hostile, "business_name", "business_main_keyword"]);
     for (const k of hostile) expect(isKeyAllowedBy(k, list), k).toBe(false);

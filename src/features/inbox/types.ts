@@ -55,12 +55,18 @@ export type InboxState = {
   bumps: number;
   swaps: number;
   event: InboxEvent;
+  // What is typed in the reply box. Kept with the page, so it survives moving to another page (as in the
+  // design); cleared when another conversation opens or the message is sent.
+  draft: string;
 };
 
 export type InboxAction =
   | { type: "open"; id: string }
   | { type: "send"; text: string }
   | { type: "toggleDone" }
+  // A row's own Mark done / Flag for reply (swipe left or its menu), whichever conversation is open.
+  | { type: "toggleNeed"; id: string }
+  | { type: "draft"; text: string }
   | { type: "toList" }
   | { type: "filter"; filter: Filter }
   | { type: "replyTo"; id: string }

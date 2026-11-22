@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  MAX_LINES, SEED_QUOTES, amountLabel, rowFillId, rowFromSearch, sheetBusiness, checkBuild, checkEdit, filterCounts, formatMoney, initialState, isVisible, mockBuildLines, parsePrice,
+  MAX_LINES, SEED_QUOTES, amountLabel, buildDraftOf, hasBusinessHeader, quoteByName, quoteHref, quoteRowActions, quoteSearchRows, rowFillId, rowFromSearch, sheetBusiness, checkBuild, checkEdit, filterCounts, formatMoney, initialState, isVisible, mockBuildLines, parsePrice,
   quotesReducer, searchRows, sendRequest, statusText, totals, uploadName, type QuotesAction, type QuotesState,
 } from "@/features/quotes";
 
@@ -194,12 +194,19 @@ describe("the filled button on the list (design: the first waiting quote, at eve
 });
 
 describe("opening a row from a link (?row=)", () => {
-  it("a quote that needs a price is selected so the owner can type it", () => {
-    expect(rowFromSearch("?row=quote-q1", fresh().quotes)).toEqual({ id: "q1", see: false });
+  // Design `uxOpen`: a search result only brings its row into view; it opens nothing.
+  it("a search link names the row and asks for nothing more", () => {
+    expect(rowFromSearch("?row=quote-q1", fresh().quotes)).toEqual({ id: "q1", open: null });
+    expect(rowFromSearch("?row=quote-q0", fresh().quotes)).toEqual({ id: "q0", open: null });
+    expect(rowFromSearch("?x=1&row=quote-q3", fresh().quotes)).toEqual({ id: "q3", open: null });
   });
-  it("a built quote opens its sheet", () => {
-    expect(rowFromSearch("?row=quote-q0", fresh().quotes)).toEqual({ id: "q0", see: true });
-    expect(rowFromSearch("?x=1&row=quote-q3", fresh().quotes)).toEqual({ id: "q3", see: true });
+  it("a Pipeline link asks for the sheet (See quote) or the price field (Add price)", () => {
+    expect(rowFromSearch("?row=quote-q0&open=sheet", fresh().quotes)).toEqual({ id: "q0", open: "sheet" });
+    expect(rowFromSearch("?row=quote-q1&open=price", fresh().quotes)).toEqual({ id: "q1", open: "price" });
+    expect(rowFromSearch("?row=quote-q1&open=bogus", fresh().quotes)).toEqual({ id: "q1", open: null });
+    expect(quoteHref("q1", "price")).toBe("/quotes?row=quote-q1&open=price");
+    expect(quoteHref("q0", "sheet")).toBe("/quotes?row=quote-q0&open=sheet");
+    expect(quoteHref("q2")).toBe("/quotes?row=quote-q2");
   });
   it("an unknown or missing row does nothing", () => {
     expect(rowFromSearch("?row=quote-q99", fresh().quotes)).toBeNull();
@@ -210,6 +217,34 @@ describe("opening a row from a link (?row=)", () => {
     const s = run(fresh(), { type: "select", id: "q1" });
     expect(s.selectedId).toBe("q1");
     expect(s.doc).toBe(false);
+  });
+  it("select (Add price) closes an open sheet and shows every row, as design addPrice", () => {
+    const s = run(fresh(), { type: "filter", filter: "sent" }, { type: "see", id: "q2" }, { type: "edit-start" }, { type: "select", id: "q1" });
+    expect(s).toMatchObject({ selectedId: "q1", doc: false, filter: "all", editing: false });
+  });
+});
+
+describe("drafts kept in the page state", () => {
+  it("the Build quote fields start with the lead's service and keep what the owner typed", () => {
+    const s0 = fresh();
+    expect(buildDraftOf(s0, get(s0, "q1"))).toEqual({ service: "Gutter repair", price: "", errors: { service: "", price: "" } });
+    const s1 = run(s0, { type: "build-draft", id: "q1", price: "9" }, { type: "build-draft", id: "q1", service: "Gutter fix" });
+    expect(buildDraftOf(s1, get(s1, "q1"))).toMatchObject({ service: "Gutter fix", price: "9" });
+    const s2 = run(s1, { type: "build", id: "q1", low: 9, lines: mockBuildLines("Gutter fix", 9) });
+    expect(s2.builds).toEqual({});
+  });
+  it("edit-start fills the edit draft from the quote; the draft and its error stay until Save or Cancel", () => {
+    let s = run(fresh(), { type: "see", id: "q0" }, { type: "edit-start" });
+    expect(s.draft.name).toBe("Derek Olsen");
+    expect(s.draft.lines).toHaveLength(3);
+    s = run(s, { type: "edit-draft", draft: { ...s.draft, name: "D. Olsen" } }, { type: "edit-error", message: "Enter the customer name." });
+    expect(s).toMatchObject({ editing: true, draft: { name: "D. Olsen" }, editError: "Enter the customer name." });
+    s = run(s, { type: "edit-cancel" });
+    expect(s).toMatchObject({ editing: false, editError: "" });
+  });
+  it("an edit draft is ignored when not editing", () => {
+    const s = fresh();
+    expect(run(s, { type: "edit-draft", draft: { name: "x", lines: [] } })).toBe(s);
   });
 });
 
@@ -223,5 +258,36 @@ describe("the business on the sheet", () => {
   });
   it("uses the custom value name when there is one", () => {
     expect(sheetBusiness({ ...NONE, business_name: "Sample Co" })).toMatchObject({ name: "Sample Co", init: "SC" });
+  });
+});
+
+describe("round 3: row actions and cross-page helpers", () => {
+  const h = { filled: true, canUndo: false, onUndo() {}, onSee() {}, onApprove() {}, onWon() {}, onLost() {}, onBuild() {}, onUpload() {} };
+  const s0 = fresh();
+  it("swipe right runs the filled Approve and send, else See the quote; no swipe left; Lost is danger", () => {
+    const right = (a: ReturnType<typeof quoteRowActions>) => a.find((x) => x.swipe === "right")?.label;
+    expect(right(quoteRowActions(get(s0, "q0"), h))).toBe("Approve and send");
+    expect(right(quoteRowActions(get(s0, "q0"), { ...h, filled: false }))).toBe("See the quote");
+    const sent = quoteRowActions(get(s0, "q2"), h);
+    expect(right(sent)).toBe("See the quote");
+    expect(sent.some((x) => x.swipe === "left")).toBe(false);
+    expect(sent.find((x) => x.label === "Lost")?.tone).toBe("danger");
+    expect(quoteRowActions(get(s0, "q2"), { ...h, canUndo: true })[0].label).toBe("Undo");
+  });
+  it("finds a quote by the customer's name", () => {
+    expect(quoteByName(s0.quotes, "Priya Shah")?.id).toBe("q1");
+    expect(quoteByName(s0.quotes, "Nobody")).toBeUndefined();
+  });
+  it("the sheet header shows only when there is a business value", () => {
+    expect(hasBusinessHeader(sheetBusiness({ business_name: "", business_address: "", business_phone_number: "", business_email: "", business_hours: "", business_website_url: "" }))).toBe(false);
+    expect(hasBusinessHeader(sheetBusiness({ business_name: "", business_address: "1 Way", business_phone_number: "", business_email: "", business_hours: "", business_website_url: "" }))).toBe(true);
+  });
+});
+
+describe("live search rows", () => {
+  it("a built quote is found with its new price", () => {
+    const s = run(fresh(), { type: "build", id: "q1", low: 950, lines: mockBuildLines("Gutter repair", 950) });
+    expect(quoteSearchRows(s.quotes).find((r) => r.id === "quote-q1")).toMatchObject({ name: "Priya Shah", sub: "Gutter repair · $950", page: "quotes" });
+    expect(quoteSearchRows(fresh().quotes)).toEqual(searchRows);
   });
 });

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   canUndo, chipText, historyLines, initialState, lateness, markPaid, money, nobodyOwes, remind, totals, undo, undoPaid,
-  buildMockPayments, searchRows,
+  buildMockPayments, liveState, paymentsFromInvoices, paymentsReducer, rowActionSpecs, searchRows,
 } from "@/features/payments";
-import { buildMockInvoices, chipFor } from "@/features/invoices";
+import { buildMockInvoices, chipFor, markPaid as invoicePaid, markSent as invoiceSent } from "@/features/invoices";
 
 const NOW = new Date(2026, 10, 22, 9, 0);
 const rows = buildMockPayments(NOW);
@@ -127,5 +127,56 @@ describe("search rows", () => {
       expect(r.href).toBe("/payments");
     }
     expect(new Set(searchRows.map((r) => r.id)).size).toBe(rows.length);
+  });
+});
+
+describe("reads the live Invoices list (owner decision: Payments reads live Invoices)", () => {
+  const history = () => "The first reminder goes 3 days after the due date";
+  it("adds an invoice sent on the Invoices page, due 7 days later, not late", () => {
+    const list = buildMockInvoices(NOW).map((i) => (i.no === 1049 ? invoiceSent(i, NOW) : i));
+    const live = paymentsFromInvoices(list, NOW, history);
+    const r = live.find((x) => x.invoice === "Invoice 1049")!;
+    expect(r).toMatchObject({ id: "inv-1049", name: "Hilliard Storage", amount: 1200, daysLate: 0, when: "Due Nov 29" });
+    expect(chipText(r, initialState(live))).toBe("Due Nov 29");
+    expect(totals(live, initialState(live)).owed).toBe(23750 + 1200);
+  });
+  it("shows an invoice paid during this visit (here or on Invoices) as paid: Paid just now, reminders stopped, in Paid today, with Undo", () => {
+    const list = buildMockInvoices(NOW).map((i) => (i.no === 1044 ? invoicePaid(i, NOW) : i));
+    const live = paymentsFromInvoices(list, NOW, history);
+    const r = live.find((x) => x.invoice === "Invoice 1044")!;
+    expect(r).toMatchObject({ no: 1044, settled: true, when: "6 days late" });
+    const s = liveState(live, remind(initialState(live), live[0].id));
+    expect(s[r.id]).toEqual({ paid: true, reminded: false });
+    expect(s[live[0].id]).toEqual({ paid: false, reminded: true });
+    expect(chipText(r, s)).toBe("Paid just now");
+    expect(historyLines(r, s)).toEqual(["Reminders stopped"]);
+    expect(canUndo(s, r.id)).toBe(true);
+    expect(totals(live, s)).toEqual({ owed: 18900, late: 9400, lateCount: 1, got: 4850 });
+    expect(rowActionSpecs(r, s)).toEqual([{ label: "Undo", key: "undo" }]);
+  });
+  it("leaves out invoices paid before today's visit and drafts", () => {
+    const live = paymentsFromInvoices(buildMockInvoices(NOW), NOW, history);
+    expect(live.map((r) => r.invoice).sort()).toEqual(["Invoice 1042", "Invoice 1044", "Invoice 1045"]);
+  });
+  it("tracks a row that appears later, so Remind now and Mark paid work on it", () => {
+    let s = initialState(rows);
+    expect(paymentsReducer(s, { type: "remind", id: "inv-1049" })).toBe(s);
+    s = paymentsReducer(s, { type: "track", ids: ["inv-1049", a.id] });
+    expect(s["inv-1049"]).toEqual({ paid: false, reminded: false });
+    expect(paymentsReducer(s, { type: "track", ids: [a.id] })).toBe(s);
+    s = paymentsReducer(s, { type: "paid", id: "inv-1049" });
+    expect(s["inv-1049"].paid).toBe(true);
+  });
+});
+
+describe("row swipe and menu actions (design uxActs / uxItems)", () => {
+  it("an open invoice: Remind now on swipe right, Mark paid on swipe left; the menu lists both", () => {
+    expect(rowActionSpecs(a, initialState(rows))).toEqual([
+      { label: "Remind now", key: "remind", swipe: "right" },
+      { label: "Mark paid", key: "paid", swipe: "left" },
+    ]);
+  });
+  it("a paid invoice: only Undo in the menu, no swipe", () => {
+    expect(rowActionSpecs(a, markPaid(initialState(rows), a.id))).toEqual([{ label: "Undo", key: "undo" }]);
   });
 });

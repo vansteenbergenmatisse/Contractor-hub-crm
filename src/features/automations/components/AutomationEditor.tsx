@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { useBusiness, useBusinessValues } from "@/features/app-shell";
+import { useRef } from "react";
+import { useBusinessValues } from "@/features/app-shell";
 import { STOP, WAIT, WHEN, testLine } from "../api/automations";
 import type { Automation, Draft } from "../types";
 
@@ -23,12 +23,13 @@ type Props = {
 
 // The side panel (computer) or the pushed detail (phone): four numbered steps, Save, Send me a test.
 export function AutomationEditor({ target, isNew, open, draft, err, test, onChange, onSave, onCancel, onTest, onMake }: Props) {
-  const biz = useBusiness();
   const values = useBusinessValues();
   const nameRef = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    if (err) nameRef.current?.focus();
-  }, [err]);
+  // Save with no name puts the cursor in the name field, on every press (design save()).
+  const save = () => {
+    onSave();
+    if (!draft.name.trim()) nameRef.current?.focus();
+  };
 
   const title = isNew ? "New automation" : open && target ? `Edit: ${target.name}` : "Change an automation";
   const sub = open ? "Change what you need. Then press Save. It runs for the next customer." : "Press Edit on a row to change its text or timing. Or make a new one.";
@@ -65,10 +66,10 @@ export function AutomationEditor({ target, isNew, open, draft, err, test, onChan
         </select>
         <p className={`fd-okl fd-tst2${test ? "" : " is-off"}`} role="status">
           <svg {...check}><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
-          <span><span className="fd-h">{test ? testLine(draft.msg, { ...values, review_url: biz.googleReviewUrl ?? "" }) : ""}</span></span>
+          <span><span className="fd-h">{test ? testLine({ business_phone_number: values.business_phone_number ?? "" }) : ""}</span></span>
         </p>
         <div className="fd-rac fd-pna">
-          <button type="button" className="fd-btn is-fill" onClick={onSave}>Save</button>
+          <button type="button" className="fd-btn is-fill" onClick={save}>Save</button>
           <button type="button" className="fd-btn is-plain" onClick={onTest}>Send me a test</button>
           <button type="button" className="fd-btn is-plain" onClick={onCancel}>Cancel</button>
         </div>

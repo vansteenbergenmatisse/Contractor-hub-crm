@@ -38,7 +38,19 @@ export type QuotesState = {
   filter: QuoteFilter;
   // The one change that can be undone.
   last: { id: string; prev: QuoteStatus } | null;
+  // What the owner typed in a row's Build quote fields, kept across pages like the design. Absent: the
+  // service field shows the lead's service and the price is empty.
+  builds: Record<string, BuildDraft>;
+  // The sheet's edit fields while editing, kept across pages.
+  draft: EditDraft;
+  editError: string;
 };
+
+export type BuildDraft = { service: string; price: string; errors: { service: string; price: string } };
+
+// What a link to this page asks for: "sheet" opens the quote (Pipeline See quote), "price" selects it
+// and puts the cursor in its price field (Pipeline Add price), null only brings the row into view (search).
+export type QuoteOpen = "sheet" | "price" | null;
 
 export type QuotesAction =
   | { type: "filter"; filter: QuoteFilter }
@@ -53,7 +65,10 @@ export type QuotesAction =
   | { type: "undo" }
   | { type: "edit-start" }
   | { type: "edit-cancel" }
-  | { type: "edit-save"; id: string; name: string; lines: QuoteLine[] };
+  | { type: "edit-save"; id: string; name: string; lines: QuoteLine[] }
+  | { type: "edit-draft"; draft: EditDraft }
+  | { type: "edit-error"; message: string }
+  | { type: "build-draft"; id: string; service?: string; price?: string; errors?: BuildDraft["errors"] };
 
 export type PriceParse = { ok: true; low: number; high?: number } | { ok: false };
 export type BuildCheck = { ok: true; service: string; low: number; high?: number } | { ok: false; errors: { service: string; price: string }; field: "service" | "price" };

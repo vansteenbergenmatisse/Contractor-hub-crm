@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useBusiness, useBusinessValues, usePushed, useRowFocus } from "@/features/app-shell";
+import { useEffect, useMemo, useRef } from "react";
+import { ROW_PICK_EVENT, useBusiness, useBusinessValues, usePushed, useRowFocus, useSearchRows } from "@/features/app-shell";
 import { conversationOfRow, deliveryLabel, doneLabel, filterCounts, isVisible, replyLabel, rowIdOf, rowSnippet, rowTime, summarize, visibleCount } from "../api/state";
+import { toSearchRows } from "../api/search-rows";
 import { bookingLinkOf, fillText } from "../api/text";
 import { waitLabel, waitLevelClass } from "../api/wait";
 import { useInbox } from "../hooks/use-inbox";
@@ -13,7 +14,10 @@ import { FilterBar } from "./FilterBar";
 import { ThreadBody } from "./ThreadBody";
 import { WaitSummary } from "./WaitSummary";
 
+const PHONE = <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="M5 4h4l1.5 4.5-2 1.5a12 12 0 0 0 5.5 5.5l1.5-2L20 15v4a1 1 0 0 1-1 1A15 15 0 0 1 4 5a1 1 0 0 1 1-1z" /></svg>;
+
 // The Inbox page content. The shell adds the page wrapper, the top bar and the tab bar.
+// As in the design, Enter in the reply box does not send: only the Send button does.
 // Everything here changes local state only: nothing is sent, fetched or saved.
 // `row` is the shell search's `?row=<id>`: that conversation opens (see `InboxPageFromUrl`).
 export function InboxPage({ row = null }: { row?: string | null } = {}) {
@@ -30,7 +34,18 @@ export function InboxPage({ row = null }: { row?: string | null } = {}) {
   const conversations = MOCK_CONVERSATIONS;
   const { state, dispatch } = useInbox(conversations);
   usePushed(state.open);
-  const [draft, setDraft] = useState("");
+  // Search finds the rows as they show now ("You: ..." after a reply, the business facts filled in).
+  const { name: bizName, first: bizFirst, site: bizSite, bookingLink: bizLink } = BUSINESS;
+  const liveRows = useMemo(
+    () => toSearchRows(conversations, { name: bizName, first: bizFirst, site: bizSite, bookingLink: bizLink }, state),
+    // Only the sent messages change what a row shows; the rest of the state does not.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [conversations, state.sent, bizName, bizFirst, bizSite, bizLink],
+  );
+  useSearchRows("inbox", liveRows);
+  // The reply box is kept with the page state, so a half-written reply survives changing page.
+  const draft = state.draft;
+  const setDraft = (text: string) => dispatch({ type: "draft", text });
   const inputRef = useRef<HTMLInputElement>(null);
   const threadRef = useRef<HTMLDivElement>(null);
   const rowsRef = useRef<HTMLDivElement>(null);
@@ -91,17 +106,31 @@ export function InboxPage({ row = null }: { row?: string | null } = {}) {
     // Only a new result opens a conversation; later filter changes must not reopen it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetId, dispatch]);
+  // The same result picked again (the URL does not change): open it again, as the design's `uxOpen`
+  // does on every pick, also after the owner went back to the list or a filter hid it.
+  const pick = useRef({ row, hidden: targetHidden });
+  useEffect(() => {
+    pick.current = { row, hidden: targetHidden };
+  });
+  useEffect(() => {
+    const onPick = (event: Event) => {
+      const id = (event as CustomEvent<unknown>).detail;
+      if (typeof id !== "string" || id !== pick.current.row) return;
+      const c = conversationOfRow(id, conversations);
+      if (c) dispatch({ type: "show", id: c.id, hidden: pick.current.hidden });
+    };
+    window.addEventListener(ROW_PICK_EVENT, onPick);
+    return () => window.removeEventListener(ROW_PICK_EVENT, onPick);
+  }, [conversations, dispatch]);
   useRowFocus(conversations.map(rowIdOf));
 
   function open(id: string, byKeyboard: boolean) {
-    if (id !== state.selected) setDraft("");
     if (byKeyboard) focusNext.current = "composer";
     dispatch({ type: "open", id });
   }
   // The summary button: show everyone, then open the conversation that waits longest.
   function replyToLongest(byKeyboard: boolean) {
     if (!summary.targetId) return;
-    if (summary.targetId !== state.selected) setDraft("");
     if (byKeyboard) focusNext.current = "composer";
     dispatch({ type: "replyTo", id: summary.targetId });
   }
@@ -111,7 +140,6 @@ export function InboxPage({ row = null }: { row?: string | null } = {}) {
       return;
     }
     dispatch({ type: "send", text: draft });
-    setDraft("");
   }
   function quick(text: string) {
     setDraft(fillText(text, BUSINESS));
@@ -141,6 +169,7 @@ export function InboxPage({ row = null }: { row?: string | null } = {}) {
                 snippet={rowSnippet(state, c, BUSINESS)}
                 rowId={rowIdOf(c)}
                 onOpen={(byKeyboard) => open(c.id, byKeyboard)}
+                onToggleNeed={() => dispatch({ type: "toggleNeed", id: c.id })}
               />
             ))}
             <div className={`fd-none${visibleCount(state, conversations) ? " is-off" : ""}`}>
@@ -161,13 +190,19 @@ export function InboxPage({ row = null }: { row?: string | null } = {}) {
               <h2 className="fd-thn"><span className="fd-h">{current.name}</span></h2>
               <p className="fd-ths"><span className="fd-h">{current.channel} · {current.sub}</span><span className="fd-thc"> · <span className="fd-h">{current.contact}</span></span></p>
             </div>
-            {current.phone ? (
-              <span className="fd-tha">
+            {/* The design always shows Call. With a number it dials; without one (Facebook, Instagram, email)
+                it is the design's plain button. BACKEND: Phase 3 dials the contact's phone from HighLevel. */}
+            <span className="fd-tha">
+              {current.phone ? (
                 <a className="fd-btn is-plain fd-tcall" href={`tel:${current.phone.replace(/[^\d+]/g, "")}`} aria-label={`Call ${current.name}`}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="M5 4h4l1.5 4.5-2 1.5a12 12 0 0 0 5.5 5.5l1.5-2L20 15v4a1 1 0 0 1-1 1A15 15 0 0 1 4 5a1 1 0 0 1 1-1z" /></svg><span>Call</span>
+                  {PHONE}<span>Call</span>
                 </a>
-              </span>
-            ) : null}
+              ) : (
+                <button type="button" className="fd-btn is-plain fd-tcall" aria-label={`Call ${current.name}`}>
+                  {PHONE}<span>Call</span>
+                </button>
+              )}
+            </span>
           </header>
           {/* Only the status line and the Delivered/Seen line are live, so opening another conversation
               does not read the whole thread out again. */}
@@ -204,7 +239,6 @@ export function InboxPage({ row = null }: { row?: string | null } = {}) {
                 autoComplete="off"
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
-                onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); send(); } }}
               />
               <button type="button" className="fd-btn is-fill fd-send" onClick={send}>Send</button>
             </div>

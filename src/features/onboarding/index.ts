@@ -5,6 +5,8 @@ export { buildAlertMessage, handleSync, runSync } from "./api/sync";
 export type { SyncDeps } from "./api/sync";
 export { addCounts, syncTenantUsers } from "./api/users";
 export type { UserSyncDeps } from "./api/users";
+export { createWebhookHooks } from "./api/hooks";
+export type { WebhookHookDeps } from "./api/hooks";
 export { getCallbackOnboard, getWebhookHooks, syncRoute } from "./api/instance";
 export { emptyUserCounts } from "./types";
 export type { SyncSummary, UserCounts } from "./types";

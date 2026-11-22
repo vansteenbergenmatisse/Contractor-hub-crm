@@ -14,6 +14,9 @@ const current = vi.hoisted(() => ({ values: {} as Record<string, string> }));
 vi.mock("@/features/app-shell", async () => ({
   useKeptReducer: (await vi.importActual<typeof import("@/features/app-shell")>("@/features/app-shell")).useKeptReducer,
   useRowFocus: () => {},
+  useRowGestures: () => ({ ref: () => {}, onContextMenu: () => {}, onKeyDown: () => {} }),
+  useSearchRows: () => {},
+  ROW_PICK_EVENT: "fx:row-pick",
   useShell: () => ({ sendTimer: vi.fn(), askReason: vi.fn(), setPushed: vi.fn(), setAction: vi.fn() }),
   usePushed: () => {},
   useBusinessValues: () => current.values,
@@ -22,7 +25,7 @@ vi.mock("@/features/app-shell", async () => ({
   REASONS: ["Ask again later", "Said no", "Chose a competitor", "Not a fit", "Opted out"],
 }));
 
-import { QuoteSheet, QuotesPage, SEED_QUOTES, sheetBusiness } from "@/features/quotes";
+import { QuoteSheet, QuotesPage, SEED_QUOTES, draftOf, sheetBusiness } from "@/features/quotes";
 
 // Made-up business values.
 const VALUES = {
@@ -82,6 +85,9 @@ describe("QuotesPage markup", () => {
     expect(empty).not.toContain("Your business");
     expect(empty).not.toContain("YB");
     expect(empty).not.toContain('class="fd-dcb"');
+    // No business values at all: no empty header row (and so no divider) above the title.
+    expect(empty).not.toContain('class="fd-dch"');
+    expect(html).toContain('class="fd-dch"');
   });
   it("shows the initials tile when the business has a name", () => {
     expect(html).toContain('<span class="fd-logo" aria-hidden="true"><span class="fd-h">TR</span></span>');
@@ -99,7 +105,7 @@ describe("QuotesPage markup", () => {
 });
 
 describe("QuoteSheet", () => {
-  const base = { business: sheetBusiness(VALUES), onShut() {}, onEdit() {}, onCancel() {}, onSave() {}, onUpload() {}, onRemoveFile() {}, onApprove() {} };
+  const base = { business: sheetBusiness(VALUES), draft: draftOf(SEED_QUOTES[0]), error: "", onDraft() {}, onError() {}, onShut() {}, onEdit() {}, onCancel() {}, onSave() {}, onUpload() {}, onRemoveFile() {}, onApprove() {} };
   it("edit mode shows fields, Save and Cancel and hides the sheet", () => {
     const out = renderToStaticMarkup(<QuoteSheet {...base} quote={SEED_QUOTES[0]} editing />);
     expect(out).toContain('id="fd-qe-name"');

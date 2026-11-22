@@ -2,13 +2,24 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useDialog } from "../hooks/use-dialog";
+import { sheetOnTop } from "../api/gestures";
 
 // Send feedback. Phase 2: the note goes nowhere (no backend yet); the thank-you is real UI only.
 // While open: focus moves to the note, Tab stays inside, Escape closes, focus goes back to the
-// opener. Send stays off until something is typed.
+// opener. Send stays off until something is typed. Every opening starts on an empty form (design
+// `openFb`: fbView 'form'). A page sheet open on top takes Escape first (design `uxEsc`).
+// Without a first name the thank-you reads "Thanks." (a missing value shows nothing).
 export function FeedbackSheet({ open, first, onClose }: { open: boolean; first: string; onClose: () => void }) {
   const [sent, setSent] = useState(false);
   const [note, setNote] = useState("");
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
+    if (open) {
+      setSent(false);
+      setNote("");
+    }
+  }
   const box = useRef<HTMLElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
@@ -16,7 +27,7 @@ export function FeedbackSheet({ open, first, onClose }: { open: boolean; first: 
     onClose();
     setSent(false);
   };
-  useDialog(box, close, open);
+  useDialog(box, close, open, { yieldTo: () => sheetOnTop(box.current) });
   useEffect(() => {
     if (!open) return;
     const id = setTimeout(() => field.current?.focus(), 80);
@@ -40,7 +51,7 @@ export function FeedbackSheet({ open, first, onClose }: { open: boolean; first: 
         </div>
       </div>
       <div className={`fd-part${sent ? " is-new" : " is-off"}`}>
-        <h2 className="fd-fbt">Thanks, {first}.</h2>
+        <h2 className="fd-fbt">{first ? `Thanks, ${first}.` : "Thanks."}</h2>
         <p className="fd-fbk">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
           Sent. We read every note.

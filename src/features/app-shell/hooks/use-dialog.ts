@@ -8,10 +8,16 @@ import { createFocusReturn, trapFocus } from "../api/focus";
 // the element that had it when the sheet opened. Focus is only given back when it was lost (on the
 // page body or still inside the sheet), so a page that moved focus on purpose keeps it.
 // Both keys are caught before the page sees them, so a page's own Escape does not also run.
-export function useDialog(root: RefObject<HTMLElement | null>, onEscape: () => void, active = true): void {
+// `yieldTo` (optional) is asked on every key: while it returns true another sheet sits on top (the menu
+// drawer behind a page's stop sheet), so this one leaves Escape and Tab alone for that sheet to handle.
+export type DialogOptions = { yieldTo?: () => boolean };
+
+export function useDialog(root: RefObject<HTMLElement | null>, onEscape: () => void, active = true, options: DialogOptions = {}): void {
   const escape = useRef(onEscape);
+  const yieldTo = useRef(options.yieldTo);
   useEffect(() => {
     escape.current = onEscape;
+    yieldTo.current = options.yieldTo;
   });
   const [back] = useState(createFocusReturn);
   useEffect(() => {
@@ -19,6 +25,7 @@ export function useDialog(root: RefObject<HTMLElement | null>, onEscape: () => v
     back.remember(document.activeElement);
     const box = root.current;
     const onKey = (event: KeyboardEvent) => {
+      if ((event.key === "Escape" || event.key === "Tab") && yieldTo.current?.()) return;
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();

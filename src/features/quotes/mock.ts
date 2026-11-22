@@ -1,7 +1,7 @@
 // MOCK DATA (Phase 2). The design's sample quotes and customers. Replaced in Phase 3 by the sub-account's
 // estimates (HighLevel) and its custom values. Never treat any value here as a real customer or price.
 import type { SearchRow } from "@/features/app-shell";
-import { amountLabel } from "./api/quotes";
+import { quoteSearchRows } from "./api/quotes";
 import type { Quote, QuoteLine } from "./types";
 
 const q = (id: string, name: string, service: string, status: Quote["status"], note: string, opens: number, lines: Array<[string, number]>): Quote => ({
@@ -28,11 +28,5 @@ export function mockBuildLines(service: string, low: number): QuoteLine[] {
   return [{ text: service, amount: low }];
 }
 
-// Rows for the shared search. Hrefs open this page.
-export const searchRows: SearchRow[] = SEED_QUOTES.map((quote) => ({
-  id: `quote-${quote.id}`,
-  page: "quotes",
-  name: quote.name,
-  sub: `${quote.service} · ${amountLabel(quote)}`,
-  href: "/quotes",
-}));
+// Rows for the shared search before the page has opened. Hrefs open this page.
+export const searchRows: SearchRow[] = quoteSearchRows(SEED_QUOTES);

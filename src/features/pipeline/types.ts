@@ -40,6 +40,10 @@ export type MockCard = {
   review: boolean;
 };
 
+// What the board reads from the live Quotes state: a quote is found by its customer's name (Phase 2;
+// Phase 3 links by record id). The full quote type comes from the quotes feature.
+export type LiveQuote = { name: string; status: string };
+
 // The last move on the board. `undo` is true when the move itself was an Undo.
 export type LastMove = { i: number; from: number; to: number; pseq: number; undo: boolean };
 

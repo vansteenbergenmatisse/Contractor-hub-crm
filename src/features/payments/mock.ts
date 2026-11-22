@@ -4,7 +4,8 @@
 // list, so both pages always show the same due chip for the same invoice. Only the reminder history
 // line is this page's own.
 import type { SearchRow } from "@/features/app-shell";
-import { buildMockInvoices, chipFor, daysLate, initialsOf } from "@/features/invoices";
+import { buildMockInvoices } from "@/features/invoices";
+import { paymentsFromInvoices } from "./api/payments";
 import type { PaymentRow } from "./types";
 
 // What the reminder history says before anything happens on screen, per invoice number.
@@ -15,30 +16,24 @@ const HISTORY: Readonly<Record<number, string>> = {
 };
 const FALLBACK_HISTORY = "The first reminder goes 3 days after the due date";
 
+// The reminder history line of an invoice before anything happens on screen.
+export const mockHistory = (no: number): string => HISTORY[no] ?? FALLBACK_HISTORY;
+
 // The sent (open) invoices, dated from `now`, most late first as in the design.
 export function buildMockPayments(now: Date): PaymentRow[] {
-  return buildMockInvoices(now)
-    .filter((inv) => inv.st === "sent" && inv.dueOn !== null)
-    .map((inv) => ({
-      id: `inv-${inv.no}`,
-      initials: initialsOf(inv.name),
-      name: inv.name,
-      invoice: `Invoice ${inv.no}`,
-      job: inv.svc,
-      amount: inv.amt,
-      daysLate: inv.dueOn ? daysLate(inv.dueOn, now) : 0,
-      when: chipFor(inv, now).text,
-      history: HISTORY[inv.no] ?? FALLBACK_HISTORY,
-    }))
-    .sort((a, b) => b.daysLate - a.daysLate);
+  return paymentsFromInvoices(buildMockInvoices(now), now, mockHistory);
 }
 
-// Rows the global search finds on this page. Names and jobs do not depend on the day, so a fixed
-// day keeps this static (safe on the server layout).
-export const searchRows: SearchRow[] = buildMockPayments(new Date(2000, 0, 1)).map((row) => ({
-  id: `payments-${row.id}`,
-  page: "payments",
-  name: row.name,
-  sub: `${row.invoice} · ${row.job}`,
-  href: "/payments",
-}));
+// Rows the global search finds on this page, for the rows it shows.
+export const paymentSearchRows = (rows: readonly PaymentRow[]): SearchRow[] =>
+  rows.map((row) => ({
+    id: `payments-${row.id}`,
+    page: "payments",
+    name: row.name,
+    sub: `${row.invoice} · ${row.job}`,
+    href: "/payments",
+  }));
+
+// The layout's rows (before the page registers its live rows). Names and jobs do not depend on the
+// day, so a fixed day keeps this static (safe on the server layout).
+export const searchRows: SearchRow[] = paymentSearchRows(buildMockPayments(new Date(2000, 0, 1)));

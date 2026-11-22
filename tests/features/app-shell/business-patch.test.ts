@@ -33,8 +33,10 @@ describe("patchBusiness", () => {
     expect(nulled.phone).toBe("");
   });
 
-  it("falls back to the plain word when the name is blanked", () => {
-    expect(patchBusiness(base, { name: "" }).name).toBe("Your business");
+  it("leaves the name empty when it is blanked (no made-up word)", () => {
+    const b = patchBusiness(base, { name: "" });
+    expect(b.name).toBe("");
+    expect(b.init).toBe("");
   });
 
   it("keeps the call to action", () => {

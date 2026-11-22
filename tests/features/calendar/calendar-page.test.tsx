@@ -46,7 +46,7 @@ describe("CalendarPage markup", () => {
   });
 
   it("shows the Not available yet chip without a check icon, and a whole sentence beside it", () => {
-    expect(html).toContain('<span class="fd-chip fd-csync is-plain">Not available yet</span>');
+    expect(html).toMatch(/<span class="fd-chip fd-csync is-plain"><svg class="i-o"[^>]*>.*?<\/svg><span class="fd-h">Not available yet<\/span><\/span>/);
     expect(html).toContain("Connect your calendar in Settings.");
     expect(html).not.toContain("The calendar this syncs with shows here once it can be read.");
     expect(html).not.toContain("Which calendar this syncs with.");

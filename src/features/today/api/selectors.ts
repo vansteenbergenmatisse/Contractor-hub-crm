@@ -1,5 +1,6 @@
-import type { SearchRow, SendTimerRequest } from "@/features/app-shell";
+import type { RowAction, SearchRow, SendDoc, SendTimerRequest } from "@/features/app-shell";
 import { buildMockInvoices, chipFor } from "@/features/invoices";
+import { sendRequest as quoteSendRequest, type QuotesState } from "@/features/quotes";
 import { LEADS, MONEY_OWED, QUOTES_OUT } from "../mock";
 import type { Lead, LeadRange, MiniRow, OwedRow, RowStatus, Stop, Todo, TodayState } from "../types";
 
@@ -63,15 +64,38 @@ export const mapsUrl = (address: string): string => `https://maps.google.com/?q=
 // Only the primary answer of a send row opens the timer. "Yes, paid" sends nothing.
 export const pressPlan = (todo: Todo, value: RowStatus): "send" | "set" => (todo.send && value === 1 ? "send" : "set");
 
-// The document the 20-second timer shows. Phase 2: built from the to-do's own service and amount.
-export function sendRequest(todo: Todo, onDone: () => void): SendTimerRequest | null {
+// What a swipe and the row menu do on a to-do (design logic `uxActs` / `uxItems` for
+// `.fd-need .fd-rows > li`): the menu lists the row's visible buttons in their order; a swipe right
+// presses the first one (the design picks the first visible button that is not Undo, so on a two-button
+// row that is the left one: "No-show", "Yes, paid"). Today has no Mark done/paid button, so no swipe
+// left. A done row offers only Undo, and a sent quote or invoice (no Undo) offers nothing.
+export function rowActions(todo: Todo, status: RowStatus, run: { primary: () => void; secondary: () => void; undo: () => void }): RowAction[] {
+  if (status) return todo.send && status === 1 ? [] : [{ label: "Undo", onAction: run.undo }];
+  const out: RowAction[] = [];
+  if (todo.secondary) out.push({ label: todo.secondary, onAction: run.secondary });
+  out.push({ label: todo.primary.label, onAction: run.primary });
+  out[0] = { ...out[0], swipe: "right" };
+  return out;
+}
+
+// The quote document the Quotes page would send for this to-do's customer (design logic 1060
+// `q.docOf(j)`: the quote's own lines), or null when Quotes has no quote with that name.
+export function quoteDocFor(todo: Todo, quotes: readonly QuotesState["quotes"][number][]): SendDoc | null {
+  if (todo.send !== "Quote") return null;
+  const quote = quotes.find((q) => q.name === todo.name);
+  return quote ? quoteSendRequest(quote, () => {}).doc : null;
+}
+
+// The document the 20-second timer shows: the quote's own document when there is one (`quoteDoc`),
+// else one line built from the to-do's own service and amount (the design's fallback).
+export function sendRequest(todo: Todo, onDone: () => void, quoteDoc: SendDoc | null = null): SendTimerRequest | null {
   if (!todo.send) return null;
   const service = todo.detail.split(" · ")[0];
   return {
     kind: todo.send,
     name: todo.name,
     total: todo.amount,
-    doc: { title: todo.send, name: todo.name, sub: service, amount: todo.amount, lines: [[service, todo.amount]] },
+    doc: quoteDoc ?? { title: todo.send, name: todo.name, sub: service, amount: todo.amount, lines: [[service, todo.amount]] },
     onDone,
   };
 }
@@ -87,7 +111,9 @@ export const searchRows: readonly SearchRow[] = [
 
 // Money owed rows with the due day or lateness taken from the Invoices page's sample invoices on
 // `now`, so both pages say the same ("Due Nov 22" / "6 days late"). A late invoice gets the red chip.
-export function owedRows(rows: readonly OwedRow[], now: Date): MiniRow[] {
+// With no `now` yet (server render, hydration) the rows show without the due day.
+export function owedRows(rows: readonly OwedRow[], now: Date | null): MiniRow[] {
+  if (!now) return rows.map((r) => ({ name: r.name, amount: r.amount, note: "" }));
   const invoices = buildMockInvoices(now);
   return rows.map((r) => {
     const inv = invoices.find((i) => i.no === r.invoiceNo);

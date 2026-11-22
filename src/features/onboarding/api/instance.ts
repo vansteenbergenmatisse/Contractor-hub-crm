@@ -1,6 +1,8 @@
 import { createEmailSenderFromEnv, deactivateGhlUser, getProvisionDeps, listActiveLinks, provisionGhlUser } from "@/features/auth";
+import { getBrandService } from "@/features/brand";
 import { getOnboardingApi, type OAuthCallbackDeps, type WebhookHooks } from "@/features/highlevel";
 import { claimAlerts, releaseAlerts } from "../db/alerts";
+import { createWebhookHooks } from "./hooks";
 import { onboardLocation, type OnboardDeps } from "./onboard";
 import { handleSync, runSync, type SyncDeps } from "./sync";
 import { syncTenantUsers, type UserSyncDeps } from "./users";
@@ -72,22 +74,8 @@ export function getWebhookHooks(): WebhookHooks | undefined {
     return undefined;
   }
   const { hl, userSync } = built;
-  return {
-    async onLocationConnected({ tenantId, companyId, locationId, accessToken }) {
-      const users = await hl.usersWithToken(accessToken, companyId, locationId);
-      const counts = await syncTenantUsers(userSync, tenantId, users);
-      console.info(`Onboarding: INSTALL users created=${counts.created} linked=${counts.linked} failed=${counts.failed}`);
-    },
-    async onLocationUpdate({ locationId, name }) {
-      if (name) await hl.renameTenant(locationId, name);
-    },
-    async onUserEvent({ type, locationId }) {
-      const tenant = await hl.findTenant(locationId);
-      if (!tenant || tenant.status !== "connected") return;
-      const counts = await syncTenantUsers(userSync, tenant.tenantId, await hl.usersOfTenant(tenant.tenantId));
-      console.info(`Onboarding: ${type} users created=${counts.created} deactivated=${counts.deactivated} failed=${counts.failed}`);
-    },
-  };
+  // Per server instance: other instances drop their cached brand only when its TTL runs out.
+  return createWebhookHooks({ hl, userSync, invalidateBrand: (tenantId) => getBrandService().invalidate(tenantId) });
 }
 
 // POST or GET /api/integrations/sync.

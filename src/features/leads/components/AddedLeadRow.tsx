@@ -4,7 +4,7 @@ import { ChannelIcon } from "./ChannelIcon";
 // A lead added by hand. It has just arrived, so it waits under 1 hour.
 export function AddedLeadRow({ lead }: { lead: AddedLead }) {
   return (
-    <div className="fd-rw is-new">
+    <div className="fd-rw is-new" data-row-id={lead.id}>
       <div className="fd-rm">
         <span className="fd-cht is-you" aria-hidden="true"><ChannelIcon name="you" /></span>
         <div className="fd-rbx">

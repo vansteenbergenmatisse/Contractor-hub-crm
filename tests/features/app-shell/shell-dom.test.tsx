@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const push = vi.fn();
 let search = new URLSearchParams();
@@ -12,7 +12,7 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => search,
 }));
 
-import { AppShell, buildBusiness, useRowFocus, useShell, useUndoShortcut, type SearchRow, type SendTimerRequest } from "@/features/app-shell";
+import { AppShell, ROW_PICK_EVENT, buildBusiness, useDialog, useRowFocus, useShell, useUndoShortcut, type SearchRow, type SendTimerRequest } from "@/features/app-shell";
 
 const business = buildBusiness({ name: "Sample Roofing", owner: "Pat Lee" });
 const rows: SearchRow[] = [{ id: "quote-q1", page: "quotes", name: "Maria Alvarez", sub: "Roof", href: "/quotes" }];
@@ -86,6 +86,27 @@ describe("send timer dialog", () => {
     expect(onDone).not.toHaveBeenCalled();
   });
 
+  it("Back from the shown quote puts focus on Cancel again", async () => {
+    const user = setupUser();
+    shell(<SendPage onDone={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "Send quote" }));
+    await user.click(screen.getByRole("button", { name: "View quote" }));
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    await wait(100);
+    expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
+  });
+
+  it("a dialog removed in the last 300 ms before sending sends nothing", async () => {
+    const user = setupUser();
+    const onDone = vi.fn();
+    const view = shell(<SendPage onDone={onDone} />);
+    await user.click(screen.getByRole("button", { name: "Send quote" }));
+    await wait(20_000);
+    view.unmount();
+    await wait(400);
+    expect(onDone).not.toHaveBeenCalled();
+  });
+
   it("when the count runs out the send runs once and focus goes back to the opener", async () => {
     const user = setupUser();
     const onDone = vi.fn();
@@ -129,6 +150,75 @@ describe("reason sheet", () => {
     await user.click(screen.getByRole("button", { name: "Said no" }));
     expect(onPick).toHaveBeenCalledWith("Said no");
     expect(opener).toHaveFocus();
+  });
+});
+
+describe("reason sheet answers", () => {
+  it("\"Ask again later\" answers later", async () => {
+    const user = setupUser();
+    const onPick = vi.fn();
+    shell(<SendPage onDone={onPick} />);
+    await user.click(screen.getByRole("button", { name: "Remove" }));
+    await user.click(screen.getByRole("button", { name: "Ask again later" }));
+    expect(onPick).toHaveBeenCalledWith("later");
+  });
+});
+
+describe("useDialog", () => {
+  it("an open sheet takes Escape before the page's own handler", async () => {
+    const user = setupUser();
+    const pageEscape = vi.fn();
+    function EscPage() {
+      useEffect(() => {
+        const on = (e: KeyboardEvent) => { if (e.key === "Escape") pageEscape(); };
+        document.addEventListener("keydown", on);
+        window.addEventListener("keydown", on);
+        return () => {
+          document.removeEventListener("keydown", on);
+          window.removeEventListener("keydown", on);
+        };
+      }, []);
+      return <SendPage onDone={vi.fn()} />;
+    }
+    shell(<EscPage />);
+    await user.click(screen.getByRole("button", { name: "Remove" }));
+    await wait(100);
+    await user.keyboard("{Escape}");
+    expect(dialogNamed(/off the board/)).toBeNull();
+    expect(pageEscape).not.toHaveBeenCalled();
+  });
+
+  it("a closed sheet no longer reacts to Escape", async () => {
+    const user = setupUser();
+    const onEscape = vi.fn();
+    function Box({ open }: { open: boolean }) {
+      const ref = useRef<HTMLDivElement>(null);
+      useDialog(ref, onEscape, open);
+      return <div ref={ref}><button type="button">in</button></div>;
+    }
+    const view = render(<Box open />);
+    await user.keyboard("{Escape}");
+    expect(onEscape).toHaveBeenCalledTimes(1);
+    view.rerender(<Box open={false} />);
+    await user.keyboard("{Escape}");
+    expect(onEscape).toHaveBeenCalledTimes(1);
+  });
+
+  it("a pick that moves focus keeps it there", async () => {
+    const user = setupUser();
+    function MovePage() {
+      const { askReason } = useShell();
+      return (
+        <div>
+          <button type="button" onClick={() => askReason({ name: "Maria", onPick: () => document.getElementById("target")?.focus() })}>Remove</button>
+          <button type="button" id="target">Target</button>
+        </div>
+      );
+    }
+    shell(<MovePage />);
+    await user.click(screen.getByRole("button", { name: "Remove" }));
+    await user.click(screen.getByRole("button", { name: "Said no" }));
+    expect(screen.getByRole("button", { name: "Target" })).toHaveFocus();
   });
 });
 
@@ -207,6 +297,37 @@ describe("keyboard shortcuts", () => {
     expect(screen.getByText("changed")).toBeInTheDocument();
   });
 
+  it("⌘Z skips a disabled Undo", async () => {
+    const user = setupUser();
+    const click = vi.fn();
+    shell(<button type="button" disabled onClick={click}>Undo</button>);
+    document.body.focus();
+    await user.keyboard("{Meta>}z{/Meta}");
+    expect(click).not.toHaveBeenCalled();
+    expect(screen.queryByText("Undone.")).toBeNull();
+  });
+
+  it("arrows do not move rows inside Settings, and skip no-action buttons", async () => {
+    const user = setupUser();
+    shell(
+      <>
+        <div className="fd-stsec"><div className="fd-lst">
+          <div className="fd-rw"><button type="button">S1</button></div><div className="fd-rw"><button type="button">S2</button></div>
+        </div></div>
+        <div className="fd-lst">
+          <div className="fd-rw"><button type="button">R1</button></div>
+          <div className="fd-rw"><button type="button" data-fx-noact="">Noact</button><button type="button">R2</button></div>
+        </div>
+      </>,
+    );
+    screen.getByRole("button", { name: "S1" }).focus();
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("button", { name: "S1" })).toHaveFocus();
+    screen.getByRole("button", { name: "R1" }).focus();
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("button", { name: "R2" })).toHaveFocus();
+  });
+
   it("Arrow Down and Up move between rows", async () => {
     const user = setupUser();
     shell(
@@ -258,6 +379,12 @@ describe("drawer, feedback and skip link", () => {
     await user.keyboard("More colors");
     await user.click(screen.getByRole("button", { name: "Send" }));
     expect(screen.getByText(/Sent\. We read every note\./)).toBeInTheDocument();
+    await wait(10);
+    expect(screen.getByRole("button", { name: "Close" })).toHaveFocus();
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    await user.click(screen.getAllByRole("button", { name: "Send feedback" })[0]);
+    await wait(100);
+    expect(screen.getByRole("textbox", { name: "Your feedback" }).closest(".fd-part")).not.toHaveClass("is-off");
   });
 
   it("has a skip link that moves focus to the main content", async () => {
@@ -302,6 +429,45 @@ describe("useRowFocus", () => {
     await wait(150);
     expect(document.querySelector(".fx-flash")).not.toBeNull();
     expect(screen.getByText("quote-q1")).toHaveFocus();
+  });
+
+  it("does not take focus again when the page's rows change", () => {
+    search = new URLSearchParams("row=b");
+    const view = render(<><button type="button">elsewhere</button><Rows ids={["a", "b"]} /></>);
+    screen.getByRole("button", { name: "elsewhere" }).focus();
+    view.rerender(<><button type="button">elsewhere</button><Rows ids={["a", "b", "c"]} /></>);
+    expect(screen.getByRole("button", { name: "elsewhere" })).toHaveFocus();
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
+  });
+
+  it("a pick of another row does not flash the current one", () => {
+    search = new URLSearchParams("row=a");
+    render(<Rows ids={["a", "b"]} />);
+    act(() => { vi.advanceTimersByTime(2000); });
+    act(() => { window.dispatchEvent(new CustomEvent(ROW_PICK_EVENT, { detail: "b" })); });
+    act(() => { vi.advanceTimersByTime(150); });
+    expect(document.querySelector(".fx-flash")).toBeNull();
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves no ring or layer behind when the page closes before the flash", () => {
+    search = new URLSearchParams("row=a");
+    const view = render(<Rows ids={["a"]} />);
+    act(() => { vi.advanceTimersByTime(50); });
+    view.unmount();
+    act(() => { vi.advanceTimersByTime(200); });
+    expect(document.querySelector(".fx-flash")).toBeNull();
+    expect(document.getElementById("fx")).toBeNull();
+  });
+
+  it("handles the same ?row= again after it was cleared", () => {
+    search = new URLSearchParams("row=a");
+    const view = render(<Rows ids={["a"]} />);
+    search = new URLSearchParams("");
+    view.rerender(<Rows ids={["a"]} />);
+    search = new URLSearchParams("row=a");
+    view.rerender(<Rows ids={["a"]} />);
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(2);
   });
 
   it("ignores an id that is not one of the page's rows", () => {

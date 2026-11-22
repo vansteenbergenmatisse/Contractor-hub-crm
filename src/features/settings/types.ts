@@ -14,7 +14,7 @@ export type Connection = {
   steps: string[];
 };
 
-// "unknown": no API gives this row's status yet (build prompt section 6), so the row claims nothing.
+// "unknown": no API gives this row's status (build prompt section 6); the row says "Not available yet".
 export type ConnectionState = "connected" | "not-connected" | "unknown";
 
 export type ConnectionStatus = {

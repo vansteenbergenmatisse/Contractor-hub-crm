@@ -1,5 +1,5 @@
 import { GROUPS, LAST_STAGE, STAGES, groupOf, hasTrash, secondButton } from "./stages";
-import type { BoardState, CardView, MockCard, PrimaryKind, StubView, Tag } from "../types";
+import type { BoardState, CardView, LiveQuote, MockCard, PrimaryKind, StubView, Tag } from "../types";
 
 // Selectors: everything the screen shows, worked out from the board state. No React in here.
 
@@ -51,8 +51,11 @@ function motion(s: BoardState): string {
 }
 
 // Does the quote of this card still need a service and a price? Only a quote in the "need" state
-// does. A card without an amount still offers Send quote; its send document then says "No price yet".
-export function needsPrice(card: MockCard): boolean {
+// does. With the live Quotes state (`quotes`) the card asks Quotes, as the design does (logic
+// `qi` + `P.quotes.state.st[j] === 'need'`): once a quote is built there, the card offers Send quote.
+// A card without a quote in Quotes still offers Send quote; its send document is then built from the card.
+export function needsPrice(card: MockCard, quotes?: readonly LiveQuote[]): boolean {
+  if (quotes) return quotes.find((q) => q.name === card.name)?.status === "need";
   return card.quote === "need";
 }
 
@@ -75,22 +78,23 @@ function tagsFor(card: MockCard, st: number, home: boolean): [Tag | null, Tag | 
   return [a, b];
 }
 
-function timeFor(s: BoardState, card: MockCard, i: number, st: number, home: boolean): string {
+function timeFor(s: BoardState, card: MockCard, i: number, st: number, home: boolean, need: boolean): string {
   if (st === 4 && home && card.since.startsWith("Opened")) return "";
   if (st === 8) return "";
-  if (st === 3 && card.since === NEEDS_PRICE_TEXT) return needsPrice(card) ? card.since : "Quote ready";
+  if (st === 3 && card.since === NEEDS_PRICE_TEXT) return need ? card.since : "Quote ready";
   if (st === 10 && s.rs[i]) return s.rs[i];
   return home ? card.since : "Moved just now";
 }
 
-export function cardView(s: BoardState, cards: readonly MockCard[], i: number, layout = computeLayout(s)): CardView {
+// `quotes`: the live Quotes state (see needsPrice). Left out, the card's own sample flag is used.
+export function cardView(s: BoardState, cards: readonly MockCard[], i: number, layout = computeLayout(s), quotes?: readonly LiveQuote[]): CardView {
   const card = cards[i];
   const st = s.sg[i];
   const l = s.last;
   const live = isLive(s);
   const noUndo = live && s.noUndoAt === s.n;
   const home = st === card.stage;
-  const need = st === 3 && needsPrice(card);
+  const need = st === 3 && needsPrice(card, quotes);
 
   let primary: { label: string; kind: PrimaryKind; to: number } = { label: STAGES[st].button.label, kind: "move", to: STAGES[st].button.to };
   if (st === 3) primary = need ? { label: "Add price", kind: "add-price", to: 3 } : { label: "Send quote", kind: "send-quote", to: 4 };
@@ -101,7 +105,7 @@ export function cardView(s: BoardState, cards: readonly MockCard[], i: number, l
     card,
     stage: st,
     className: `fd-kc is-s${st} is-r${Math.min(layout.rank[i], MAX_RANK)}${l && l.i === i ? " is-new" + motion(s) : ""}`,
-    timeText: timeFor(s, card, i, st, home),
+    timeText: timeFor(s, card, i, st, home, need),
     autoText: need ? "The AI builds the quote after that" : STAGES[st].next,
     showUndo: live && l!.i === i && !noUndo,
     primary,

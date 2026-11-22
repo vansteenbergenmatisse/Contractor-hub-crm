@@ -39,8 +39,10 @@ describe("PaymentsPage", () => {
     expect(html).toMatch(/<a[^>]*href="\/settings\?section=connections"[^>]*>Connect in Settings<\/a>/);
   });
 
-  it("shows Not available yet as a chip next to the sentence, with no switch", () => {
-    expect(html).toMatch(/<p class="fd-ppb is-warn" role="status">[\s\S]*<b class="fd-chip is-plain">Not available yet<\/b><span>Online payments are not connected\./);
+  it("shows Not available yet as a chip inside the sentence beside the icon (as Settings says it), with no switch", () => {
+    // The chip sits inside the text span, so the banner keeps the design's icon + text line on a phone.
+    expect(html).toMatch(/<p class="fd-ppb is-warn" role="status"><svg[^]*?<\/svg><span>Online payments: <b class="fd-chip is-plain">Not available yet<\/b> A paid invoice does not mark itself paid yet\.<\/span><a /);
+    expect(html).not.toContain("not connected");
     const banner = html.slice(html.indexOf('class="fd-ppb'), html.indexOf("</p>", html.indexOf('class="fd-ppb')));
     expect(banner).not.toMatch(/role="switch"|type="checkbox"/);
   });

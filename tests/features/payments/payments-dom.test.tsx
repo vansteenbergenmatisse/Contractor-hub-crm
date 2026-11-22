@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
-import { act, cleanup, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 vi.mock("next/navigation", () => ({
@@ -10,8 +10,9 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
-import { AppShell, buildBusiness } from "@/features/app-shell";
+import { AppShell, GestureLayer, buildBusiness } from "@/features/app-shell";
 import { PaymentsPage } from "@/features/payments";
+import { markSentPatch, useInvoicesKept } from "@/features/invoices";
 
 afterEach(() => {
   cleanup();
@@ -107,5 +108,77 @@ describe("Payments due in the browser", () => {
     await user.keyboard("{Control>}z{/Control}");
     expect(within(rowOf("Grace Whitfield")).queryByText("Paid just now")).toBeNull();
     expect(screen.getByRole("button", { name: "Mark paid, Grace Whitfield" })).toBeInTheDocument();
+  });
+
+  it("a row's menu holds the design's actions: Remind now and Mark paid; a paid row offers only Undo", async () => {
+    render(<GestureLayer><PaymentsPage /></GestureLayer>);
+    const row = rowOf("Grace Whitfield");
+    fireEvent.contextMenu(row, { clientX: 100, clientY: 100 });
+    const menu = screen.getByRole("menu", { name: "Actions for Grace Whitfield" });
+    expect(within(menu).getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Remind now", "Mark paid"]);
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Mark paid" }));
+    await waitFor(() => expect(within(rowOf("Grace Whitfield")).getByText("Paid just now")).toBeInTheDocument());
+    fireEvent.contextMenu(rowOf("Grace Whitfield"), { clientX: 100, clientY: 100 });
+    const items = screen.getAllByRole("menuitem");
+    expect(items.map((i) => i.textContent)).toEqual(["Undo"]);
+    fireEvent.click(items[0]);
+    await waitFor(() => expect(within(rowOf("Grace Whitfield")).queryByText("Paid just now")).toBeNull());
+  });
+
+  it("swipe left marks the invoice paid and swipe right sends a reminder (phone)", () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const width = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { value: 390, configurable: true, writable: true });
+    try {
+      render(<GestureLayer><PaymentsPage /></GestureLayer>);
+      const drag = (el: HTMLElement, dx: number) => {
+        el.getBoundingClientRect = () => ({ left: 0, top: 100, width: 390, height: 80, right: 390, bottom: 180, x: 0, y: 100, toJSON: () => ({}) }) as DOMRect;
+        const at = (x: number) => ({ touches: [{ clientX: x, clientY: 140 }], changedTouches: [{ clientX: x, clientY: 140 }] });
+        act(() => { fireEvent.touchStart(el, at(200)); });
+        act(() => { fireEvent.touchMove(el, at(200 + dx / 2)); });
+        act(() => { fireEvent.touchMove(el, at(200 + dx)); });
+        act(() => { fireEvent.touchEnd(el, { touches: [], changedTouches: [{ clientX: 200 + dx, clientY: 140 }] }); });
+      };
+      drag(rowOf("Paul Ortega"), -180);
+      expect(within(rowOf("Paul Ortega")).getByText("Paid just now")).toBeInTheDocument();
+      act(() => { vi.advanceTimersByTime(1000); });
+      drag(rowOf("Grace Whitfield"), 180);
+      expect(within(rowOf("Grace Whitfield")).getByText("Reminder sent just now")).toBeInTheDocument();
+    } finally {
+      Object.defineProperty(window, "innerWidth", { value: width, configurable: true, writable: true });
+      vi.useRealTimers();
+    }
+  });
+
+  it("shows the Not available yet chip inside the banner sentence, as Settings says it", () => {
+    render(<PaymentsPage />);
+    const banner = screen.getByText(/A paid invoice does not mark itself paid yet\./);
+    expect(banner.tagName).toBe("SPAN");
+    expect(within(banner).getByText("Not available yet")).toHaveClass("fd-chip", "is-plain");
+    expect(banner.previousElementSibling?.tagName.toLowerCase()).toBe("svg");
+  });
+
+  it("reads the live Invoices state: Mark paid here pays the invoice there, and an invoice sent there shows here", async () => {
+    const user = userEvent.setup();
+    let invoices: ReturnType<typeof useInvoicesKept> | null = null;
+    function Probe() {
+      invoices = useInvoicesKept();
+      return null;
+    }
+    render(
+      <AppShell business={buildBusiness({ name: "Sample Roofing", owner: "Pat Lee" })} searchRows={[]}>
+        <Probe />
+        <PaymentsPage />
+      </AppShell>,
+    );
+    await user.click(screen.getByRole("button", { name: "Mark paid, Grace Whitfield" }));
+    expect(invoices![0].invoices.find((i) => i.no === 1044)!.st).toBe("paid");
+    await user.click(screen.getByRole("button", { name: "Undo for Grace Whitfield" }));
+    expect(invoices![0].invoices.find((i) => i.no === 1044)!.st).toBe("sent");
+    expect(screen.queryByText("Hilliard Storage")).toBeNull();
+    act(() => invoices![1](markSentPatch(1049, new Date())));
+    expect(within(rowOf("Hilliard Storage")).getByText(/^Due /)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Remind now, Hilliard Storage" }));
+    expect(within(rowOf("Hilliard Storage")).getByText("Reminder sent just now")).toBeInTheDocument();
   });
 });

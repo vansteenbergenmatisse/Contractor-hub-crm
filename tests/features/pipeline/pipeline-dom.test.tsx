@@ -86,7 +86,10 @@ describe("stage arrows", () => {
     await user.click(within(bar).getByRole("button", { name: "Previous stage" }));
     await user.click(within(bar).getByRole("button", { name: "Previous stage" }));
     expect(board()).toHaveClass("is-st0");
-    expect(within(bar).getByRole("button", { name: "Previous stage" })).toBeDisabled();
+    // Changed in round 3 (finding P6): at the first stage the arrow is marked aria-disabled and stays
+    // focusable (the design only adds is-dis), so keyboard focus does not drop to the page.
+    expect(within(bar).getByRole("button", { name: "Previous stage" })).toHaveAttribute("aria-disabled", "true");
+    expect(within(bar).getByRole("button", { name: "Previous stage" })).not.toBeDisabled();
   });
 });
 
@@ -111,7 +114,8 @@ describe("state survives moving between pages", () => {
     await user.click(screen.getByRole("button", { name: "switch page" }));
     expect(card("Maria Alvarez").className).toContain("is-s2");
     expect(within(card("Maria Alvarez")).getByText("Moved just now")).toBeInTheDocument();
-    expect([...kept.keys]).toEqual(["pipeline"]);
+    // Changed in round 3: the board also reads the live Quotes state (key "quotes"), as the design does.
+    expect([...kept.keys]).toEqual(["pipeline", "quotes"]);
   });
 });
 

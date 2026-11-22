@@ -3,6 +3,7 @@
 import { useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useKeptReducer, useShell, useUndoShortcut } from "@/features/app-shell";
+import { useQuotesKept } from "@/features/quotes";
 import { boardReducer, canUndo, initialBoard } from "../api/board";
 import { calendarHref, quoteHref } from "../api/links";
 import { pressPlan } from "../api/press";
@@ -25,6 +26,9 @@ export function usePipelineBoard() {
   const [state, dispatch] = useKeptReducer("pipeline", boardReducer, MOCK_CARDS, initialBoard);
   const { sendTimer, askReason } = useShell();
   const router = useRouter();
+  // The live Quotes state: a card in Quote to Send asks it whether its quote still needs a price, and
+  // Send quote shows that quote (design logic 1142-1158).
+  const [{ quotes }] = useQuotesKept();
 
   const counts = useMemo(() => stageCounts(state, MOCK_HIDDEN_COUNTS), [state]);
   const groups = useMemo(() => groupCounts(counts), [counts]);
@@ -52,20 +56,25 @@ export function usePipelineBoard() {
     if (state.last && !state.last.undo) pick(state.last.to, true);
   }, [state.last, pick]);
 
-  const prev = useCallback(() => pick(state.stg - 1), [pick, state.stg]);
-  const next = useCallback(() => pick(state.stg + 1), [pick, state.stg]);
+  // At the first and the last stage the arrow stays focusable (aria-disabled) and does nothing.
+  const prev = useCallback(() => {
+    if (state.stg > 0) pick(state.stg - 1);
+  }, [pick, state.stg]);
+  const next = useCallback(() => {
+    if (state.stg < LAST_STAGE) pick(state.stg + 1);
+  }, [pick, state.stg]);
 
   const moveTo = useCallback((i: number, to: number) => dispatch({ type: "move", i, to }), [dispatch]);
 
   const press = useCallback(
     (view: CardView) => {
-      const plan = pressPlan(view);
+      const plan = pressPlan(view, quotes);
       if (plan.type === "dispatch") dispatch(plan.action);
       else if (plan.type === "navigate") router.push(plan.href);
       // A card moved by a send has no Undo: `plan.done` carries bySend.
       else sendTimer({ ...plan.request, onDone: () => dispatch(plan.done) });
     },
-    [router, sendTimer, dispatch],
+    [router, sendTimer, dispatch, quotes],
   );
 
   const lose = useCallback(
@@ -76,11 +85,12 @@ export function usePipelineBoard() {
   );
 
   const openCalendar = useCallback((name: string) => router.push(calendarHref(name)), [router]);
-  const openQuote = useCallback((name: string) => router.push(quoteHref(name)), [router]);
+  const openQuote = useCallback((name: string) => router.push(quoteHref(name, "sheet")), [router]);
 
   return {
     state,
     cards: MOCK_CARDS,
+    quotes,
     counts,
     groups,
     pick,

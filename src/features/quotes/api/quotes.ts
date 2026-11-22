@@ -1,7 +1,7 @@
 // Pure quote logic. No React, no network, no storage. Everything here runs on screen against mock data.
-import type { SendTimerRequest } from "@/features/app-shell";
+import type { SearchRow, SendTimerRequest } from "@/features/app-shell";
 import type {
-  BuildCheck, EditCheck, EditDraft, PriceParse, Quote, QuoteFilter, QuoteLine, QuotesAction, QuotesState, QuoteStatus,
+  BuildCheck, BuildDraft, EditCheck, EditDraft, PriceParse, Quote, QuoteFilter, QuoteLine, QuoteOpen, QuotesAction, QuotesState, QuoteStatus,
 } from "../types";
 
 // The edit form holds at most this many lines.
@@ -118,14 +118,34 @@ export const canApprove = (q: Quote): boolean => q.status === "ready";
 // the design. The sheet's own (filled) button shows only on a phone, where the sheet hides the list.
 export const rowFillId = (quotes: readonly Quote[]): string | undefined => firstReadyId(quotes);
 
-// A link from another page names a row with ?row=quote-<id>. A quote that needs a price is selected so
-// the owner can type it; any other quote opens its sheet.
-export function rowFromSearch(search: string, quotes: readonly Quote[]): { id: string; see: boolean } | null {
-  const row = new URLSearchParams(search).get("row") ?? "";
+// A link names a row with ?row=quote-<id>. A search result only brings the row into view (design
+// `uxOpen`: show all rows when a filter hides it, then flash it). A Pipeline link adds what it asks for:
+// &open=sheet opens the quote (design `openQuote`), &open=price selects it and puts the cursor in its
+// price field (design `addPrice`).
+export function rowFromSearch(search: string, quotes: readonly Quote[]): { id: string; open: QuoteOpen } | null {
+  const params = new URLSearchParams(search);
+  const row = params.get("row") ?? "";
   if (!row.startsWith("quote-")) return null;
   const q = quotes.find((x) => x.id === row.slice("quote-".length));
-  return q ? { id: q.id, see: q.status !== "need" } : null;
+  if (!q) return null;
+  const open = params.get("open");
+  return { id: q.id, open: open === "sheet" || open === "price" ? open : null };
 }
+
+// The link another page uses to reach a quote. Pipeline: See quote -> "sheet", Add price -> "price".
+export function quoteHref(id: string, open?: Exclude<QuoteOpen, null>): string {
+  return `/quotes?row=${encodeURIComponent(`quote-${id}`)}${open ? `&open=${open}` : ""}`;
+}
+
+// The quote of a customer, by name (Phase 2 links cards to quotes by the sample name, like the design `qi`).
+export const quoteByName = (quotes: readonly Quote[], name: string): Quote | undefined => quotes.find((q) => q.name === name);
+
+// The row's Build quote fields: what the owner typed, or the lead's service and an empty price.
+export const buildDraftOf = (state: QuotesState, q: Quote): BuildDraft =>
+  state.builds[q.id] ?? { service: q.service, price: "", errors: { service: "", price: "" } };
+
+export const draftOf = (q: Quote): EditDraft => ({ name: q.name, lines: q.lines.map((l) => ({ text: l.text, amount: String(l.amount) })) });
+
 export const canEdit = (q: Quote): boolean => (q.status === "ready" || q.status === "sent") && !q.file;
 export const canUpload = (q: Quote): boolean => (q.status === "need" || q.status === "ready") && !q.file;
 
@@ -158,14 +178,31 @@ export const initialState = (quotes: readonly Quote[]): QuotesState => ({
   editing: false,
   filter: "all",
   last: null,
+  builds: {},
+  draft: { name: "", lines: [] },
+  editError: "",
 });
 
 export function quotesReducer(state: QuotesState, action: QuotesAction): QuotesState {
   switch (action.type) {
     case "filter": return { ...state, filter: action.filter };
-    case "see": return { ...state, selectedId: action.id, doc: true, editing: false };
-    case "select": return state.quotes.some((q) => q.id === action.id) ? { ...state, selectedId: action.id, editing: false } : state;
-    case "shut": return { ...state, doc: false, editing: false };
+    case "see": return { ...state, selectedId: action.id, doc: true, editing: false, editError: "" };
+    // Add price (design `addPrice`): the list with every row, the quote selected, no sheet over it.
+    case "select": return state.quotes.some((q) => q.id === action.id) ? { ...state, selectedId: action.id, doc: false, filter: "all", editing: false, editError: "" } : state;
+    case "shut": return { ...state, doc: false, editing: false, editError: "" };
+    case "build-draft": {
+      const q = find(state, action.id);
+      if (!q) return state;
+      const now = buildDraftOf(state, q);
+      const next: BuildDraft = {
+        service: action.service ?? now.service,
+        price: action.price ?? now.price,
+        errors: action.errors ?? now.errors,
+      };
+      return { ...state, builds: { ...state.builds, [q.id]: next } };
+    }
+    case "edit-draft": return state.editing ? { ...state, draft: action.draft } : state;
+    case "edit-error": return { ...state, editError: action.message };
     case "build": {
       const q = find(state, action.id);
       if (!q || q.status !== "need") return state;
@@ -173,7 +210,9 @@ export function quotesReducer(state: QuotesState, action: QuotesAction): QuotesS
       void _file;
       // The row keeps the lead's service as its subtitle (as in the design); what the owner typed is the line text.
       const next: Quote = { ...rest, status: "ready", lines: action.lines, ...(action.high ? { high: action.high } : {}) };
-      return { ...state, quotes: patch(state, q.id, () => next), selectedId: q.id, last: null };
+      const { [q.id]: _done, ...builds } = state.builds;
+      void _done;
+      return { ...state, quotes: patch(state, q.id, () => next), selectedId: q.id, last: null, builds };
     }
     case "attach": {
       const q = find(state, action.id);
@@ -203,13 +242,18 @@ export function quotesReducer(state: QuotesState, action: QuotesAction): QuotesS
     }
     case "edit-start": {
       const q = find(state, state.selectedId);
-      return q && canEdit(q) ? { ...state, editing: true } : state;
+      return q && canEdit(q) ? { ...state, editing: true, draft: draftOf(q), editError: "" } : state;
     }
-    case "edit-cancel": return { ...state, editing: false };
+    case "edit-cancel": return { ...state, editing: false, editError: "" };
     case "edit-save": {
       const q = find(state, action.id);
       if (!q) return state;
-      return { ...state, quotes: patch(state, q.id, (x) => { const { high: _h, ...rest } = x; void _h; return { ...rest, name: action.name, lines: action.lines }; }), editing: false };
+      return { ...state, quotes: patch(state, q.id, (x) => { const { high: _h, ...rest } = x; void _h; return { ...rest, name: action.name, lines: action.lines }; }), editing: false, editError: "" };
     }
   }
 }
+
+// The rows the shared search finds on this page, from the quotes as they are now (a built quote shows
+// its new price). The layout seeds the same rows from the sample data until the page has opened.
+export const quoteSearchRows = (quotes: readonly Quote[]): SearchRow[] =>
+  quotes.map((quote) => ({ id: `quote-${quote.id}`, page: "quotes", name: quote.name, sub: `${quote.service} · ${amountLabel(quote)}`, href: "/quotes" }));

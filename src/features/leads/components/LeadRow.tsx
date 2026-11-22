@@ -1,3 +1,6 @@
+"use client";
+
+import { useRowGestures, type RowAction } from "@/features/app-shell";
 import { waitClass, isWaiting, rowWhen, SOURCE_LABEL, waitText } from "../api/leads-logic";
 import type { Lead, LeadStatus } from "../types";
 import { ChannelIcon } from "./ChannelIcon";
@@ -25,8 +28,19 @@ export function LeadRow({ lead, status, main, onCall, onReply, onBook }: Props) 
   const [tone, label] = waiting ? [waitClass(lead.minutesWaiting), status === "reply" ? "Reply" : "Call back"] : STATUS_CHIP[status as keyof typeof STATUS_CHIP];
   const chipText = waiting ? `${label} · waiting ${waitText(lead.minutesWaiting)}` : label;
   const mainClass = `fd-btn ${main ? "is-fill" : "is-plain"}`;
+  const reply = status === "reply";
+  // The row's buttons as its menu (long press, right-click, ContextMenu key, Shift+F10), in their order.
+  // A swipe right runs the main button (Call or Reply); the row has no Mark done, so a swipe left does
+  // nothing (design logic `uxActs` + `uxItems`; labels are the buttons' accessible names).
+  const actions: RowAction[] = [
+    reply
+      ? { label: `Reply to ${lead.name}`, onAction: onReply, swipe: "right" }
+      : { label: `Call ${lead.name}`, onAction: onCall, swipe: "right" },
+    { label: status === "booked" ? "Undo booking" : "Book visit", onAction: onBook },
+  ];
+  const gestures = useRowGestures<HTMLDivElement>({ label: lead.name, actions });
   return (
-    <div className="fd-rw" data-row-id={lead.id}>
+    <div {...gestures} className="fd-rw" data-row-id={lead.id}>
       <div className="fd-rm">
         <span className={`fd-cht is-${lead.source}`} aria-hidden="true"><ChannelIcon name={lead.source} /></span>
         <div className="fd-rbx">
@@ -39,7 +53,7 @@ export function LeadRow({ lead, status, main, onCall, onReply, onBook }: Props) 
         </div>
       </div>
       <div className="fd-rac">
-        {status === "reply" ? (
+        {reply ? (
           <button type="button" className={mainClass} onClick={onReply} aria-label={`Reply to ${lead.name}`}>
             <ChannelIcon name="reply" size={15} />Reply
           </button>

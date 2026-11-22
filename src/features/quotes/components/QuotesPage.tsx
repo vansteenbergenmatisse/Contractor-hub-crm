@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useBusiness, useBusinessValues, usePushed, useRowFocus, useShell } from "@/features/app-shell";
-import { checkBuild, filterCounts, isVisible, rowFillId, rowFromSearch, sendRequest, totals, uploadName } from "../api/quotes";
+import { useMemo, useRef } from "react";
+import { useBusiness, useBusinessValues, usePushed, useRowFocus, useSearchRows, useShell } from "@/features/app-shell";
+import { buildDraftOf, checkBuild, filterCounts, quoteSearchRows, rowFillId, sendRequest, totals, uploadName } from "../api/quotes";
 import { sheetBusiness } from "../api/sheet-business";
+import { useQuoteLink } from "../hooks/use-quote-link";
 import { useQuotes } from "../hooks/use-quotes";
 import { WIN_TILE, mockBuildLines } from "../mock";
 import type { QuoteFilter } from "../types";
@@ -16,6 +17,22 @@ const FILTERS: ReadonlyArray<{ key: QuoteFilter; label: string }> = [
   { key: "sent", label: "Sent" },
 ];
 
+const width = () => { try { return window.innerWidth; } catch { return 1280; } };
+
+// "See the quote", as the design: on a phone (under 1024px) the sheet is the whole screen, so the page
+// goes back to its top (`top()`) and the focus moves into the sheet (no ring: it is not a control); when
+// the sheet sits under the list (1024 to 1199px) it is brought into view (`uxStack`); on a wide screen
+// the sheet already shows beside the list and nothing moves.
+function revealSheet() {
+  const w = width();
+  if (w < 1024) {
+    document.querySelector(".fd-main")?.scrollTo?.({ top: 0 });
+    setTimeout(() => document.getElementById(SHEET_ID)?.focus({ preventScroll: true }), 0);
+  } else if (w < 1200) {
+    setTimeout(() => document.querySelector(".fd-side2")?.scrollIntoView?.({ block: "start" }), 120);
+  }
+}
+
 // Page content only. The shell supplies the fd-view wrapper. Local state against mock data: nothing is
 // sent, fetched or stored. "Approve and send" opens the shared 20 second timer and, at 0, only marks the
 // quote Sent on screen.
@@ -25,45 +42,42 @@ export function QuotesPage() {
   const [state, dispatch] = useQuotes();
   const fileInput = useRef<HTMLInputElement>(null);
   const uploadFor = useRef<string | null>(null);
-  const [seen, setSeen] = useState(0);
   usePushed(state.doc);
-
-  useEffect(() => {
-    if (seen === 0) return;
-    const sheet = document.getElementById(SHEET_ID);
-    sheet?.scrollIntoView?.({ block: "start" });
-    sheet?.focus({ preventScroll: true });
-  }, [seen]);
+  // Search finds the quotes as they are now (design: search reads the rendered rows).
+  useSearchRows("quotes", useMemo(() => quoteSearchRows(state.quotes), [state.quotes]));
 
   const selected = state.quotes.find((q) => q.id === state.selectedId) ?? state.quotes[0];
   const sums = totals(state.quotes);
   const counts = filterCounts(state.quotes);
   const filledId = rowFillId(state.quotes);
 
-  const see = (id: string) => { dispatch({ type: "see", id }); setSeen((n) => n + 1); };
-  // A link (?row=quote-<id>: a search result, or Add price / See quote on the Pipeline) selects that
-  // quote when the page opens and again whenever the link changes while the page is open. A filter that
-  // hides the row is cleared first, as in the design; useRowFocus then scrolls to the row and flashes it.
-  const rowLink = useRowFocus(state.quotes.map((q) => `quote-${q.id}`)) ?? "";
-  useEffect(() => {
-    const pick = rowFromSearch(`?row=${encodeURIComponent(rowLink)}`, state.quotes);
-    if (!pick) return;
-    const linked = state.quotes.find((q) => q.id === pick.id);
-    if (linked && !isVisible(linked, state.filter)) dispatch({ type: "filter", filter: "all" });
-    const timer = setTimeout(() => {
-      if (pick.see) { see(pick.id); return; }
-      dispatch({ type: "select", id: pick.id });
+  const see = (id: string) => { dispatch({ type: "see", id }); revealSheet(); };
+  // A link: a search result only shows the row (all rows when a filter hides it) and useRowFocus
+  // flashes it; Pipeline's See quote opens the sheet; Add price selects the quote on the list and puts
+  // the cursor in its price field (design `addPrice`).
+  const filter = useQuoteLink(state, {
+    showAll: () => dispatch({ type: "filter", filter: "all" }),
+    openSheet: see,
+    addPrice: (id) => {
+      dispatch({ type: "select", id });
       setTimeout(() => {
-        const field = document.getElementById(`fd-qt-pr-${pick.id}`);
+        const field = document.getElementById(`fd-qt-pr-${id}`);
         field?.scrollIntoView?.({ block: "center" });
         field?.focus({ preventScroll: true });
-      }, 0);
-    }, 0);
-    return () => clearTimeout(timer);
-    // Runs when the link changes; later changes of the list must not re-select the linked row.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rowLink]);
-  const shut = () => { const id = state.selectedId; dispatch({ type: "shut" }); setTimeout(() => document.getElementById(`fd-qt-${id}`)?.focus(), 0); };
+      }, 80);
+    },
+  });
+  useRowFocus(state.quotes.map((q) => `quote-${q.id}`));
+  // Back to the list: on a phone the row comes back into view (design `into`), and the focus goes back
+  // to the row's "See the quote" button.
+  const shut = () => {
+    const id = state.selectedId;
+    dispatch({ type: "shut" });
+    setTimeout(() => {
+      if (width() < 1024) document.getElementById(`fd-qt-${id}`)?.scrollIntoView?.({ block: "center" });
+      document.getElementById(`fd-qt-v-${id}`)?.focus({ preventScroll: true });
+    }, 60);
+  };
   const approve = (id: string) => {
     const q = state.quotes.find((x) => x.id === id);
     if (q) shell.sendTimer(sendRequest(q, () => dispatch({ type: "sent", id })));
@@ -108,7 +122,7 @@ export function QuotesPage() {
           </section>
           <div className="fd-fl" role="group" aria-label="Which rows show">
             {FILTERS.map(({ key, label }) => (
-              <button key={key} type="button" className={"fd-flb" + (state.filter === key ? " is-on" : "")} aria-pressed={state.filter === key} aria-label={`${label}, ${counts[key]}`} onClick={() => dispatch({ type: "filter", filter: key })}>{label}</button>
+              <button key={key} type="button" className={"fd-flb" + (filter === key ? " is-on" : "")} aria-pressed={filter === key} aria-label={`${label}, ${counts[key]}`} onClick={() => dispatch({ type: "filter", filter: key })}>{label}</button>
             ))}
           </div>
           <div className="fx-emp">
@@ -121,10 +135,12 @@ export function QuotesPage() {
               <QuoteRow
                 key={q.id}
                 quote={q}
-                filter={state.filter}
+                filter={filter}
                 selected={q.id === state.selectedId}
                 filled={q.id === filledId}
                 canUndo={state.last?.id === q.id}
+                draft={buildDraftOf(state, q)}
+                onDraft={(change) => dispatch({ type: "build-draft", id: q.id, ...change })}
                 onSee={() => see(q.id)}
                 onApprove={() => approve(q.id)}
                 onWon={() => dispatch({ type: "move", id: q.id, to: "won" })}
@@ -143,6 +159,10 @@ export function QuotesPage() {
               quote={selected}
               business={business}
               editing={state.editing}
+              draft={state.draft}
+              error={state.editError}
+              onDraft={(draft) => dispatch({ type: "edit-draft", draft })}
+              onError={(message) => dispatch({ type: "edit-error", message })}
               onShut={shut}
               onEdit={() => dispatch({ type: "edit-start" })}
               onCancel={() => dispatch({ type: "edit-cancel" })}

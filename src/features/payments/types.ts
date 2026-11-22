@@ -3,6 +3,8 @@
 // One open invoice. `daysLate` is 0 or less when the invoice is not due yet.
 export type PaymentRow = {
   id: string;
+  // The invoice number (the Invoices page's key).
+  no: number;
   initials: string;
   name: string;
   invoice: string;
@@ -14,6 +16,8 @@ export type PaymentRow = {
   when: string;
   // What the reminder history says before anything happens on screen.
   history: string;
+  // Marked paid during this visit (here or on the Invoices page): shown paid, with Undo.
+  settled?: boolean;
 };
 
 export type Lateness = "warn" | "bad" | "hot";
@@ -26,4 +30,8 @@ export type PaymentsState = Readonly<Record<string, RowState>>;
 export type Totals = { owed: number; late: number; lateCount: number; got: number };
 
 // What the page can do to a row.
-export type PaymentsAction = { type: "remind" | "paid" | "undo"; id: string };
+// "track" adds a state entry for rows that appear later (an invoice sent on the Invoices page).
+export type PaymentsAction = { type: "remind" | "paid" | "undo"; id: string } | { type: "track"; ids: readonly string[] };
+
+// What a row's swipe and menu can do (design uxActs / uxItems).
+export type RowActionSpec = { label: string; key: "remind" | "paid" | "undo"; swipe?: "right" | "left" };

@@ -47,18 +47,23 @@ describe("SettingsPage markup", () => {
     expect(usePushed).toHaveBeenCalledWith(false);
   });
 
-  it("marks the current section and never claims a connection the app cannot read", () => {
+  it("marks the current section and shows each connection as build prompt lines 145-146 allow", () => {
     expect(html).toMatch(/aria-current="page"[^>]*>(?:(?!<\/button>).)*Business details/s);
-    // No API gives a connection status yet (build prompt section 6), so no row says Connected,
-    // no row says Not connected, and the A2P line does not show.
+    // Phone, Facebook and Google My Business: Connected (MOCK, the design's sample). Instagram: Not
+    // connected (MOCK). Calendar and Online payments: no API reads them, so "Not available yet".
+    const chips = [...html.matchAll(/<span class="fd-chip (is-ok|is-plain)">(?:(?!<\/span><\/span>).)*<span class="fd-h">([^<]*)<\/span><\/span>/gs)].map((m) => `${m[1]}:${m[2]}`);
+    expect(chips).toEqual([
+      "is-ok:Connected", "is-plain:Not available yet", "is-ok:Connected", "is-plain:Not connected", "is-ok:Connected", "is-plain:Not available yet",
+    ]);
+    // The calendar's name is not readable, so it is never claimed.
     expect(html).not.toContain("Connected: Google Calendar");
-    expect(html).not.toMatch(/>Connected</);
-    expect(html).not.toContain("Not connected");
+    // No API gives the A2P status: the line says so and never claims it is verified.
+    expect(html).toContain("A2P status: Not available yet.");
     expect(html).not.toContain("A2P verified. Your texts get delivered.");
-    expect((html.match(/class="fd-chip is-plain">(?:(?!<\/span><\/span>).)*<span class="fd-h">Not available yet<\/span><\/span>/gs) ?? []).length).toBe(6);
-    // Each row shows its steps and the ask button, as a not-connected row does in the design.
-    expect((html.match(/>Ask Forge Forward to connect</g) ?? []).length).toBe(6);
-    expect((html.match(/class="fd-rex fd-how"/g) ?? []).length).toBe(6);
+    // A row that is not connected shows its steps and the ask button; a connected row is collapsed.
+    expect((html.match(/>Ask Forge Forward to connect</g) ?? []).length).toBe(3);
+    expect((html.match(/class="fd-rex fd-how"/g) ?? []).length).toBe(3);
+    expect((html.match(/class="fd-rex fd-how is-off"/g) ?? []).length).toBe(3);
     expect(html).toContain("Done when this row says Connected.");
     expect(html).not.toMatch(/>Connect</);
   });
@@ -87,7 +92,7 @@ describe("SettingsPage markup", () => {
     const out = renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), sec: "conn", asked: { 1: true } }} />);
     expect(out).toContain("Noted on this screen. The request is not sent to Forge Forward yet.");
     expect(out).not.toContain("got your request");
-    expect((out.match(/>Ask Forge Forward to connect</g) ?? []).length).toBe(5);
+    expect((out.match(/>Ask Forge Forward to connect</g) ?? []).length).toBe(2);
   });
 
   it("has two real switches showing On or Off and three chips with no switch", () => {
@@ -122,14 +127,35 @@ describe("SettingsPage markup", () => {
     expect(none).toContain("No settings match your search.");
   });
 
-  it("shows the error, flags the field and repeats the message at the field", () => {
-    const s = { ...initialState(), err: { key: "main_hover_color", message: "Main, pressed needs a color like #2E7D32.", section: "colors" as const } };
+  it("shows the error once, at the top as in the design, and flags the field that points to it", () => {
+    const msg = "custom_values.main_hover_color needs a color like #2E7D32.";
+    const s = { ...initialState(), err: { key: "main_hover_color", message: msg, section: "colors" as const } };
     const out = renderToStaticMarkup(<SettingsPage initial={s} />);
-    expect(out).toMatch(/class="fd-lerr fd-ste" id="fd-st-err" role="alert">(?:(?!<\/p>).)*Main, pressed needs a color like #2E7D32\./s);
+    expect(out).toMatch(/class="fd-lerr fd-ste" id="fd-st-err" role="alert">(?:(?!<\/p>).)*custom_values\.main_hover_color needs a color like #2E7D32\./s);
     expect(out).toMatch(/id="cv-main_hover_color"[^>]*aria-invalid="true"|aria-invalid="true"[^>]*id="cv-main_hover_color"/);
-    expect(out).toMatch(/aria-describedby="cv-main_hover_color-err"/);
-    expect(out).toMatch(/<p class="fd-lerr" id="cv-main_hover_color-err">(?:(?!<\/p>).)*Main, pressed needs a color like #2E7D32\./s);
-    expect((out.match(/class="fd-lerr"/g) ?? []).length).toBe(1);
+    expect(out).toMatch(/aria-describedby="fd-st-err"/);
+    expect(out.split(msg).length - 1).toBe(1);
+    expect((out.match(/class="fd-lerr"/g) ?? []).length).toBe(0);
+  });
+
+  it("keeps the save bar, the color group headings and the five section frames while searching, as the design does", () => {
+    const out = renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), q: "a2p" }} />);
+    expect(out).toContain("Save changes");
+    expect(out).toContain('class="fd-cols fd-st2 fd-in"');
+    expect(out).not.toContain('id="cv-business_name"');
+    expect(out).toContain("A2P status: Not available yet.");
+  });
+
+  it("finds a connection by its status, as the design's search reads the whole row", () => {
+    const out = renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), q: "not connected" }} />);
+    expect(out).toContain(">Instagram<");
+    expect(out).not.toContain(">Facebook page<");
+    const live = renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), q: "on" }} />);
+    expect(live).toContain('aria-label="Customers pick their own job date"');
+  });
+
+  it("has the design's Sign out button", () => {
+    expect(html).toMatch(/<button type="button" class="fd-btn is-plain fd-lgo fd-stout">Sign out<\/button>/);
   });
 
   it("shows the sub-account's real values, empty fields for keys it lacks, and its extra keys under their own key", () => {
@@ -204,9 +230,10 @@ describe("SettingsPage markup", () => {
     expect(swatches.every((t) => /style="background:(#[0-9a-f]{3,6}|var\(--[a-z-]+\))"/i.test(t))).toBe(true);
   });
 
-  it("says Save stays on this screen", () => {
-    expect(html).toContain("Saved on this screen. It is not written to HighLevel yet.");
-    expect(html).not.toContain("Every page uses the new values.");
+  it("uses the design's Saved line and Brand colors subtitle", () => {
+    expect(html).toContain("<span>Saved. Every page uses the new values.</span>");
+    expect(html).toContain("Folder 02_Branding. Four groups. Type a color like #2E7D32 and press Save changes. Every page takes the color of each key.");
+    expect(html).not.toContain("Saved on this screen. It is not written to HighLevel yet.");
   });
 
   it("keeps the color toggle's aria-expanded equal to what shows, also while searching", () => {

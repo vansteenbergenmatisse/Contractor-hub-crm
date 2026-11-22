@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ROW_PICK_EVENT, flashStyle, rowParam } from "../api/search";
+import { giveFxLayer, takeFxLayer } from "../api/fx-layer";
 
 // useRowFocus(ids: readonly string[]): string | null
 //
@@ -52,32 +53,27 @@ export function useRowFocus(ids: readonly string[]): string | null {
     if (el.hasAttribute("tabindex") || el.tabIndex >= 0) el.focus({ preventScroll: true });
     let remove: ReturnType<typeof setTimeout> | undefined;
     let ring: HTMLDivElement | null = null;
-    let made: HTMLElement | null = null;
+    let layer: HTMLElement | null = null;
+    const finish = () => {
+      ring?.remove();
+      ring = null;
+      if (layer) giveFxLayer(layer);
+      layer = null;
+    };
     const show = setTimeout(() => {
-      // The ring goes in the `#fx` layer over the app, like the design; one is made when search is closed.
-      let layer = document.getElementById("fx");
-      if (!layer) {
-        made = document.createElement("div");
-        made.id = "fx";
-        made.className = "fd-app brand-scope fx-root";
-        document.body.appendChild(made);
-        layer = made;
-      }
+      // The ring goes in the shared `#fx` layer over the app, like the design (api/fx-layer.ts).
+      layer = takeFxLayer();
       ring = document.createElement("div");
       ring.className = "fx-flash";
       ring.setAttribute("aria-hidden", "true");
       Object.assign(ring.style, flashStyle(el.getBoundingClientRect()));
       layer.appendChild(ring);
-      remove = setTimeout(() => {
-        ring?.remove();
-        made?.remove();
-      }, 1500);
+      remove = setTimeout(finish, 1500);
     }, 140);
     return () => {
       clearTimeout(show);
       if (remove) clearTimeout(remove);
-      ring?.remove();
-      made?.remove();
+      finish();
     };
   }, [row, key, again]);
   return row;

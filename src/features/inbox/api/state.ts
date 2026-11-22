@@ -12,22 +12,26 @@ export function initialState(conversations: readonly Conversation[]): InboxState
     bumps: 0,
     swaps: 0,
     event: "",
+    draft: "",
   };
 }
+
+// The reply box empties when another conversation opens (design `pick`).
+const draftFor = (state: InboxState, id: string): string => (id === state.selected ? state.draft : "");
 
 // Local state only. Nothing here sends anything.
 export function inboxReducer(state: InboxState, action: InboxAction): InboxState {
   switch (action.type) {
     case "open": {
       const changed = action.id !== state.selected || !state.open;
-      return { ...state, selected: action.id, open: true, swaps: state.swaps + (changed ? 1 : 0), event: "open" };
+      return { ...state, selected: action.id, open: true, swaps: state.swaps + (changed ? 1 : 0), event: "open", draft: draftFor(state, action.id) };
     }
     case "replyTo":
-      return { ...state, filter: "all", selected: action.id, open: true, swaps: state.swaps + 1, event: "open" };
+      return { ...state, filter: "all", selected: action.id, open: true, swaps: state.swaps + 1, event: "open", draft: draftFor(state, action.id) };
     case "show": {
       if (!(action.id in state.needs)) return state;
       const changed = action.id !== state.selected || !state.open;
-      return { ...state, filter: action.hidden ? "all" : state.filter, selected: action.id, open: true, swaps: state.swaps + (changed ? 1 : 0), event: "open" };
+      return { ...state, filter: action.hidden ? "all" : state.filter, selected: action.id, open: true, swaps: state.swaps + (changed ? 1 : 0), event: "open", draft: draftFor(state, action.id) };
     }
     case "send": {
       const text = action.text.trim();
@@ -38,10 +42,16 @@ export function inboxReducer(state: InboxState, action: InboxAction): InboxState
         needs: { ...state.needs, [state.selected]: false },
         bumps: state.bumps + 1,
         event: "send",
+        draft: "",
       };
     }
     case "toggleDone":
       return { ...state, needs: { ...state.needs, [state.selected]: !state.needs[state.selected] }, bumps: state.bumps + 1, event: "done" };
+    case "toggleNeed":
+      if (!(action.id in state.needs)) return state;
+      return { ...state, needs: { ...state.needs, [action.id]: !state.needs[action.id] }, bumps: state.bumps + 1, event: "done" };
+    case "draft":
+      return state.draft === action.text ? state : { ...state, draft: action.text };
     case "toList":
       return { ...state, open: false, event: "list" };
     case "filter":
@@ -106,6 +116,10 @@ export function rowSnippet(state: InboxState, c: Conversation, business: TextBus
   const last = mine[mine.length - 1];
   return last !== undefined ? `You: ${last}` : fillText(c.snippet, business);
 }
+
+// The design shows the owner's newest 4 messages of a thread (logic `SLOTS = 4`).
+export const SENT_SLOTS = 4;
+export const shownSent = (sent: readonly string[]): readonly string[] => sent.slice(Math.max(0, sent.length - SENT_SLOTS));
 
 export function rowTime(state: InboxState, c: Conversation): string {
   return (state.sent[c.id] ?? []).length ? "Just now" : c.time;

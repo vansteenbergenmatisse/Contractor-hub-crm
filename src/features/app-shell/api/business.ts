@@ -37,11 +37,11 @@ function siteOf(url: string | null | undefined): string {
 }
 
 // What the frame and the pages show about the business and the signed-in person. Inputs come from
-// the sub-account's custom values; every field has a plain fallback so an empty value never breaks
-// the frame and never shows a made-up business fact.
+// the sub-account's custom values. A missing value stays empty ("" or null), never a made-up word
+// (docs/tenant-branding.md), and whatever shows it renders nothing in its place.
 export function buildBusiness(input: BusinessInput): Business {
-  const name = clean(input.name) || "Your business";
-  const owner = clean(input.owner) || "Owner";
+  const name = clean(input.name);
+  const owner = clean(input.owner);
   const place = [clean(input.city), clean(input.state)].filter(Boolean).join(", ");
   const tag = [clean(input.keyword), place].filter(Boolean).join(" · ");
   const link = (value: string | null | undefined) => (value && value.trim() ? value.trim() : null);
@@ -51,7 +51,7 @@ export function buildBusiness(input: BusinessInput): Business {
     tag,
     owner,
     ownerInit: initials(owner.split(/\s+/)),
-    first: owner.split(/\s+/)[0],
+    first: owner.split(/\s+/)[0] ?? "",
     logoUrl: link(input.logoUrl),
     keyword: clean(input.keyword),
     phone: clean(input.phone),
@@ -77,8 +77,8 @@ export function buildBusiness(input: BusinessInput): Business {
 // page reads `values.business_phone_number` whether the data is the sample or the real sub-account.
 export function businessValues(business: Business) {
   return {
-    business_name: business.name === "Your business" ? "" : business.name,
-    business_owner_name: business.owner === "Owner" ? "" : business.owner,
+    business_name: business.name,
+    business_owner_name: business.owner,
     business_phone_number: business.phone,
     business_email: business.email,
     business_address: business.address,
@@ -103,10 +103,9 @@ const PATCH_KEYS = [
 export type BusinessPatch = Partial<Business>;
 
 // The details with a patch on top (Settings edits in this browser session). "" or null blanks a
-// field (text to "", links to null, the name to its plain word); derived and unknown
-// fields in the patch are ignored and recomputed by `buildBusiness`. A blank owner keeps the owner
-// already shown (the signed-in person's name), so a Settings save without an owner name never
-// turns the menu card into "Owner".
+// field (text to "", links to null); derived and unknown fields in the patch are ignored and
+// recomputed by `buildBusiness`. A blank owner keeps the owner already shown (the signed-in person's
+// name), so a Settings save without an owner name never blanks the menu card.
 export function patchBusiness(base: Business, patch: BusinessPatch): Business {
   const input: BusinessInput = {
     name: base.name, owner: base.owner, keyword: base.keyword, city: base.city, county: base.county, state: base.state,

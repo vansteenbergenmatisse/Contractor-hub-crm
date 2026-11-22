@@ -46,19 +46,32 @@ afterEach(() => {
 });
 
 describe("?row= on the Quotes page", () => {
-  it("selects the linked quote when the URL changes while the page is already open", async () => {
+  // Design `uxOpen`: a search result only shows and flashes its row; it opens no sheet and selects nothing.
+  it("a search link shows the row without opening its sheet or selecting it, also when the URL changes while open", async () => {
     vi.useFakeTimers();
     const view = render(<QuotesPage />);
-    expect(row("q0").className).toContain("is-sel");
     go("?row=quote-q3");
     view.rerender(<QuotesPage />);
     await act(async () => { vi.runAllTimers(); });
-    expect(row("q3").className).toContain("is-sel");
-    expect(row("q0").className).not.toContain("is-sel");
-    go("?row=quote-q4");
+    expect(document.querySelector(".fd-dv")!.className).not.toContain("is-doc");
+    expect(row("q0").className).toContain("is-sel");
+    expect(row("q3").className).not.toContain("is-sel");
+  });
+
+  it("a Pipeline See quote link (&open=sheet) opens that quote's sheet; Add price (&open=price) selects it on the list", async () => {
+    vi.useFakeTimers();
+    const view = render(<QuotesPage />);
+    go("?row=quote-q3&open=sheet");
     view.rerender(<QuotesPage />);
     await act(async () => { vi.runAllTimers(); });
-    expect(row("q4").className).toContain("is-sel");
+    expect(row("q3").className).toContain("is-sel");
+    expect(document.querySelector(".fd-dv")!.className).toContain("is-doc");
+    go("?row=quote-q1&open=price");
+    view.rerender(<QuotesPage />);
+    await act(async () => { vi.runAllTimers(); });
+    expect(row("q1").className).toContain("is-sel");
+    expect(document.querySelector(".fd-dv")!.className).not.toContain("is-doc");
+    expect(document.activeElement?.id).toBe("fd-qt-pr-q1");
   });
 
   it("clears a filter that hides the linked row, as the design does", async () => {
@@ -70,7 +83,6 @@ describe("?row= on the Quotes page", () => {
     view.rerender(<QuotesPage />);
     await act(async () => { vi.runAllTimers(); });
     expect(row("q0").className).not.toContain("is-off");
-    expect(row("q0").className).toContain("is-sel");
   });
 
   it("lays the design's flash ring over the linked row", async () => {
@@ -92,7 +104,7 @@ describe("Quotes state survives moving between pages", () => {
     expect(row("q2").textContent).toContain("Accepted. Booking link sent.");
     view.rerender(<Page on={false} />);
     expect(document.getElementById("fd-qt-q2")).toBeNull();
-    expect(kept.has("quotes")).toBe(true);
+    expect([...kept.keys()]).toEqual(["quotes"]);
     view.rerender(<Page on />);
     expect(row("q2").textContent).toContain("Accepted. Booking link sent.");
   });

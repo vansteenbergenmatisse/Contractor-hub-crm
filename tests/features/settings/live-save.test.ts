@@ -14,7 +14,7 @@ describe("businessPatchFromValues", () => {
     });
     expect(p).toEqual({
       name: "Test Roofing Co", owner: "Sam Tester", phone: "+1 (555) 010-0000", email: "office@test.example",
-      address: "1 Test St", hours: "Mon-Fri 8-5", websiteUrl: "https://test.example", logoUrl: "https://cdn.test.example/logo.png",
+      address: "1 Test St", hours: "Mon-Fri 8-5", websiteUrl: "https://test.example/", logoUrl: "https://cdn.test.example/logo.png",
       bookingJobUrl: "https://book.test.example/job", bookingQuoteUrl: "https://book.test.example/quote",
       googleProfileUrl: "https://g.test.example/profile", googleReviewUrl: "https://g.test.example/review",
     });
@@ -42,6 +42,18 @@ describe("businessPatchFromValues", () => {
     const p = businessPatchFromValues({ business_logo: "http://x.example/a.png", business_website_url: "javascript:alert(1)" });
     expect(p.logoUrl).toBeUndefined();
     expect(p.websiteUrl).toBeUndefined();
+  });
+
+  it("sends a link only in its parsed form, so a quote can never end a CSS url(\"...\")", () => {
+    const p = businessPatchFromValues({
+      business_logo: 'https://a.test.example/x"),url("https://tracker.test.example/p',
+      business_website_url: "https://exa mple.test", google_review_request_url: "HTTPS://G.TEST.EXAMPLE/r",
+    });
+    expect(p.logoUrl).toBe("https://a.test.example/x%22),url(%22https://tracker.test.example/p");
+    expect(p.logoUrl).not.toContain('"');
+    expect(p.websiteUrl).toBeUndefined();
+    expect(p.googleReviewUrl).toBe("https://g.test.example/r");
+    expect(businessPatchFromValues({ business_logo: "https://" }).logoUrl).toBeUndefined();
   });
 });
 

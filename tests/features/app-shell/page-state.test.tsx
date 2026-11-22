@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PageStateProvider, useKeptReducer } from "@/features/app-shell";
@@ -49,5 +49,37 @@ describe("useKeptReducer", () => {
     unmount();
     render(<Counter />);
     expect(screen.getByRole("button", { name: "count 0" })).toBeInTheDocument();
+  });
+});
+
+describe("useKeptReducer: an action after the page is gone", () => {
+  it("still lands in the kept state, and the page shows it when it comes back", async () => {
+    const user = userEvent.setup();
+    const late: { send?: (by: number) => void } = {};
+    function Page() {
+      const [n, dispatch] = useKeptReducer("late", add, 0, (x) => x);
+      useEffect(() => {
+        late.send = dispatch;
+      });
+      return <p>late {n}</p>;
+    }
+    function Frame() {
+      const [shown, setShown] = useState(true);
+      return (
+        <PageStateProvider>
+          <button type="button" onClick={() => setShown((s) => !s)}>
+            toggle
+          </button>
+          {shown ? <Page /> : <p>other page</p>}
+        </PageStateProvider>
+      );
+    }
+    render(<Frame />);
+    expect(screen.getByText("late 0")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "toggle" }));
+    expect(screen.getByText("other page")).toBeInTheDocument();
+    late.send!(5); // a send timer finishing while the owner is on another page
+    await user.click(screen.getByRole("button", { name: "toggle" }));
+    expect(screen.getByText("late 5")).toBeInTheDocument();
   });
 });

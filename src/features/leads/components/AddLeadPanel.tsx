@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, type KeyboardEvent } from "react";
+import { trapFocus } from "@/features/app-shell";
 import type { FormErrors, FormField, FormValues, LeadsState } from "../types";
-import { ChannelIcon } from "./ChannelIcon";
+import { FieldError } from "./FieldError";
 
 type Props = {
   sheet: boolean;
@@ -19,19 +20,11 @@ type Props = {
   onClose: () => void;
 };
 
-function FieldError({ id, message }: { id: string; message: string }) {
-  return (
-    <p className={`fd-lerr${message ? "" : " is-off"}`} id={id} role="alert">
-      <ChannelIcon name="alert" size={16} />
-      <span>{message}</span>
-    </p>
-  );
-}
-
 // "Add a lead by hand": a bottom sheet on a phone, a panel beside the list on a computer.
 // Phase 2: it only adds a row on screen. In Phase 3 it posts to the form webhook so the
 // lead-capture workflow in HighLevel runs.
 export function AddLeadPanel({ sheet, phone, focusTick, form, errors, focus, onField, onSubmit, onClose }: Props) {
+  const panelRef = useRef<HTMLElement | null>(null);
   const nameRef = useRef<HTMLInputElement | null>(null);
   const phoneRef = useRef<HTMLInputElement | null>(null);
   const emailRef = useRef<HTMLInputElement | null>(null);
@@ -56,15 +49,31 @@ export function AddLeadPanel({ sheet, phone, focusTick, form, errors, focus, onF
   }, [focusTick]);
 
   const dialog = sheet && phone;
+  // The open sheet closes with Escape wherever the focus is (the page puts it back on "Add a lead").
+  const close = useRef(onClose);
+  useEffect(() => {
+    close.current = onClose;
+  });
+  useEffect(() => {
+    if (!sheet) return;
+    const onEscape = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      e.preventDefault();
+      close.current();
+    };
+    document.addEventListener("keydown", onEscape);
+    return () => document.removeEventListener("keydown", onEscape);
+  }, [sheet]);
+  // The phone sheet is a modal dialog: Tab and Shift+Tab stay inside it.
   const onKey = (e: KeyboardEvent<HTMLElement>) => {
-    if (e.key === "Escape" && sheet) onClose();
+    if (dialog) trapFocus(e, panelRef.current);
   };
   const bad = (m: string) => (m ? " is-bad" : "");
 
   return (
     <>
       <button type="button" className={`fx-addscrim${sheet ? " is-on" : ""}`} aria-label="Close" tabIndex={sheet ? 0 : -1} onClick={onClose} />
-      <section className={`fd-pnl fx-addp${sheet ? " is-sheet" : ""}`} aria-labelledby="fd-ld-h" role={dialog ? "dialog" : undefined} aria-modal={dialog ? true : undefined} onKeyDown={onKey}>
+      <section ref={panelRef} className={`fd-pnl fx-addp${sheet ? " is-sheet" : ""}`} aria-labelledby="fd-ld-h" role={dialog ? "dialog" : undefined} aria-modal={dialog ? true : undefined} onKeyDown={onKey}>
         <h2 className="fd-pnh" id="fd-ld-h">Add a lead by hand</h2>
         <p className="fd-pns">For a lead you met in person. Leads from calls, forms and messages add themselves.</p>
         <label className="fd-ll" htmlFor="fd-ld-name">Name</label>

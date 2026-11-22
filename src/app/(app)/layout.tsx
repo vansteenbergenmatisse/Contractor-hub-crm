@@ -13,6 +13,8 @@ import { getRequestUser } from "../session";
 export const dynamic = "force-dynamic";
 
 // Rows the search can find: the pages' sample rows (Phase 2, mock data; Phase 3 asks the backend).
+// A page that has been opened hands in its current rows instead (`useSearchRows`), so moves, added
+// leads and new prices show in search; these are the rows for pages not opened yet.
 // The Today page's own list repeats the same people, so it is left out to avoid double results.
 const SEARCH_ROWS: readonly SearchRow[] = [...leadRows, ...pipelineRows, ...quoteRows, ...invoiceRows, ...paymentRows, ...inboxRows];
 

@@ -1,8 +1,8 @@
 "use client";
 
-import type { CSSProperties } from "react";
-import { useBusiness, useBusinessValues, usePushed } from "@/features/app-shell";
-import { businessCard, formatMoney, totals } from "../api/invoices";
+import { useMemo, type CSSProperties } from "react";
+import { useBusiness, useBusinessValues, usePushed, useSearchRows } from "@/features/app-shell";
+import { businessCard, formatMoney, invoiceSearchRows, totals } from "../api/invoices";
 import { useInvoices } from "../hooks/use-invoices";
 import type { Filter } from "../types";
 import { InvoiceRow } from "./InvoiceRow";
@@ -22,6 +22,8 @@ const step = (i: number) => ({ "--i": i }) as CSSProperties;
 export function InvoicesPage() {
   const s = useInvoices();
   usePushed(s.doc);
+  // Search finds the invoices as they are now (design: search reads the rendered rows).
+  useSearchRows("invoices", useMemo(() => invoiceSearchRows(s.invoices), [s.invoices]));
   // Business facts come from the signed-in sub-account's custom values, never from copy. "" when missing.
   const biz = businessCard(useBusinessValues(), useBusiness().logoUrl ?? null);
   const t = totals(s.invoices, s.now);

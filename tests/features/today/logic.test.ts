@@ -1,6 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { buildMockInvoices, chipFor } from "@/features/invoices";
+import { SEED_QUOTES } from "@/features/quotes";
 import {
-  createReducer, doneText, greeting, initialState, LEADS, leadMeta, leadsFor, mapsUrl, nextLabel, nextStop, nextTodo, numClass, openCount, pressPlan, rowClass,
+  MONEY_OWED, owedRows, quoteDocFor, rowActions, createReducer, doneText, greeting, initialState, LEADS, leadMeta, leadsFor, mapsUrl, nextLabel, nextStop, nextTodo, numClass, openCount, pressPlan, rowClass,
   searchRows, sendRequest, setFilter, setRange, setStatus, STOPS, TODOS, visitChip,
 } from "@/features/today";
 
@@ -178,5 +180,69 @@ describe("selectors", () => {
     expect(searchRows.find((r) => r.name === "Maria Alvarez")).toMatchObject({ page: "leads", href: "/leads" });
     expect(searchRows.find((r) => r.name === "Bright Daycare")).toMatchObject({ page: "payments", href: "/payments" });
     expect(searchRows.find((r) => r.name === "Harlan Realty")).toMatchObject({ page: "quotes", href: "/quotes" });
+  });
+});
+
+describe("Money owed rows (mutation survivors P14, P15)", () => {
+  it("takes the due day or lateness from the Invoices page's invoices; 1 to 7 days late is late too", () => {
+    const now = new Date(2026, 10, 22, 10);
+    const rows = owedRows(MONEY_OWED.rows, now);
+    expect(rows.map((r) => r.name)).toEqual(["Bright Daycare", "Grace Whitfield", "Paul Ortega"]);
+    expect(rows[0].late).toMatch(/days late$/);
+    expect(rows[1].late).toMatch(/days late$/);
+    expect(rows[2].late).toBeUndefined();
+    expect(rows[2].note).toMatch(/^Due /);
+    const invoices = buildMockInvoices(now);
+    rows.forEach((r, i) => {
+      const inv = invoices.find((x) => x.no === MONEY_OWED.rows[i].invoiceNo)!;
+      expect(r.late ?? r.note).toBe(chipFor(inv, now).text);
+    });
+  });
+  it("shows no due day before the browser's clock is known (server render and hydration)", () => {
+    expect(owedRows(MONEY_OWED.rows, null)).toEqual(MONEY_OWED.rows.map((r) => ({ name: r.name, amount: r.amount, note: "" })));
+  });
+});
+
+describe("Approve shows the quote's own document (design logic 1060 q.docOf)", () => {
+  it("uses the Quotes page's three lines for Derek Olsen", () => {
+    const doc = quoteDocFor(byId("derek"), SEED_QUOTES)!;
+    expect(doc).toMatchObject({ title: "Quote", name: "Derek Olsen", sub: "Full roof replacement", amount: "$18,400" });
+    expect(doc.lines).toEqual([
+      ["Tear off the old shingles", "$4,200"],
+      ["Architectural shingles, 28 squares", "$11,600"],
+      ["Flashing and vents", "$2,600"],
+    ]);
+    const req = sendRequest(byId("derek"), () => {}, doc)!;
+    expect(req.doc).toBe(doc);
+    expect(req.total).toBe("$18,400");
+  });
+  it("has no quote document for an invoice row or a name Quotes does not have", () => {
+    expect(quoteDocFor(byId("whitmore"), SEED_QUOTES)).toBeNull();
+    expect(quoteDocFor(byId("derek"), [])).toBeNull();
+  });
+});
+
+describe("row gestures (design uxActs / uxItems on Needs you rows)", () => {
+  const run = () => ({ primary: vi.fn(), secondary: vi.fn(), undo: vi.fn() });
+  it("an open row offers its buttons in order; a swipe right presses the first", () => {
+    const r = run();
+    const one = rowActions(byId("maria"), 0, r);
+    expect(one.map((a) => [a.label, a.swipe])).toEqual([["Call", "right"]]);
+    one[0].onAction();
+    expect(r.primary).toHaveBeenCalledOnce();
+    const two = rowActions(byId("tom"), 0, r);
+    expect(two.map((a) => [a.label, a.swipe])).toEqual([["No-show", "right"], ["Visit done", undefined]]);
+    expect(rowActions(byId("whitmore"), 0, r).map((a) => a.label)).toEqual(["Yes, paid", "Yes, send invoice"]);
+    expect(two.some((a) => a.swipe === "left")).toBe(false);
+  });
+  it("a done row offers Undo only; a sent quote or invoice offers nothing", () => {
+    const r = run();
+    const done = rowActions(byId("maria"), 1, r);
+    expect(done.map((a) => a.label)).toEqual(["Undo"]);
+    expect(done[0].swipe).toBeUndefined();
+    done[0].onAction();
+    expect(r.undo).toHaveBeenCalledOnce();
+    expect(rowActions(byId("derek"), 1, r)).toEqual([]);
+    expect(rowActions(byId("whitmore"), 2, r).map((a) => a.label)).toEqual(["Undo"]);
   });
 });

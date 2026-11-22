@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   INVOICE_DUE_DAYS,
+  hasBusinessHeader,
+  invoiceRowActions,
+  markPaidPatch,
+  markSentPatch,
+  unmarkPaid,
+  unmarkPaidPatch,
   OVER_WEEK_DAYS,
   addDaysIso,
   canSend,
@@ -232,7 +238,10 @@ describe("sheet", () => {
   });
   it("shows the due date of a sent invoice and the late days", () => {
     expect(sheetFor({ ...base, st: "sent", dueOn: "2026-11-28" }, NOW).due).toBe("Due Nov 28");
-    expect(sheetFor({ ...base, st: "sent", dueOn: "2026-11-15" }, NOW).due).toBe("Due Nov 15, 6 days late");
+    // Design wording (logic 953): the lateness alone once late, "Due in 7 days" right after a send.
+    expect(sheetFor({ ...base, st: "sent", dueOn: "2026-11-15" }, NOW).due).toBe("6 days late");
+    expect(sheetFor({ ...base, st: "sent", dueOn: "2026-11-07" }, NOW).due).toBe("14 days late");
+    expect(sheetFor({ ...base, st: "sent", justNow: true, dueOn: "2026-11-28" }, NOW).due).toBe("Due in 7 days");
   });
   it("shows the paid day", () => {
     expect(sheetFor({ ...base, st: "paid", paidOn: "2026-11-09" }, NOW).due).toBe("Paid Nov 9");
@@ -360,5 +369,41 @@ describe("the fix field points at its error", () => {
   });
   it("says nothing when there is no error", () => {
     expect(fixFieldA11y(1049, "")).toEqual({ id: "fd-iv-1049", errorId: "fd-iv-1049-e", "aria-invalid": undefined, "aria-describedby": undefined });
+  });
+});
+
+describe("round 3: kept-state patches and row actions", () => {
+  it("Mark paid and its Undo bring back the chip the invoice had", () => {
+    const sentNow = { ...base, st: "sent" as const, justNow: true, dueOn: "2026-11-28" };
+    const paid = markPaid(sentNow, NOW);
+    expect(paid).toMatchObject({ st: "paid", justNow: true, paidOn: "2026-11-21" });
+    expect(unmarkPaid(paid)).toMatchObject({ st: "sent", justNow: true, paidOn: null });
+    const late = { ...base, st: "sent" as const, dueOn: "2026-11-07" };
+    expect(chipFor(unmarkPaid(markPaid(late, NOW)), NOW)).toEqual({ tone: "is-hot", text: "14 days late" });
+    // a paid invoice from the sample data (not paid on this screen) has nothing to undo
+    const seeded = { ...base, st: "paid" as const, paidOn: "2026-11-09" };
+    expect(unmarkPaid(seeded)).toBe(seeded);
+  });
+  it("patches change only their own invoice and never step back", () => {
+    const list = [{ ...base, no: 1 }, { ...base, no: 2, st: "sent" as const, dueOn: "2026-11-28" }];
+    expect(markSentPatch(1, NOW)({ invoices: list }).invoices.map((i) => i.st)).toEqual(["sent", "sent"]);
+    const paid = markPaidPatch(2, NOW)({ invoices: list }).invoices;
+    expect(paid.map((i) => i.st)).toEqual(["ready", "paid"]);
+    expect(markSentPatch(2, NOW)({ invoices: paid }).invoices[1].st).toBe("paid");
+    expect(unmarkPaidPatch(2)({ invoices: paid }).invoices[1].st).toBe("sent");
+  });
+  it("row actions: swipe right runs the filled Send invoice, else View; swipe left is Mark paid", () => {
+    const h = { filled: true, onView() {}, onSend() {}, onPaid() {}, onMake() {} };
+    const side = (a: ReturnType<typeof invoiceRowActions>, s: "right" | "left") => a.find((x) => x.swipe === s)?.label;
+    expect(side(invoiceRowActions(base, h), "right")).toBe("Send invoice");
+    expect(side(invoiceRowActions(base, { ...h, filled: false }), "right")).toBe("View");
+    const sent = invoiceRowActions({ ...base, st: "sent" }, h);
+    expect([side(sent, "right"), side(sent, "left")]).toEqual(["View", "Mark paid"]);
+    expect(side(invoiceRowActions({ ...base, st: "need" }, h), "left")).toBeUndefined();
+  });
+  it("the sheet header shows only when there is a business value", () => {
+    expect(hasBusinessHeader(businessCard({}))).toBe(false);
+    expect(hasBusinessHeader(businessCard({ business_phone_number: "1" }))).toBe(true);
+    expect(hasBusinessHeader(businessCard({}, "https://cdn.example/l.png"))).toBe(true);
   });
 });

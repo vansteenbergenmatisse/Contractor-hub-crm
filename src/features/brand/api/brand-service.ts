@@ -54,6 +54,8 @@ export function createBrandService(deps: {
     return (await getEntry(tenantId)).values;
   }
 
+  // Called by the onboarding feature's LocationUpdate webhook hook (tenant resolved from the signed
+  // event's location). Per server instance only: other instances keep their entry until the TTL.
   function invalidate(tenantId: string) {
     generation.set(tenantId, (generation.get(tenantId) ?? 0) + 1);
     inflight.delete(tenantId);

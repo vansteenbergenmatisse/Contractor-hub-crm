@@ -1,3 +1,6 @@
+"use client";
+
+import { useRowGestures, type RowAction } from "@/features/app-shell";
 import type { CardView } from "../types";
 
 const svgProps = { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true, focusable: false } as const;
@@ -21,8 +24,19 @@ export function KanbanCard({
   onSeeQuote: () => void;
 }) {
   const { card, primary, second } = view;
+  // A long press, a right-click, the ContextMenu key or Shift+F10 opens the card's menu: every button
+  // the card shows, in its order, with the trash (Lost) last (design logic `uxCtxT` + `uxItems`). A card
+  // is not a swipe row in the design (`uxRows` leaves out .fd-kc), so no action is marked for a swipe.
+  const actions: RowAction[] = [];
+  if (view.calendar) actions.push({ label: `Open ${card.name} in the calendar`, onAction: onCalendar });
+  if (view.showUndo) actions.push({ label: "Undo", onAction: onUndo });
+  actions.push({ label: primary.label, onAction: onPress });
+  if (second) actions.push({ label: second.label, onAction: onSecond });
+  if (view.seeQuote) actions.push({ label: "See quote", onAction: onSeeQuote });
+  if (view.trash) actions.push({ label: `Move ${card.name} to Lost`, onAction: onTrash, tone: "danger" });
+  const gestures = useRowGestures<HTMLElement>({ label: card.name, actions });
   return (
-    <article className={view.className} aria-label={card.name} data-row-id={`pipeline-${view.i}`}>
+    <article {...gestures} className={view.className} aria-label={card.name} data-row-id={`pipeline-${view.i}`}>
       <div className="fd-kt">
         <span className="fd-av" aria-hidden="true">{card.init}</span>
         <div className="fd-kx">

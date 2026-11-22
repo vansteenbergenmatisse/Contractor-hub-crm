@@ -21,3 +21,8 @@ export const sheetBusiness = (v: Facts, logo: string | null = null): SheetBusine
   hours: v.business_hours,
   logo,
 });
+
+// The header row (logo tile, name, contact lines) and its divider show only when there is something to
+// put in it. With no business values at all the sheet starts at its title, never with an empty row.
+export const hasBusinessHeader = (b: SheetBusiness): boolean =>
+  Boolean(b.logo || b.name || b.addr || b.phone || b.email || b.site || b.hours);
