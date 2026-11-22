@@ -1,11 +1,6 @@
-import { Suspense } from "react";
-import { CalendarPageFromUrl } from "@/features/calendar";
+import { NotAvailablePage } from "@/shared/ui/not-available-page";
 
-// Thin page: the Calendar feature does the work. Suspense is for useSearchParams (?row=<id>).
+// Not wired to real data yet, so real clients never see the feature's sample rows.
 export default function Page() {
-  return (
-    <Suspense fallback={null}>
-      <CalendarPageFromUrl />
-    </Suspense>
-  );
+  return <NotAvailablePage title="Calendar" />;
 }

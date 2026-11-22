@@ -40,7 +40,8 @@ export function initialState(values?: CustomValues, section?: SectionKey): Setti
   return {
     values: { ...start },
     draft: { ...start },
-    sw: [...MOCK_SWITCHES],
+    // No source holds a tenant's choices yet, so real values never start from the sample switches.
+    sw: values ? [false, false] : [...MOCK_SWITCHES],
     ok: false,
     err: null,
     cols: true,

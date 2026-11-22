@@ -124,3 +124,22 @@ export type OAuthCodeResult =
 
 // A sub-account as the agency's location search lists it.
 export type AgencyLocation = { locationId: string; name: string | null; email: string | null };
+
+// One contact from POST /contacts/search, reduced to what the app shows. Phone and email are left
+// out on purpose until a screen needs them.
+export type HighLevelContact = {
+  id: string;
+  name: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  postalCode: string | null;
+  source: string | null;
+  dateAdded: string;
+};
+
+// One page of the newest contacts. `dropped`: malformed rows left out. `complete`: nothing is
+// beyond this page.
+export type ContactsPage = { contacts: HighLevelContact[]; dropped: number; complete: boolean };
+
+export type ContactsRead = ({ ok: true } & ContactsPage) | { ok: false; reason: "reconnect" | "unavailable" };

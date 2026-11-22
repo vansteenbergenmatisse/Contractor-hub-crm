@@ -1,26 +1,15 @@
+import type { ReactNode } from "react";
 import type { PageKey } from "@/features/app-shell";
-import { Glyph } from "./Glyph";
+import { Tile, type TileView } from "./Tile";
 
-export type TileView = {
-  page: PageKey;
-  label: string;
-  value: number;
-  unit?: string;
-  sub: string;
-  aria: string;
-};
+export type PageTile = TileView & { page: PageKey };
 
-export function Tiles({ tiles, onOpen }: { tiles: readonly TileView[]; onOpen: (page: PageKey) => void }) {
+// `first` is the live New leads tile; the other tiles follow it.
+export function Tiles({ first, tiles, onOpen }: { first: ReactNode; tiles: readonly PageTile[]; onOpen: (page: PageKey) => void }) {
   return (
     <section className="fd-tiles" aria-label="Today at a glance">
-      {tiles.map((tile, index) => (
-        <button key={tile.page} type="button" className="fd-tile fd-in" style={{ "--i": index + 1 } as React.CSSProperties} aria-label={tile.aria} onClick={() => onOpen(tile.page)}>
-          <span className="fd-tl">{tile.label}</span>
-          <span className="fd-tv"><b>{tile.value}</b>{tile.unit ? <span>{tile.unit}</span> : null}</span>
-          <span className="fd-ts">{tile.sub}</span>
-          <span className="fd-tc" aria-hidden="true"><Glyph name="chevron" size={16} /></span>
-        </button>
-      ))}
+      {first}
+      {tiles.map((tile, index) => <Tile key={tile.page} tile={tile} index={index + 1} onOpen={() => onOpen(tile.page)} />)}
     </section>
   );
 }

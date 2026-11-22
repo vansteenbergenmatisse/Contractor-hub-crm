@@ -6,9 +6,8 @@ import {
   firstNeedId,
   isWaiting,
   leadsReducer,
+  leadSearchRows,
   liveSearchRows,
-  MOCK_LEADS,
-  searchRows,
   sourceRows,
   summarize,
   tiles,
@@ -20,9 +19,12 @@ import {
   type LeadsAction,
   type LeadsState,
 } from "@/features/leads";
+import { MOCK_LEADS } from "../../../src/features/leads/mock";
+import { FIXTURE_LEADS, LOADED_AT } from "./fixtures";
 
 const run = (state: LeadsState, ...actions: LeadsAction[]) => actions.reduce(leadsReducer, state);
 const fresh = () => createInitialState(MOCK_LEADS);
+const searchRows = leadSearchRows(MOCK_LEADS);
 const fill = (s: LeadsState, v: Partial<Record<"name" | "phone" | "email" | "addr" | "need", string>>) =>
   run(s, ...Object.entries(v).map(([field, value]) => ({ type: "field", field, value }) as LeadsAction));
 
@@ -197,8 +199,8 @@ describe("Add a lead", () => {
 });
 
 describe("tiles and source panel", () => {
-  it("starts at 13 leads this week by source", () => {
-    const rows = sourceRows(0);
+  it("draws each channel from the counts it is given, 25% per lead", () => {
+    const rows = sourceRows(0, { call: 4, form: 3, text: 2, gmb: 2, fb: 1, ig: 1 });
     expect(rows.map((r) => [r.key, r.label, r.count, r.width])).toEqual([
       ["call", "Call", 4, 100],
       ["form", "Web form", 3, 75],
@@ -216,10 +218,12 @@ describe("tiles and source panel", () => {
     expect(sourceRows(6).at(-1)).toMatchObject({ count: 6, width: 100 });
   });
 
-  it("New today and This week stay at the sample counts (as in the design); Wait on you follows the leads", () => {
-    expect(tiles(MOCK_LEADS, fresh())).toEqual({ today: 4, week: 13, wait: 3 });
-    const s = run(fill(fresh(), { name: "Pat", phone: "6145550100" }), { type: "submit" }, { type: "call", id: "ld-1" });
-    expect(tiles(MOCK_LEADS, s)).toEqual({ today: 4, week: 13, wait: 3 });
+  it("New today and This week come from the loaded rows; Wait on you follows the leads", () => {
+    const context = { loadedAt: LOADED_AT, complete: true, timeZone: "UTC" };
+    const start = createInitialState(FIXTURE_LEADS);
+    expect(tiles(FIXTURE_LEADS, start, context)).toEqual({ today: 8, week: 8, wait: 3 });
+    const s = run(fill(start, { name: "Pat", phone: "6145550100" }), { type: "submit" }, { type: "call", id: "ld-1" });
+    expect(tiles(FIXTURE_LEADS, s, context)).toEqual({ today: 8, week: 8, wait: 3 });
   });
 });
 
@@ -309,9 +313,9 @@ describe("Add a lead on a phone or a computer", () => {
 describe("live search rows", () => {
   it("lists the hand-added leads on top, then the sample leads", () => {
     const s = run(fill(fresh(), { name: "Pat Lee", phone: "6145550100", need: "Gutters" }), { type: "submit" });
-    const rows = liveSearchRows(s.added);
+    const rows = liveSearchRows(s.added, MOCK_LEADS);
     expect(rows[0]).toEqual({ id: "added-1", page: "leads", name: "Pat Lee", sub: "Added by you · Gutters · 6145550100", href: "/leads" });
     expect(rows.slice(1)).toEqual(searchRows);
-    expect(liveSearchRows([])).toEqual(searchRows);
+    expect(liveSearchRows([], MOCK_LEADS)).toEqual(searchRows);
   });
 });

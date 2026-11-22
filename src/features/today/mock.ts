@@ -2,7 +2,12 @@
 // Phase 3 by reads from HighLevel (to-dos by urgency, tiles, today's calendar, leads, money cards).
 // Never treat any name, amount or text here as a real fact. Business details (name, owner, phone, email,
 // address, website) never go in this file: they come from the sub-account's custom values (`useBusiness`).
-import type { Lead, MiniRow, MoneyBar, OwedRow, Stop, Todo } from "./types";
+// Test fixtures only: no production file imports this module.
+import type { SearchRow, SendDoc } from "@/features/app-shell";
+import { buildMockInvoices, chipFor } from "@/features/invoices";
+import { sendRequest as quoteSendRequest, type QuotesState } from "@/features/quotes";
+import type { MoneyData } from "./components/MoneyCards";
+import type { Lead, LeadRange, MiniRow, MoneyBar, OwedRow, Stop, Todo } from "./types";
 
 export const TODOS: readonly Todo[] = [
   {
@@ -97,4 +102,43 @@ export const MONEY_OWED = {
     { name: "Paul Ortega", invoiceNo: 1045, amount: "$9,500" },
   ] satisfies readonly OwedRow[],
   foot: "3 invoices · 2 late",
+};
+
+export const leadsFor = (range: LeadRange): readonly Lead[] => (range === "today" ? LEADS.filter((l) => l.ago) : LEADS);
+
+// The quote document the Quotes page would send for this to-do's customer (design logic 1060
+// `q.docOf(j)`: the quote's own lines), or null when Quotes has no quote with that name.
+export function quoteDocFor(todo: Todo, quotes: readonly QuotesState["quotes"][number][]): SendDoc | null {
+  if (todo.send !== "Quote") return null;
+  const quote = quotes.find((q) => q.name === todo.name);
+  return quote ? quoteSendRequest(quote, () => {}).doc : null;
+}
+
+const slug = (text: string) => text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+// Sample search rows: the leads, the quotes out, the money owed.
+export const searchRows: readonly SearchRow[] = [
+  ...LEADS.map((l): SearchRow => ({ id: `today-lead-${slug(l.name)}`, page: "leads", name: l.name, sub: `${l.need} · ${l.chip.text}`, href: "/leads" })),
+  ...QUOTES_OUT.rows.map((r): SearchRow => ({ id: `today-quote-${slug(r.name)}`, page: "quotes", name: r.name, sub: `Quote ${r.amount} · ${r.note ?? ""}`.trim(), href: "/quotes" })),
+  ...MONEY_OWED.rows.map((r): SearchRow => ({ id: `today-owed-${slug(r.name)}`, page: "payments", name: r.name, sub: `Owes ${r.amount}`, href: "/payments" })),
+];
+
+// Money owed rows with the due day or lateness taken from the Invoices page's sample invoices on
+// `now`, so both pages say the same ("Due Nov 22" / "6 days late"). A late invoice gets the red chip.
+// With no `now` yet (server render, hydration) the rows show without the due day.
+export function owedRows(rows: readonly OwedRow[], now: Date | null): MiniRow[] {
+  if (!now) return rows.map((r) => ({ name: r.name, amount: r.amount, note: "" }));
+  const invoices = buildMockInvoices(now);
+  return rows.map((r) => {
+    const inv = invoices.find((i) => i.no === r.invoiceNo);
+    const chip = inv ? chipFor(inv, now) : null;
+    const late = !!chip && (chip.tone === "is-bad" || chip.tone === "is-hot");
+    return { name: r.name, amount: r.amount, ...(late ? { late: chip.text } : { note: chip?.text ?? "" }) };
+  });
+}
+
+export const SAMPLE_MONEY: MoneyData = {
+  booked: BOOKED,
+  quotes: QUOTES_OUT,
+  owed: { total: MONEY_OWED.total, foot: MONEY_OWED.foot, rowsAt: (now) => owedRows(MONEY_OWED.rows, now) },
 };

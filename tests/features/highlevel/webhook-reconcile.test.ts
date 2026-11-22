@@ -38,7 +38,7 @@ let deps: WebhookDeps;
 let installed: { locationId: string; name: string | null }[];
 
 beforeEach(() => {
-  installed = [{ locationId: "loc_1", name: "JCR" }];
+  installed = [{ locationId: "loc_1", name: "Test Co" }];
   store = {
     begin: vi.fn(async () => "process" as const),
     markProcessed: vi.fn(async () => {}),

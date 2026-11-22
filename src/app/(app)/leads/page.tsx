@@ -1,11 +1,23 @@
 import { Suspense } from "react";
-import { LeadsPage } from "@/features/leads";
+import { hitRateLimit } from "@/features/auth";
+import { createTenantContactsReader } from "@/features/highlevel";
+import { LeadsPage, LeadsSkeleton, loadLeads } from "@/features/leads";
+import { getRequestUser } from "../../session";
 
-// Thin page: the Leads feature does the work. Suspense is for useSearchParams (?add=1).
+export const dynamic = "force-dynamic";
+
+// The signed-in tenant's leads. The tenant comes from the session only.
+async function LeadsData() {
+  const user = await getRequestUser();
+  const result = await loadLeads(user?.tenantId, createTenantContactsReader(hitRateLimit));
+  return <LeadsPage result={result} />;
+}
+
+// Thin page. Suspense covers the data and useSearchParams (?add=1).
 export default function Page() {
   return (
-    <Suspense fallback={null}>
-      <LeadsPage />
+    <Suspense fallback={<LeadsSkeleton />}>
+      <LeadsData />
     </Suspense>
   );
 }

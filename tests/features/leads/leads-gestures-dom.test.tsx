@@ -32,6 +32,7 @@ vi.mock("@/features/app-shell", async (original) => {
 
 import { GestureLayer, ROW_PICK_EVENT } from "@/features/app-shell";
 import { LeadsPage } from "@/features/leads";
+import { READY } from "./fixtures";
 
 function setUrl(search: string) {
   nav.search = search;
@@ -43,7 +44,7 @@ const pick = (id: string) =>
   act(() => {
     window.dispatchEvent(new CustomEvent(ROW_PICK_EVENT, { detail: id }));
   });
-const page = () => render(<GestureLayer><LeadsPage /></GestureLayer>);
+const page = () => render(<GestureLayer><LeadsPage result={READY} /></GestureLayer>);
 const checked = (name: RegExp) => screen.getByRole("radio", { name });
 
 let phone = false;
@@ -145,7 +146,7 @@ describe("a search result picked again", () => {
     await user.click(checked(/24\+/));
     expect(row("ld-3")).not.toBeNull();
     setUrl("?row=ld-3");
-    rerender(<GestureLayer><LeadsPage /></GestureLayer>);
+    rerender(<GestureLayer><LeadsPage result={READY} /></GestureLayer>);
     pick("ld-3");
     expect(checked(/24\+/)).toHaveAttribute("aria-checked", "true");
   });
@@ -177,7 +178,7 @@ describe("hand-added leads", () => {
     expect(document.querySelectorAll(".fd-lst > .fd-rw.is-new")).toHaveLength(3);
     expect(screen.queryByText("One")).toBeNull();
     expect(checked(/^All/)).toHaveTextContent("11");
-    expect(screen.getByText(/The 17 leads of this week\./)).toBeInTheDocument();
+    expect(screen.getByText(/The 12 leads of this week\./)).toBeInTheDocument();
   });
 });
 

@@ -19,7 +19,9 @@ vi.mock("@/features/app-shell", async (original) => ({
 }));
 
 import { GestureLayer, type SendTimerRequest } from "@/features/app-shell";
-import { MoneyCards, TodayPage } from "@/features/today";
+import { MoneyCards } from "@/features/today";
+import { SAMPLE_MONEY } from "../../../src/features/today/mock";
+import { SampleToday } from "./sample-today";
 
 const todoRow = (name: string) => Array.from(document.querySelectorAll<HTMLElement>("li.fd-row")).find((li) => li.textContent?.includes(name)) as HTMLElement;
 
@@ -29,7 +31,7 @@ beforeEach(() => {
 
 describe("Today: Money owed renders the same on the server and in the browser", () => {
   it("leaves the due days out of the server HTML and hydrates without a mismatch, then shows them", async () => {
-    const server = renderToString(<MoneyCards />);
+    const server = renderToString(<MoneyCards data={SAMPLE_MONEY} />);
     expect(server).toContain("Paul Ortega");
     expect(server).not.toMatch(/days late|Due /);
     const container = document.createElement("div");
@@ -38,7 +40,7 @@ describe("Today: Money owed renders the same on the server and in the browser", 
     const errors = vi.fn();
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     await act(async () => {
-      hydrateRoot(container, <MoneyCards />, { onRecoverableError: errors });
+      hydrateRoot(container, <MoneyCards data={SAMPLE_MONEY} />, { onRecoverableError: errors });
     });
     expect(errors).not.toHaveBeenCalled();
     expect(spy.mock.calls.flat().join(" ")).not.toMatch(/hydrat/i);
@@ -52,7 +54,7 @@ describe("Today: Money owed renders the same on the server and in the browser", 
 describe("Today: Approve opens the send timer with the quote's own document", () => {
   it("shows the three quote lines and marks the row done only when the timer ends", async () => {
     const user = userEvent.setup();
-    render(<TodayPage ownerFirst="Pat" />);
+    render(<SampleToday ownerFirst="Pat" />);
     await user.click(within(todoRow("Derek Olsen")).getByRole("button", { name: "Approve" }));
     expect(sendTimer).toHaveBeenCalledOnce();
     const req = sendTimer.mock.calls[0][0] as SendTimerRequest;
@@ -65,7 +67,7 @@ describe("Today: Approve opens the send timer with the quote's own document", ()
 
   it("Yes, send invoice opens the timer with the invoice line", async () => {
     const user = userEvent.setup();
-    render(<TodayPage ownerFirst="Pat" />);
+    render(<SampleToday ownerFirst="Pat" />);
     await user.click(within(todoRow("Whitmore Dental")).getByRole("button", { name: /Yes, send invoice/ }));
     const req = sendTimer.mock.calls[0][0] as SendTimerRequest;
     expect(req.kind).toBe("Invoice");
@@ -89,7 +91,7 @@ describe("Today: row gestures on Needs you", () => {
   };
 
   it("the menu lists the row's buttons; a done row offers Undo", async () => {
-    render(<GestureLayer><TodayPage ownerFirst="Pat" /></GestureLayer>);
+    render(<GestureLayer><SampleToday ownerFirst="Pat" /></GestureLayer>);
     const tom = todoRow("Tom Becker");
     expect(tom).not.toHaveAttribute("tabindex");
     fireEvent.contextMenu(tom, { clientX: 100, clientY: 120 });
@@ -103,14 +105,14 @@ describe("Today: row gestures on Needs you", () => {
   });
 
   it("the menu key opens the menu from the keyboard", () => {
-    render(<GestureLayer><TodayPage ownerFirst="Pat" /></GestureLayer>);
+    render(<GestureLayer><SampleToday ownerFirst="Pat" /></GestureLayer>);
     fireEvent.keyDown(todoRow("Maria Alvarez"), { key: "ContextMenu" });
     expect(screen.getByRole("menuitem", { name: "Call" })).toHaveFocus();
   });
 
   it("a full swipe right presses the row's button", () => {
     setWidth(390);
-    render(<GestureLayer><TodayPage ownerFirst="Pat" /></GestureLayer>);
+    render(<GestureLayer><SampleToday ownerFirst="Pat" /></GestureLayer>);
     const maria = todoRow("Maria Alvarez");
     maria.getBoundingClientRect = () => ({ left: 0, top: 100, width: 390, height: 60, right: 390, bottom: 160, x: 0, y: 100, toJSON: () => ({}) }) as DOMRect;
     touch(maria, "touchStart", 60);

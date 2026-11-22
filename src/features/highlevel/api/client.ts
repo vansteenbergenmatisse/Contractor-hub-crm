@@ -18,6 +18,7 @@ const PAGE_SIZE = 100; // documented maximum
 const MAX_PAGES = 50; // guard against a paging loop
 const USER_SEARCH_LIMIT = 25; // the docs' default page size; the invite check searches by exact email
 const REQUEST_TIMEOUT_MS = 10_000; // a stalled HighLevel must not hold the route open
+const CONTACT_SEARCH_API_VERSION = API_VERSION; // the live docs name v3; older OpenAPI files say 2021-07-28 (not yet confirmed on a real response)
 
 // Carries the HTTP status (null: no response) and nothing else: never a body, token or secret.
 // `detail` holds the raw response text for the server log only (it is redacted and cut before it
@@ -430,5 +431,25 @@ export function createHighLevelClient(config: HighLevelClientConfig) {
     return values;
   }
 
-  return { exchangeAgencyCode, exchangeCode, listAgencyLocations, listCustomValues, listLocationUsers, listInstalledLocations, mintLocationToken, refreshToken, searchUsers };
+  // POST /contacts/search (scope contacts.readonly). A read despite the POST. One page, newest first.
+  // Answers the raw Response so withLocationToken can refresh once on a 401; contacts.ts parses it.
+  async function requestContactSearch(accessToken: string, locationId: string, pageLimit: number): Promise<Response> {
+    try {
+      return await doFetch(`${base}/contacts/search`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${accessToken}`,
+          version: CONTACT_SEARCH_API_VERSION,
+          "content-type": "application/json",
+          accept: "application/json",
+        },
+        body: JSON.stringify({ locationId, page: 1, pageLimit, sort: [{ field: "dateAdded", direction: "desc" }] }),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+    } catch {
+      throw new HighLevelHttpError("HighLevel contact search could not reach HighLevel.", null);
+    }
+  }
+
+  return { exchangeAgencyCode, exchangeCode, listAgencyLocations, listCustomValues, listLocationUsers, listInstalledLocations, mintLocationToken, refreshToken, requestContactSearch, searchUsers };
 }

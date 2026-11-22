@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useKeptReducer, usePushed, useShell } from "@/features/app-shell";
 import { CONNECTIONS, SWITCHES, extraKeys } from "../api/fields";
-import { connectionRowText } from "../api/connections";
+import { NOT_AVAILABLE, connectionRowText } from "../api/connections";
 import { applyBrandToDocument, businessPatchFromValues, type BusinessPatch } from "../api/live-save";
 import { filterSettings } from "../api/search";
 import { initialState, settingsReducer, type SettingsState } from "../api/state";
@@ -34,6 +34,8 @@ export function useSettings(
   const arrivedFocus = useRef(state.focus);
   const extras = useMemo(() => extraKeys(state.values), [state.values]);
   const phone = (state.values.business_phone_number ?? "").trim();
+  // With a tenant's real values the choices have no source yet, so they read "Not available yet".
+  const choicesAvailable = initialValues === undefined;
   // The search reads each row's whole text as it shows now (design: the row's textContent).
   const rowText = useMemo(() => {
     const out: Record<string, string> = {};
@@ -47,10 +49,10 @@ export function useSettings(
       });
     });
     SWITCHES.forEach((label, i) => {
-      out[`sw-${i}`] = `${label} ${state.sw[i] ? "On" : "Off"}`;
+      out[`sw-${i}`] = `${label} ${choicesAvailable ? (state.sw[i] ? "On" : "Off") : NOT_AVAILABLE}`;
     });
     return out;
-  }, [connections, phone, state.how, state.asked, state.sw]);
+  }, [connections, phone, state.how, state.asked, state.sw, choicesAvailable]);
   const filter = useMemo(() => filterSettings(state.q, extras, rowText), [state.q, extras, rowText]);
   const shell = useShell() as ShellWithUpdate;
   // Held in a ref so a new function identity from the shell never re-runs the Save effect (no loop).
@@ -77,5 +79,5 @@ export function useSettings(
     updateRef.current?.(businessPatchFromValues(state.values));
   }, [state.ok, state.values]);
 
-  return { state, dispatch, filter, extras, phone };
+  return { state, dispatch, filter, extras, phone, choicesAvailable };
 }

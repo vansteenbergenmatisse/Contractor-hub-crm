@@ -20,12 +20,21 @@ vi.mock("@/features/app-shell", async (original) => ({
   },
 }));
 
+import type { Lead, LeadsResult } from "@/features/leads";
 import {
-  CalendarCard, Greeting, initialState, LeadsCard, MoneyCards, NeedsCard, setFilter, setStatus, STOPS, TodayPage, TODOS,
+  CalendarCard, Greeting, initialState, LeadsCard, LeadsTile, MoneyCards, NeedsCard, setFilter, setStatus, TodayPage,
 } from "@/features/today";
+import { SAMPLE_MONEY, STOPS, TODOS } from "../../../src/features/today/mock";
+import { SampleToday } from "./sample-today";
 
 const noop = () => {};
-const html = renderToStaticMarkup(<TodayPage ownerFirst="Pat" />);
+const realLead = (id: string, receivedAt: string): Lead => ({ id, name: `Person ${id}`, source: null, need: "", minutesWaiting: 0, receivedAt, address: "", status: "new" });
+const READY: LeadsResult = {
+  state: "ready", loadedAt: "2026-03-04T12:00:00.000Z", complete: true, dropped: 0,
+  leads: [realLead("a", "2026-03-04T11:00:00.000Z"), realLead("b", "2026-03-04T10:00:00.000Z"), realLead("c", "2026-03-02T10:00:00.000Z")],
+};
+const html = renderToStaticMarkup(<TodayPage ownerFirst="Pat" leadsTile={<LeadsTile result={READY} />} leadsCard={<LeadsCard result={READY} range="today" onRange={noop} timeZone="UTC" />} />);
+const sampleHtml = renderToStaticMarkup(<SampleToday ownerFirst="Pat" />);
 
 describe("TodayPage markup", () => {
   it("renders the content without the shell's fd-view wrapper", () => {
@@ -35,36 +44,36 @@ describe("TodayPage markup", () => {
 
   it("greets the owner by first name and counts the six things", () => {
     expect(html).toContain("Morning, Pat.");
-    expect(html).toContain("6 things");
-    expect(html).toContain("need you today.");
+    expect(sampleHtml).toContain("6 things");
+    expect(sampleHtml).toContain("need you today.");
   });
 
   it("has four tiles that open their page, with counts from the lists", () => {
     expect((html.match(/class="fd-tile fd-in"/g) ?? []).length).toBe(4);
-    expect(html).toContain('aria-label="New leads: 4 today, 13 this week. Open leads"');
-    expect(html).toContain('aria-label="Appointments: 4 today, next at 11:00 AM. Open the calendar"');
-    expect(html).toContain('aria-label="Invoices to send: 4. Open Invoices"');
-    expect(html).toContain('aria-label="Jobs this week: 6, 1 today. Open the job stages in the pipeline"');
+    expect(html).toContain('aria-label="New leads: 2 today, 3 this week. Open leads"');
+    expect(html).toContain('aria-label="Appointments: not available yet. Open the calendar"');
+    expect(html).toContain('aria-label="Invoices to send: not available yet. Open Invoices"');
+    expect(html).toContain('aria-label="Jobs this week: not available yet. Open the job stages in the pipeline"');
   });
 
   it("lists the six to-dos with one filled button on the top row only", () => {
-    expect((html.match(/<li class="fd-row/g) ?? []).length).toBe(6);
-    expect((html.match(/is-next/g) ?? []).length).toBeGreaterThanOrEqual(1);
-    expect((html.match(/class="fd-row[^"]*is-next/g) ?? []).length).toBe(1);
-    expect(html).toContain("Yes, send invoice");
-    expect(html).toContain("Yes, invoice");
+    expect((sampleHtml.match(/<li class="fd-row/g) ?? []).length).toBe(6);
+    expect((sampleHtml.match(/is-next/g) ?? []).length).toBeGreaterThanOrEqual(1);
+    expect((sampleHtml.match(/class="fd-row[^"]*is-next/g) ?? []).length).toBe(1);
+    expect(sampleHtml).toContain("Yes, send invoice");
+    expect(sampleHtml).toContain("Yes, invoice");
   });
 
   it("has the four filters with aria-pressed, All on", () => {
-    expect(html).toMatch(/class="fd-flb is-on" aria-pressed="true">All</);
-    expect(html).toMatch(/aria-pressed="false">Quotes</);
+    expect(sampleHtml).toMatch(/class="fd-flb is-on" aria-pressed="true">All</);
+    expect(sampleHtml).toMatch(/aria-pressed="false">Quotes</);
   });
 
   it("shows today's calendar, new leads (both lists) and the three money cards", () => {
-    expect(html).toContain("4 appointments");
-    expect(html).toContain("Next · in 20 min");
-    expect(html).toContain("<b>4</b> new today");
-    expect(html).toContain("<b>13</b> this week");
+    expect(sampleHtml).toContain("4 appointments");
+    expect(sampleHtml).toContain("Next · in 20 min");
+    expect(html).toContain("<b>2</b> new today");
+    expect(html).toContain("<b>3</b> this week");
     expect(html).toContain("Booked this week");
     expect(html).toContain("Quotes out");
     expect(html).toContain("Money owed");
@@ -82,7 +91,7 @@ describe("TodayPage markup", () => {
   it("greets without a name when the owner's name is missing", () => {
     for (const first of [undefined, "", "  "]) {
       const bare = renderToStaticMarkup(<TodayPage ownerFirst={first} />);
-      expect(bare).toContain("Morning. <strong");
+      expect(bare).toContain("Morning.</h1>");
       for (const bad of ["Mike", "undefined", "null", "Morning,"]) expect(bare).not.toContain(bad);
     }
   });
@@ -146,12 +155,12 @@ describe("CalendarCard", () => {
 
 describe("LeadsCard", () => {
   it("switches the visible list and the segment thumb", () => {
-    const today = renderToStaticMarkup(<LeadsCard range="today" onRange={noop} />);
+    const today = renderToStaticMarkup(<LeadsCard result={READY} range="today" onRange={noop} timeZone="UTC" />);
     expect(today).toContain('class="fd-thumb"');
-    expect(today).toMatch(/class="fd-pane is-off"><p class="fd-big"><b>13<\/b>/);
-    const week = renderToStaticMarkup(<LeadsCard range="week" onRange={noop} />);
+    expect(today).toMatch(/class="fd-pane is-off"><p class="fd-big"><b>3<\/b>/);
+    const week = renderToStaticMarkup(<LeadsCard result={READY} range="week" onRange={noop} timeZone="UTC" />);
     expect(week).toContain("fd-thumb is-week");
-    expect(week).toMatch(/class="fd-pane is-off"><p class="fd-big"><b>4<\/b>/);
+    expect(week).toMatch(/class="fd-pane is-off"><p class="fd-big"><b>2<\/b>/);
   });
 });
 
@@ -163,7 +172,7 @@ describe("Greeting and money", () => {
   it("renders the money cards with late chips carrying a word", () => {
     // A fixed "now": without one the server render leaves the due days out (they depend on the
     // browser's time zone and appear after hydration).
-    const out = renderToStaticMarkup(<MoneyCards now={new Date()} />);
+    const out = renderToStaticMarkup(<MoneyCards data={SAMPLE_MONEY} now={new Date()} />);
     expect(out).toContain("14 days late");
     expect(out).toContain('role="img"');
   });

@@ -21,8 +21,7 @@ type Props = {
 };
 
 // "Add a lead by hand": a bottom sheet on a phone, a panel beside the list on a computer.
-// Phase 2: it only adds a row on screen. In Phase 3 it posts to the form webhook so the
-// lead-capture workflow in HighLevel runs.
+// Local only: it adds a row on this screen and writes nothing, and the panel says so.
 export function AddLeadPanel({ sheet, phone, focusTick, form, errors, focus, onField, onSubmit, onClose }: Props) {
   const panelRef = useRef<HTMLElement | null>(null);
   const nameRef = useRef<HTMLInputElement | null>(null);
@@ -75,7 +74,7 @@ export function AddLeadPanel({ sheet, phone, focusTick, form, errors, focus, onF
       <button type="button" className={`fx-addscrim${sheet ? " is-on" : ""}`} aria-label="Close" tabIndex={sheet ? 0 : -1} onClick={onClose} />
       <section ref={panelRef} className={`fd-pnl fx-addp${sheet ? " is-sheet" : ""}`} aria-labelledby="fd-ld-h" role={dialog ? "dialog" : undefined} aria-modal={dialog ? true : undefined} onKeyDown={onKey}>
         <h2 className="fd-pnh" id="fd-ld-h">Add a lead by hand</h2>
-        <p className="fd-pns">For a lead you met in person. Leads from calls, forms and messages add themselves.</p>
+        <p className="fd-pns">For a lead you met in person. Leads from calls, forms and messages add themselves. A lead added here stays on this screen for now and is not saved.</p>
         <label className="fd-ll" htmlFor="fd-ld-name">Name</label>
         <input className={`fd-lin${bad(errors.name)}`} id="fd-ld-name" type="text" autoComplete="off" ref={nameRef} value={form.name} aria-invalid={errors.name ? true : undefined} aria-describedby="fd-ld-name-e" onChange={(e) => onField("name", e.target.value)} />
         <FieldError id="fd-ld-name-e" message={errors.name} />

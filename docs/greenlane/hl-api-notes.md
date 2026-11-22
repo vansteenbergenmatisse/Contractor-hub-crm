@@ -76,3 +76,39 @@ Read by a research agent (summarising fetch tool, so code samples are restored, 
 - **Cookies**: the docs only say to verify cookies and sessions work in an embedded cross-site context. `SameSite=None; Secure` and `Partitioned` are not in the docs: test on staging.
 - **Custom Page URL**: host externally over HTTPS; placement app details page or left menu; the query string may hold HighLevel variables like `{{user.first_name}}`; do not put sensitive values in the URL. The rule that URLs containing "ghl", "highlevel" or "leadconnector" are refused is not on any official page read (only a third-party thread about OAuth redirect URIs); keep the build prompt's rule anyway.
 - **Unverified**: the exact encryption format, parent origins, third-party cookie behaviour, the URL-word rule for Custom Pages, replay protection, whether `type` is reliably `location`, HighLevel's `/decrypt-sso` GitHub template, stoplight.io.
+
+# HighLevel read endpoints for Phase 3: facts read from the public docs (2026-11-22)
+
+Sources: OpenAPI repo `GoHighLevel/highlevel-api-docs` at commit `0af86a4` (2026-06-19, HEAD on that date), `marketplace.gohighlevel.com/docs/ghl/<area>/<page>`, and help article 155000009502 (workflows). No live call was made and no real response has been seen. "Not stated" means the sources read do not say. All scopes below are already in `scopes.ts`; which scopes are enabled on the Marketplace app was not checked. The docs list a Sub-Account (Location) token for all of these.
+
+| Endpoint | Scope | Required input | Paging and last page |
+|---|---|---|---|
+| `POST /contacts/search` | `contacts.readonly` | `locationId`, `pageLimit` (max 500) | `page × pageLimit` up to 10,000. With `searchAfter`, an empty `contacts` array is the end. `hasMore: false` is not proof at the 10,000 window |
+| `GET /contacts/{contactId}` | `contacts.readonly` | path | n/a |
+| `GET /opportunities/search` | `opportunities.readonly` | `locationId` | `limit` max 100. `meta.nextPage` is empty on the last page. Past 10,000 use `meta.startAfter` + `startAfterId`, never combined with `page` |
+| `GET /opportunities/pipelines` | `opportunities.readonly` | `locationId` | none documented |
+| `GET /conversations/search` | `conversations.readonly` | `locationId` | `limit`, `startAfterDate`. Last-page proof not stated |
+| `GET /conversations/{id}/messages` | `conversations/message.readonly` | path | `lastMessageId`. `nextPage: false` ends it; `true` means more "may" exist |
+| `GET /calendars/` | `calendars.readonly` | `locationId` | none documented |
+| `GET /calendars/events` | `calendars/events.readonly` | `locationId`, `startTime`, `endTime` (ms), one of `calendarId`, `userId`, `groupId` | Not stated, so completeness cannot be proven |
+| `GET /calendars/{id}/free-slots` | `calendars.readonly` | `startDate`, `endDate` (ms, max 31 days) | not paged |
+| `GET /invoices/` | `invoices.readonly` | `altId`, `altType=location`, `limit`, `offset` | top-level `total` |
+| `GET /invoices/estimate/list` | `invoices/estimate.readonly` | same as invoices | top-level `total` |
+| `GET /payments/transactions` | `payments/transactions.readonly` | `altId`, `altType` | `limit`, `offset`, `totalCount` |
+| `POST /workflows/search` | `workflows.readonly` | `locationId` | `searchAfter` absent means last page. 403 `WORKFLOW_API_NOT_ENABLED_FOR_LOCATION` when not enabled |
+
+`GET /contacts/` is deprecated; do not use it. `GET /workflows/` is marked deprecated in the docs sidebar, with no replacement or sunset stated.
+
+**Lead fields.** Search answers `contactName` and `address`; the single contact answers `name` and `address1`. Both documented: `firstName`, `lastName`, `email`, `phone`, `city`, `state`, `postalCode`, `source`, `tags`, `dateAdded`, `dateUpdated`, `lastActivity`, `attributionSource`, `lastAttributionSource`. `source` values are free strings; no mapping to labels such as Google or Facebook is documented. Opportunity: `name`, `monetaryValue`, `pipelineId`, `pipelineStageId`, `status`, `source`, `contactId` (nullable), `lastStageChangeAt`, `createdAt`, `updatedAt`.
+
+**Minutes waiting.** No documented field holds the first inbound message. It can only be derived by scanning a contact's conversations and messages, or by storing the `InboundMessage` webhook (needs a backfill). Message sort order and a per-message automated flag are not stated.
+
+**Other fields.** Conversation answers have `lastMessageBody`, `lastMessageType` and `unreadCount`, but no last-message date or direction. Invoice and transaction amount units are not stated. The estimate list item shape is not stated (typed `string[]`).
+
+**Workflows can only be changed on allowlisted sub-accounts.** Status and definition writes are a private beta, requested through HighLevel Support. `PUT /workflows/{id}/status` takes `published` or `draft`; there is no separate on/off. `PUT /workflows/{id}/definition` works on drafts only and overwrites the whole workflow, so an omitted step is deleted. The effect of a draft switch on enrolled contacts was not confirmed.
+
+**Contact search as built (P3-2, 2026-11-22).** `POST /contacts/search` with `Version: v3` and body `{ locationId, page: 1, pageLimit: 100, sort: [{ field: "dateAdded", direction: "desc" }] }`. The live docs list `dateAdded` as a sort field and `asc`/`desc` as directions; the OpenAPI v3 file leaves the body schema empty. The older OpenAPI file names Version `2021-07-28` for this path. Paging is read from `total` or `count` and `hasMore`.
+
+**Live shape check: not done.** The Neon `develop` database holds one tenant, it is not the test sub-account, and it has no stored HighLevel connection, so no contact search was sent. Which `Version` works, the real response keys, the type of `address`, the paging fields and the sort behaviour are all **unconfirmed**. The parser therefore requires only `id` and a readable `dateAdded`, and reads a wrongly typed optional field as missing.
+
+**Sources disagree on (confirm on a real response):** `Version` (`v3` on the live docs, `2021-07-28` or `2021-04-15` in the older OpenAPI files); opportunity search parameter names (`locationId` vs `location_id`, `query` vs `q`); messages nesting (`messages.messages[]` vs top-level `messages[]`); error statuses; some types versus examples (`invoiceNumber`, `startTime`, transaction `status`).

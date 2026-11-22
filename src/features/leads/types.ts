@@ -2,19 +2,22 @@
 export type SourceKey = "call" | "form" | "text" | "gmb" | "fb" | "ig";
 
 // call and reply: the lead waits on you. booked, auto, follow, called: it does not.
-export type LeadStatus = "call" | "reply" | "booked" | "auto" | "follow" | "called";
+// new: a real contact. No stored status or wait exists yet, so the row claims neither.
+export type LeadStatus = "call" | "reply" | "booked" | "auto" | "follow" | "called" | "new";
 
 export type Lead = {
   id: string;
   name: string;
-  source: SourceKey;
+  // Null: the contact's source is not an exact match for one of the six channels.
+  source: SourceKey | null;
   need: string;
   // Minutes waiting, as the backend sends it (never a ready-made label). Picks the chip color and
   // the words ("14 min", "2 days"). 0 when the lead does not wait.
   minutesWaiting: number;
   // When a lead that does not wait came in, as the row shows it ("Yesterday", "Tuesday").
-  // Proposal, not existing: Phase 3 derives it from the contact's date added.
   received?: string;
+  // The contact's date added (ISO). The page turns it into `received` in the viewer's time zone.
+  receivedAt?: string;
   address: string;
   status: LeadStatus;
 };
@@ -58,7 +61,8 @@ export type LeadsAction =
   | { type: "field"; field: FormField; value: string }
   | { type: "submit" }
   | { type: "toggleAuto" }
-  | { type: "old"; to: OldState };
+  | { type: "old"; to: OldState }
+  | { type: "sync"; leads: readonly Lead[] };
 
 export type Summary = {
   tone: "warn" | "bad" | "hot" | "calm";
@@ -69,3 +73,31 @@ export type Summary = {
   // The lead the button acts on: a text opens the Inbox, a call marks the lead called.
   target: { id: string; kind: "reply" | "call" } | null;
 };
+
+// One contact as the server's reader hands it over. The page injects the reader.
+export type LeadContact = {
+  id: string;
+  name: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  postalCode: string | null;
+  source: string | null;
+  dateAdded: string;
+};
+
+export type LeadContactsRead =
+  | { ok: true; contacts: readonly LeadContact[]; dropped: number; complete: boolean }
+  | { ok: false; reason: "reconnect" | "unavailable" };
+
+export type LeadContactsReader = (tenantId: string) => Promise<LeadContactsRead>;
+
+// What one load of the leads gives a page. Never sample data.
+// `complete`: no contact lies beyond this page. `dropped`: malformed rows left out.
+export type LeadsResult =
+  | { state: "ready"; leads: Lead[]; loadedAt: string; complete: boolean; dropped: number }
+  | { state: "empty" }
+  | { state: "reconnect" }
+  | { state: "unavailable" };
+
+export type SourceCounts = { byKey: Record<SourceKey, number>; unlabelled: number; total: number };

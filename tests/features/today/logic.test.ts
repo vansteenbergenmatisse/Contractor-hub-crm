@@ -2,9 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import { buildMockInvoices, chipFor } from "@/features/invoices";
 import { SEED_QUOTES } from "@/features/quotes";
 import {
-  MONEY_OWED, owedRows, quoteDocFor, rowActions, createReducer, doneText, greeting, initialState, LEADS, leadMeta, leadsFor, mapsUrl, nextLabel, nextStop, nextTodo, numClass, openCount, pressPlan, rowClass,
-  searchRows, sendRequest, setFilter, setRange, setStatus, STOPS, TODOS, visitChip,
+  rowActions, createReducer, doneText, greeting, initialState, leadMeta, mapsUrl, nextLabel, nextStop, nextTodo, numClass, openCount, pressPlan, rowClass,
+  sendRequest, setFilter, setRange, setStatus, visitChip,
 } from "@/features/today";
+import { LEADS, leadsFor, MONEY_OWED, owedRows, quoteDocFor, searchRows, STOPS, TODOS } from "../../../src/features/today/mock";
 
 const byId = (id: string) => TODOS.find((t) => t.id === id)!;
 const fresh = () => initialState(TODOS);

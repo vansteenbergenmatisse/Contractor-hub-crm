@@ -1,6 +1,6 @@
-import { QuotesPage } from "@/features/quotes";
+import { NotAvailablePage } from "@/shared/ui/not-available-page";
 
-// Thin page: the quotes feature renders everything. Mock data in Phase 2.
+// Not wired to real data yet, so real clients never see the feature's sample rows.
 export default function Page() {
-  return <QuotesPage />;
+  return <NotAvailablePage title="Quotes" />;
 }

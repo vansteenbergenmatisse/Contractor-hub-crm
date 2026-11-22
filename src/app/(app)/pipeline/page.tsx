@@ -1,12 +1,6 @@
-import { Suspense } from "react";
-import { PipelinePage } from "@/features/pipeline";
+import { NotAvailablePage } from "@/shared/ui/not-available-page";
 
-// Thin page: the feature draws everything. The shell adds the page container. Suspense is for
-// useSearchParams (?row= from the search).
+// Not wired to real data yet, so real clients never see the feature's sample rows.
 export default function Page() {
-  return (
-    <Suspense fallback={null}>
-      <PipelinePage />
-    </Suspense>
-  );
+  return <NotAvailablePage title="Pipeline" />;
 }

@@ -36,7 +36,7 @@ type Props = {
 };
 
 export function SettingsPage({ initial, initialValues, initialSection, connections = UNKNOWN_CONNECTIONS }: Props) {
-  const { state, dispatch, filter, extras, phone } = useSettings(initial, initialValues, initialSection, connections);
+  const { state, dispatch, filter, extras, phone, choicesAvailable } = useSettings(initial, initialValues, initialSection, connections);
   const signOut = useSignOut();
   const { values, draft, err } = state;
   const show = (id: string) => filter.items[id];
@@ -180,14 +180,14 @@ export function SettingsPage({ initial, initialValues, initialSection, connectio
           {filter.sections.choice ? (
             <section aria-labelledby="fd-st-3">
               <h2 className="fd-pnh" id="fd-st-3">Your choices</h2>
-              <p className="fd-pns fd-sts">Each switch works at once.</p>
+              <p className="fd-pns fd-sts">{choicesAvailable ? "Each switch works at once." : "We do not have these choices yet."}</p>
               <div className="fd-lst">
                 {SWITCHES.map((label, i) =>
                   show(`sw-${i}`) ? (
                     <div className="fd-rw" key={label}>
                       <div className="fd-rm"><div className="fd-rbx"><p className="fd-rn">{label}</p></div></div>
                       <div className="fd-rac">
-                        <button
+                        {!choicesAvailable ? <span className="fd-chip is-plain">Not available yet</span> : <button
                           type="button"
                           className={`fd-swb${state.sw[i] ? " is-on" : ""}`}
                           role="switch"
@@ -197,7 +197,7 @@ export function SettingsPage({ initial, initialValues, initialSection, connectio
                         >
                           <i aria-hidden="true" />
                           <span><span className="fd-h">{state.sw[i] ? "On" : "Off"}</span></span>
-                        </button>
+                        </button>}
                       </div>
                     </div>
                   ) : null,

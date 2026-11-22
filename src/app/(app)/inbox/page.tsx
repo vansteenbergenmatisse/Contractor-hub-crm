@@ -1,11 +1,6 @@
-import { Suspense } from "react";
-import { InboxPageFromUrl } from "@/features/inbox";
+import { NotAvailablePage } from "@/shared/ui/not-available-page";
 
-// Thin page: the Inbox feature does the work. Suspense is for useSearchParams (?row=<id>).
+// Not wired to real data yet, so real clients never see the feature's sample rows.
 export default function Page() {
-  return (
-    <Suspense fallback={null}>
-      <InboxPageFromUrl />
-    </Suspense>
-  );
+  return <NotAvailablePage title="Inbox" />;
 }

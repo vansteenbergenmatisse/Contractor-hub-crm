@@ -1,9 +1,14 @@
 // Public API of the leads feature. Other code imports from "@/features/leads" only.
 export { LeadsPage } from "./components/LeadsPage";
-export { liveSearchRows, searchRows } from "./api/search-rows";
+export { LeadsSkeleton } from "./components/LeadsSkeleton";
+export { loadLeads } from "./api/load-leads";
+export { leadSearchRows, liveSearchRows } from "./api/search-rows";
 export {
-  MAX_ADDED, createInitialState, filterCounts, firstNeedId, isWaiting, leadsReducer, sourceRows, summarize, tiles,
-  validateLead, visibleAdded, visibleLeads, waitClass, waitLevel, waitingCount,
+  MAX_ADDED, createInitialState, filterCounts, firstNeedId, hasWaitData, isWaiting, leadsReducer, mergeLeads, receivedLabel,
+  sourceCounts, sourceKey, sourceRows, summarize, tiles, validateLead, visibleAdded, visibleLeads, waitClass, waitLevel,
+  waitingCount, weekKnown, withReceived,
 } from "./api/leads-logic";
-export { MOCK_LEADS } from "./mock";
-export type { Lead, LeadsAction, LeadsState, LeadStatus, SourceKey, Summary, WaitFilter } from "./types";
+export type {
+  Lead, LeadContact, LeadContactsRead, LeadContactsReader, LeadsAction, LeadsResult, LeadsState, LeadStatus, SourceCounts,
+  SourceKey, Summary, WaitFilter,
+} from "./types";

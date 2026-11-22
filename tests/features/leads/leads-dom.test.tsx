@@ -33,6 +33,7 @@ vi.mock("@/features/app-shell", async (original) => {
 });
 
 import { LeadsPage } from "@/features/leads";
+import { READY } from "./fixtures";
 
 function setUrl(search: string) {
   nav.search = search;
@@ -54,18 +55,18 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe("tiles", () => {
-  it("keeps New today and This week at the design's counts when a lead is added on screen", async () => {
+  it("keeps New today and This week at the loaded rows' counts when a lead is added on screen", async () => {
     const user = userEvent.setup();
-    render(<LeadsPage />);
+    render(<LeadsPage result={READY} />);
     await user.type(screen.getByLabelText("Name"), "Pat Test");
     await user.type(screen.getByLabelText("Phone"), "6145550100");
     await user.click(screen.getByRole("button", { name: /^Add lead$/ }));
     expect(screen.getByText("Pat Test")).toBeInTheDocument();
-    expect(tile("New today")).toBe("4");
-    expect(tile("This week")).toBe("13");
+    expect(tile("New today")).toBe("8");
+    expect(tile("This week")).toBe("8");
     expect(tile("Wait on you")).toBe("4");
-    // The sources panel counts the added lead, as the design does (13 + added).
-    expect(screen.getByText(/The 14 leads of this week\./)).toBeInTheDocument();
+    // The sources panel counts the added lead, as the design does (loaded + added).
+    expect(screen.getByText(/The 9 leads of this week\./)).toBeInTheDocument();
   });
 });
 
@@ -75,7 +76,7 @@ describe("state survives moving between pages", () => {
     return (
       <>
         <button type="button" onClick={() => setShown((s) => !s)}>switch page</button>
-        {shown ? <LeadsPage /> : <p>another page</p>}
+        {shown ? <LeadsPage result={READY} /> : <p>another page</p>}
       </>
     );
   }
@@ -94,23 +95,23 @@ describe("state survives moving between pages", () => {
 
 describe("?row= from the search", () => {
   it("marks every lead row with its search id", () => {
-    render(<LeadsPage />);
+    render(<LeadsPage result={READY} />);
     for (let n = 1; n <= 8; n++) expect(row(`ld-${n}`)).not.toBeNull();
   });
 
   it("brings the lead into view on open", async () => {
     setUrl("?row=ld-6");
-    render(<LeadsPage />);
+    render(<LeadsPage result={READY} />);
     await waitFor(() => expect(scrolled).toContain(row("ld-6")));
   });
 
   it("shows all leads again when the filter hides the lead, also with the page already open", async () => {
     const user = userEvent.setup();
-    const { rerender } = render(<LeadsPage />);
+    const { rerender } = render(<LeadsPage result={READY} />);
     await user.click(screen.getByRole("radio", { name: /24\+/ }));
     expect(row("ld-6")).toBeNull();
     setUrl("?row=ld-6");
-    rerender(<LeadsPage />);
+    rerender(<LeadsPage result={READY} />);
     await waitFor(() => expect(row("ld-6")).not.toBeNull());
     expect(screen.getByRole("radio", { name: /^All/ })).toHaveAttribute("aria-checked", "true");
     await waitFor(() => expect(scrolled).toContain(row("ld-6")));
@@ -121,7 +122,7 @@ describe("?add=1 from the shell's new-lead shortcut", () => {
   it("opens the add-lead form on open and drops the parameter", async () => {
     nav.replace.mockClear();
     setUrl("?add=1");
-    render(<LeadsPage />);
+    render(<LeadsPage result={READY} />);
     const name = screen.getByLabelText("Name");
     await waitFor(() => expect(name).toHaveFocus());
     expect(scrolled).toContain(name);
@@ -130,23 +131,23 @@ describe("?add=1 from the shell's new-lead shortcut", () => {
 
   it("opens the add-lead form when ?add=1 arrives with Leads already open, every time", async () => {
     nav.replace.mockClear();
-    const { rerender } = render(<LeadsPage />);
+    const { rerender } = render(<LeadsPage result={READY} />);
     const name = screen.getByLabelText("Name");
     expect(name).not.toHaveFocus();
     expect(nav.replace).not.toHaveBeenCalled();
 
     setUrl("?add=1");
-    rerender(<LeadsPage />);
+    rerender(<LeadsPage result={READY} />);
     await waitFor(() => expect(name).toHaveFocus());
     expect(nav.replace).toHaveBeenCalledWith("/leads");
 
     // The parameter is dropped, the owner moves on, then presses the shortcut again.
     name.blur();
     setUrl("");
-    rerender(<LeadsPage />);
+    rerender(<LeadsPage result={READY} />);
     expect(name).not.toHaveFocus();
     setUrl("?add=1");
-    rerender(<LeadsPage />);
+    rerender(<LeadsPage result={READY} />);
     await waitFor(() => expect(name).toHaveFocus());
     expect(nav.replace).toHaveBeenCalledTimes(2);
   });

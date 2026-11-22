@@ -17,7 +17,9 @@ vi.mock("@/features/app-shell", async (original) => ({
 }));
 
 import { GestureLayer } from "@/features/app-shell";
-import { CalendarCard, initialState, STOPS, TodayPage, TODOS } from "@/features/today";
+import { CalendarCard, initialState, TodayPage } from "@/features/today";
+import { STOPS, TODOS } from "../../../src/features/today/mock";
+import { SampleToday } from "./sample-today";
 
 const todoRow = (name: string) => Array.from(document.querySelectorAll<HTMLElement>("li.fd-row")).find((li) => li.textContent?.includes(name)) as HTMLElement;
 
@@ -47,12 +49,12 @@ describe("R4-2: the Today greeting follows the shell's business details", () => 
 
 describe("R4-3: Today rows take no focus; the menu still opens from the row's buttons", () => {
   it("has no tabindex on a row", () => {
-    render(<TodayPage ownerFirst="Pat" />);
+    render(<SampleToday ownerFirst="Pat" />);
     expect(todoRow("Tom Becker").hasAttribute("tabindex")).toBe(false);
   });
 
   it.each([[{ key: "ContextMenu" }], [{ key: "F10", shiftKey: true }]])("opens the menu from a focused row button with %o", (keys) => {
-    render(<GestureLayer><TodayPage ownerFirst="Pat" /></GestureLayer>);
+    render(<GestureLayer><SampleToday ownerFirst="Pat" /></GestureLayer>);
     const button = todoRow("Maria Alvarez").querySelector<HTMLButtonElement>("button.fd-act") as HTMLButtonElement;
     button.focus();
     act(() => { fireEvent.keyDown(button, keys); });
@@ -60,7 +62,7 @@ describe("R4-3: Today rows take no focus; the menu still opens from the row's bu
   });
 
   it("gives focus back to a row button when the menu closes with Escape", () => {
-    render(<GestureLayer><TodayPage ownerFirst="Pat" /></GestureLayer>);
+    render(<GestureLayer><SampleToday ownerFirst="Pat" /></GestureLayer>);
     const row = todoRow("Maria Alvarez");
     const button = row.querySelector<HTMLButtonElement>("button.fd-act") as HTMLButtonElement;
     button.focus();

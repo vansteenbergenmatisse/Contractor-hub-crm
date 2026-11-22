@@ -1,41 +1,65 @@
-import { leadMeta, leadsFor } from "../api/selectors";
+"use client";
+
+import type { CSSProperties } from "react";
+import { joinParts } from "@/shared/lib/join-parts";
+import type { LeadsResult } from "@/features/leads";
+import { initials, leadPanes } from "../api/lead-panes";
 import type { LeadRange } from "../types";
-import { Chip } from "./Chip";
+import { LeadsCardStatus } from "./LeadsCardStatus";
+import { NotAvailableChip } from "./NotAvailableChip";
 
 const RANGES: ReadonlyArray<readonly [LeadRange, string]> = [["today", "Today"], ["week", "This week"]];
+const bar = (width: string): CSSProperties => ({ display: "block", width, height: 12, borderRadius: 6, background: "currentColor", opacity: 0.1 });
 
 // Both lists stay in the page; the CSS fades the one that is off (class is-off), as in the design.
-export function LeadsCard({ range, onRange }: { range: LeadRange; onRange: (range: LeadRange) => void }) {
+// Real contacts: the received time, no waiting chip and no button. Null `result`: still loading.
+export function LeadsCard({ result, range, onRange, timeZone }: {
+  result: LeadsResult | null;
+  range: LeadRange;
+  onRange: (range: LeadRange) => void;
+  timeZone: string;
+}) {
+  const panes = result?.state === "ready" ? leadPanes(result, timeZone) : null;
   return (
-    <section className="fd-card fd-in" style={{ "--i": 7 } as React.CSSProperties} aria-labelledby="fd-lead-h">
+    <section className="fd-card fd-in" style={{ "--i": 7 } as CSSProperties} aria-labelledby="fd-lead-h">
       <div className="fd-ch">
         <h2 className="fd-ct" id="fd-lead-h">New leads</h2>
-        <div className="fd-seg" role="group" aria-label="Show leads from">
-          <span className={`fd-thumb${range === "today" ? "" : " is-week"}`} aria-hidden="true" />
-          {RANGES.map(([key, label]) => (
-            <button key={key} type="button" className={`fd-sb${range === key ? " is-on" : ""}`} aria-pressed={range === key} onClick={() => onRange(key)}>{label}</button>
-          ))}
+        {panes ? (
+          <div className="fd-seg" role="group" aria-label="Show leads from">
+            <span className={`fd-thumb${range === "today" ? "" : " is-week"}`} aria-hidden="true" />
+            {RANGES.map(([key, label]) => (
+              <button key={key} type="button" className={`fd-sb${range === key ? " is-on" : ""}`} aria-pressed={range === key} onClick={() => onRange(key)}>{label}</button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+      {!result ? (
+        <ul className="fd-leads" role="status" aria-busy="true" aria-label="Loading leads">
+          {[0, 1, 2].map((n) => <li key={n} className="fd-lead"><span className="fd-av" aria-hidden="true" /><div className="fd-lx"><span style={bar("55%")} /></div></li>)}
+        </ul>
+      ) : !panes ? (
+        <LeadsCardStatus state={result.state as "empty" | "reconnect" | "unavailable"} />
+      ) : (
+        <div className="fd-panes">
+          {RANGES.map(([key]) => {
+            const { rows, count } = panes[key];
+            return (
+              <div key={key} className={`fd-pane${range === key ? "" : " is-off"}`}>
+                {count !== null ? <p className="fd-big"><b>{count}</b> {key === "today" ? "new today" : "this week"}</p>
+                  : rows.length === 0 ? <p className="fd-big"><NotAvailableChip /></p> : null}
+                <ul className="fd-leads">
+                  {rows.map((lead) => (
+                    <li key={lead.id} className="fd-lead">
+                      <span className="fd-av" aria-hidden="true">{initials(lead.name)}</span>
+                      <div className="fd-lx"><p className="fd-lt"><b>{lead.name}</b></p><p className="fd-ls">{joinParts([lead.need, lead.received])}</p></div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
         </div>
-      </div>
-      <div className="fd-panes">
-        {RANGES.map(([key]) => {
-          const leads = leadsFor(key);
-          return (
-            <div key={key} className={`fd-pane${range === key ? "" : " is-off"}`}>
-              <p className="fd-big"><b>{leads.length}</b> {key === "today" ? "new today" : "this week"}</p>
-              <ul className="fd-leads">
-                {leads.map((lead) => (
-                  <li key={lead.name} className="fd-lead">
-                    <span className="fd-av" aria-hidden="true">{lead.init}</span>
-                    <div className="fd-lx"><p className="fd-lt"><b>{lead.name}</b></p><p className="fd-ls">{leadMeta(lead, key)}</p></div>
-                    <Chip tone={lead.chip.tone} icon={lead.chip.tone === "warn" ? "clock" : lead.chip.tone === "ok" ? "check" : undefined}>{lead.chip.text}</Chip>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          );
-        })}
-      </div>
+      )}
     </section>
   );
 }

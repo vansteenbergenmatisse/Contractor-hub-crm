@@ -1,16 +1,21 @@
 "use client";
 
-import { useEffect, useRef, type Dispatch } from "react";
+import { useEffect, useMemo, useRef, type Dispatch } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ROW_PICK_EVENT, useKeptReducer } from "@/features/app-shell";
-import { createInitialState, leadsReducer } from "../api/leads-logic";
-import { MOCK_LEADS } from "../mock";
-import type { LeadsAction, LeadsState } from "../types";
+import { createInitialState, leadsReducer, mergeLeads } from "../api/leads-logic";
+import type { Lead, LeadsAction, LeadsState } from "../types";
 
-// Screen state only, kept under "leads" while the shell is mounted, so a call or a booking stays
-// when the owner goes to another page and comes back. No fetch, no timer.
-export function useLeads(): [LeadsState, Dispatch<LeadsAction>] {
-  return useKeptReducer("leads", leadsReducer, MOCK_LEADS, createInitialState);
+// Screen state, kept under "leads" while the shell is mounted, so what the owner did stays when
+// they go to another page and come back. The kept state is seeded once, so fresh server rows are
+// merged in on every render and stored by a sync.
+export function useLeads(leads: readonly Lead[]): [LeadsState, Dispatch<LeadsAction>] {
+  const [kept, dispatch] = useKeptReducer("leads", leadsReducer, leads, createInitialState);
+  useEffect(() => {
+    dispatch({ type: "sync", leads });
+  }, [dispatch, leads]);
+  const state = useMemo(() => mergeLeads(kept, leads), [kept, leads]);
+  return [state, dispatch];
 }
 
 // `?row=<lead id>` from the search: when the filter hides that lead, show all leads again (as the

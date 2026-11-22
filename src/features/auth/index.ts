@@ -13,6 +13,7 @@ export type { MoveProof, MoveReason, SourceList } from "./api/account-move";
 export type { Auth, CreateAuthOptions, InvitedUserInput } from "./api/auth";
 export { authRoute, getAuth, currentUserFromHeaders, getGuards, getInviteLimiter, getInviteService, getProvisionDeps, resolveEmbedLogin } from "./api/instance";
 export { listActiveLinks } from "./db/ghl-links";
+export { hitRateLimit } from "./db/rate-limit";
 export { createInviteService, hashInviteCode, InviteError, newInviteCode } from "./api/invites";
 export type { InviteErrorCode, InviteRecord, InviteRole, InviteServiceDeps, InviteTenant } from "./api/invites";
 export { handleSetTenantLogin } from "./api/tenant-login";

@@ -20,13 +20,15 @@ vi.mock("@/features/app-shell", async (original) => ({
 import { PageStateProvider } from "@/features/app-shell";
 import { buildMockInvoices, chipFor } from "@/features/invoices";
 import { MoneyCards, TodayPage } from "@/features/today";
+import { SAMPLE_MONEY } from "../../../src/features/today/mock";
+import { SampleToday } from "./sample-today";
 
 function Pages() {
   const [on, setOn] = useState(true);
   return (
     <PageStateProvider>
       <button type="button" onClick={() => setOn((v) => !v)}>switch page</button>
-      {on ? <TodayPage ownerFirst="Pat" /> : <p>other page</p>}
+      {on ? <SampleToday ownerFirst="Pat" /> : <p>other page</p>}
     </PageStateProvider>
   );
 }
@@ -49,7 +51,7 @@ describe("Today: state survives moving between pages", () => {
 describe("Today: wording follows the design", () => {
   it("labels the pipeline tile as the design does", () => {
     render(<TodayPage ownerFirst="Pat" />);
-    expect(screen.getByRole("button", { name: "Jobs this week: 6, 1 today. Open the job stages in the pipeline" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Jobs this week: not available yet. Open the job stages in the pipeline" })).toBeInTheDocument();
     expect(document.body.textContent).not.toContain("None left today");
   });
 });
@@ -60,7 +62,7 @@ describe("Today: Money owed agrees with the Invoices page", () => {
     const paul = buildMockInvoices(now).find((i) => i.no === 1045);
     expect(paul).toBeDefined();
     const expected = chipFor(paul!, now).text;
-    render(<MoneyCards />);
+    render(<MoneyCards data={SAMPLE_MONEY} />);
     const row = screen.getByText("Paul Ortega").closest("li") as HTMLElement;
     expect(row).toHaveTextContent(expected);
     expect(row).toHaveTextContent("$9,500");

@@ -1,7 +1,6 @@
-import { MOCK_NEW_TODAY, MOCK_WEEK_SOURCES } from "../mock";
 import type {
-  AddedLead, FocusField, FormErrors, FormValues, Lead, LeadsAction, LeadsState, LeadStatus, SourceKey, Summary,
-  WaitFilter, WaitLevel,
+  AddedLead, FocusField, FormErrors, FormValues, Lead, LeadsAction, LeadsState, LeadStatus, SourceCounts, SourceKey,
+  Summary, WaitFilter, WaitLevel,
 } from "../types";
 
 // Pure screen logic for Leads. No fetch, no timer, no automation: every change is local state.
@@ -67,6 +66,24 @@ export function createInitialState(leads: readonly Lead[]): LeadsState {
   };
 }
 
+// Fresh server rows into kept screen state. A lead whose server status is unchanged keeps what the
+// owner did on screen; a new lead or a changed status takes the server's; a lead that is gone is
+// removed. Answers the same object when nothing changed.
+export function mergeLeads(state: LeadsState, leads: readonly Lead[]): LeadsState {
+  const status: Record<string, LeadStatus> = {};
+  const initial: Record<string, LeadStatus> = {};
+  for (const l of leads) {
+    const kept = state.status[l.id];
+    status[l.id] = kept !== undefined && state.initial[l.id] === l.status ? kept : l.status;
+    initial[l.id] = l.status;
+  }
+  const same = (a: Record<string, LeadStatus>, b: Record<string, LeadStatus>) => {
+    const keys = Object.keys(a);
+    return keys.length === Object.keys(b).length && keys.every((k) => a[k] === b[k]);
+  };
+  return same(status, state.status) && same(initial, state.initial) ? state : { ...state, status, initial };
+}
+
 export function validateLead(form: FormValues): { errors: FormErrors; focus: FocusField | null } {
   const name = form.name.trim();
   const phone = form.phone.trim();
@@ -82,11 +99,14 @@ export function validateLead(form: FormValues): { errors: FormErrors; focus: Foc
 
 export function leadsReducer(state: LeadsState, action: LeadsAction): LeadsState {
   switch (action.type) {
+    case "sync":
+      return mergeLeads(state, action.leads);
     case "call":
-      return action.id in state.status ? { ...state, status: { ...state.status, [action.id]: "called" } } : state;
+      // A real contact has no call log here: nothing may claim it was called.
+      return action.id in state.status && state.status[action.id] !== "new" ? { ...state, status: { ...state.status, [action.id]: "called" } } : state;
     case "book": {
       const now = state.status[action.id];
-      if (now === undefined) return state;
+      if (now === undefined || now === "new") return state;
       const start = state.initial[action.id];
       const next: LeadStatus = now === "booked" ? (start === "booked" ? "follow" : start) : "booked";
       return { ...state, status: { ...state.status, [action.id]: next } };
@@ -165,13 +185,99 @@ export function summarize(leads: readonly Lead[], state: LeadsState): Summary {
   return { tone: "calm", a: "Nobody waits on you.", b: "New leads show up here first.", button: "", target: null };
 }
 
-// The leads of this week by source, before any lead added on screen.
-export const WEEK_TOTAL = Object.values(MOCK_WEEK_SOURCES).reduce((n, c) => n + c, 0);
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
-// The three tiles. New today and This week stay at the sample counts, as in the design (a lead
-// added on screen shows in the list, the wait count and the sources panel, not in these two).
-export function tiles(leads: readonly Lead[], state: LeadsState): { today: number; week: number; wait: number } {
-  return { today: MOCK_NEW_TODAY, week: WEEK_TOTAL, wait: waitingCount(leads, state) };
+const dayKey = (ms: number, timeZone: string) =>
+  new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(ms);
+
+const receivedTimes = (leads: readonly Lead[]) =>
+  leads.flatMap((l) => {
+    const ms = l.receivedAt ? Date.parse(l.receivedAt) : Number.NaN;
+    return Number.isNaN(ms) ? [] : [ms];
+  });
+
+// True when at least one lead carries a real wait or status. Real contacts do not yet.
+export function hasWaitData(leads: readonly Lead[]): boolean {
+  return leads.some((l) => l.status !== "new");
+}
+
+// "This week" is the last 7 days. With more contacts beyond the loaded page, a count is only known
+// when the page reaches past its window; otherwise it would undercount.
+export function weekKnown(leads: readonly Lead[], loadedAt: string, complete: boolean): boolean {
+  if (complete) return true;
+  const times = receivedTimes(leads);
+  return times.length > 0 && Math.min(...times) < Date.parse(loadedAt) - WEEK_MS;
+}
+
+type TileContext = { loadedAt: string; complete: boolean; timeZone: string };
+
+// The three tiles, from real rows. Null: there is no honest number, so the tile is hidden. A lead
+// added on screen shows in the list and the sources panel, not in New today or This week.
+export function tiles(leads: readonly Lead[], state: LeadsState, context: TileContext): { today: number | null; week: number | null; wait: number | null } {
+  const now = Date.parse(context.loadedAt);
+  const times = receivedTimes(leads);
+  const todayKey = dayKey(now, context.timeZone);
+  const todayKnown = context.complete || (times.length > 0 && dayKey(Math.min(...times), context.timeZone) !== todayKey);
+  return {
+    today: todayKnown ? times.filter((t) => dayKey(t, context.timeZone) === todayKey).length : null,
+    week: weekKnown(leads, context.loadedAt, context.complete) ? times.filter((t) => t >= now - WEEK_MS && t <= now).length : null,
+    wait: hasWaitData(leads) ? waitingCount(leads, state) : null,
+  };
+}
+
+// When a contact came in, in the viewer's time zone: 14 min, 2 hrs, Yesterday, Tuesday, Mar 3.
+export function receivedLabel(receivedAt: string, loadedAt: string, timeZone: string): string {
+  const at = Date.parse(receivedAt);
+  const now = Date.parse(loadedAt);
+  if (Number.isNaN(at) || Number.isNaN(now)) return "";
+  const minutes = Math.floor((now - at) / 60_000);
+  if (minutes < 1) return "Just now";
+  const today = dayKey(now, timeZone);
+  if (dayKey(at, timeZone) === today) return waitText(minutes);
+  // Noon UTC of each calendar date: whole days between them, whatever the clock change.
+  const dayNumber = (key: string) => Math.round(Date.parse(`${key}T12:00:00Z`) / 86_400_000);
+  const days = dayNumber(today) - dayNumber(dayKey(at, timeZone));
+  if (days === 1) return "Yesterday";
+  if (days > 1 && days < 7) return new Intl.DateTimeFormat("en-US", { timeZone, weekday: "long" }).format(at);
+  return new Intl.DateTimeFormat("en-US", { timeZone, month: "short", day: "numeric" }).format(at);
+}
+
+export function withReceived(leads: readonly Lead[], loadedAt: string, timeZone: string): Lead[] {
+  return leads.map((l) => (l.receivedAt ? { ...l, received: receivedLabel(l.receivedAt, loadedAt, timeZone) } : l));
+}
+
+// Only exact, obvious values name a channel. Anything else stays unlabelled.
+const SOURCE_VALUES: Readonly<Record<string, SourceKey>> = {
+  call: "call", "phone call": "call", "inbound call": "call",
+  form: "form", "web form": "form", "website form": "form",
+  text: "text", sms: "text", "text message": "text",
+  gmb: "gmb", "google my business": "gmb", "google business profile": "gmb",
+  facebook: "fb", fb: "fb",
+  instagram: "ig", ig: "ig",
+};
+
+export function sourceKey(value: string | null | undefined): SourceKey | null {
+  if (!value) return null;
+  const key = value.trim().toLowerCase();
+  return Object.hasOwn(SOURCE_VALUES, key) ? SOURCE_VALUES[key] : null;
+}
+
+const NO_SOURCES: Readonly<Record<SourceKey, number>> = { call: 0, form: 0, text: 0, gmb: 0, fb: 0, ig: 0 };
+
+// The last 7 days' leads per channel. Unlabelled leads count in the total, in no channel.
+export function sourceCounts(leads: readonly Lead[], loadedAt: string): SourceCounts {
+  const now = Date.parse(loadedAt);
+  const byKey = { ...NO_SOURCES };
+  let unlabelled = 0;
+  let total = 0;
+  for (const l of leads) {
+    const at = l.receivedAt ? Date.parse(l.receivedAt) : Number.NaN;
+    if (Number.isNaN(at) || at < now - WEEK_MS || at > now) continue;
+    total += 1;
+    if (l.source) byKey[l.source] += 1;
+    else unlabelled += 1;
+  }
+  return { byKey, unlabelled, total };
 }
 
 export const SOURCE_LABEL: Record<SourceKey | "you", string> = {
@@ -181,10 +287,10 @@ export const SOURCE_LABEL: Record<SourceKey | "you", string> = {
 const SOURCE_ORDER: SourceKey[] = ["call", "form", "text", "gmb", "fb", "ig"];
 
 // The bar is 25% per lead, full at 4.
-export function sourceRows(nAdded: number): Array<{ key: SourceKey | "you"; label: string; count: number; width: number }> {
+export function sourceRows(nAdded: number, counts: Readonly<Record<SourceKey, number>> = NO_SOURCES): Array<{ key: SourceKey | "you"; label: string; count: number; width: number }> {
   const bar = (n: number) => Math.min(100, 25 * n);
   return [
-    ...SOURCE_ORDER.map((key) => ({ key, label: SOURCE_LABEL[key], count: MOCK_WEEK_SOURCES[key], width: bar(MOCK_WEEK_SOURCES[key]) })),
+    ...SOURCE_ORDER.map((key) => ({ key, label: SOURCE_LABEL[key], count: counts[key], width: bar(counts[key]) })),
     { key: "you" as const, label: SOURCE_LABEL.you, count: nAdded, width: bar(nAdded) },
   ];
 }

@@ -4,7 +4,8 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { GestureLayer } from "@/features/app-shell";
 import { LeadRow } from "../../../src/features/leads/components/LeadRow";
 import { AddedLeadRow } from "../../../src/features/leads/components/AddedLeadRow";
-import { MOCK_LEADS, liveSearchRows, searchRows } from "@/features/leads";
+import { leadSearchRows, liveSearchRows } from "@/features/leads";
+import { MOCK_LEADS } from "../../../src/features/leads/mock";
 
 afterEach(cleanup);
 const noop = vi.fn();
@@ -39,6 +40,7 @@ describe("a hand-added lead row", () => {
 
 describe("leads search subtitle", () => {
   it("reads source · need · when", () => {
+    const searchRows = leadSearchRows(MOCK_LEADS);
     expect(searchRows[0].sub).toBe("Call · Roof leak repair · 14 min");
     expect(searchRows[3].sub).toBe("Web form · Roof replacement · 2 hrs");
   });

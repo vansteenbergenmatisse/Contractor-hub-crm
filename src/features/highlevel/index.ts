@@ -9,6 +9,7 @@ export type { OAuthStartDeps } from "./api/start";
 export { handleOAuthCallback } from "./api/callback";
 export type { OAuthCallbackDeps } from "./api/callback";
 export {
+  createTenantContactsReader,
   createWebhookRoute,
   getOnboardingApi,
   getTokenService,
@@ -16,6 +17,7 @@ export {
   listTenantUsers,
   oauthCallbackRoute,
   oauthStartRoute,
+  readTenantContacts,
   readTenantCustomValuesStored,
   searchLocationUsers,
   webhookRoute,
@@ -45,7 +47,10 @@ export type {
   CustomValue,
   AgencyState,
   AgencyToken,
+  ContactsPage,
+  ContactsRead,
   HighLevelClientConfig,
+  HighLevelContact,
   HighLevelUser,
   InstalledLocation,
   LocationDecision,
@@ -60,3 +65,11 @@ export type {
 } from "./types";
 export { searchUsersWithRetry } from "./api/search-users";
 export { listCustomValuesWithRetry } from "./api/custom-values";
+export {
+  CONTACTS_PAGE_SIZE,
+  CONTACTS_READS_PER_MINUTE,
+  MAX_CONTACTS_RESPONSE_BYTES,
+  parseContactSearch,
+  readContactsPage,
+  readContactsThrottled,
+} from "./api/contacts";

@@ -22,12 +22,13 @@ vi.mock("@/features/app-shell", async (orig) => {
 });
 
 import { buildBusiness } from "@/features/app-shell";
-import { LeadsPage, searchRows } from "@/features/leads";
+import { LeadsPage, leadSearchRows } from "@/features/leads";
 import { AddLeadPanel } from "../../../src/features/leads/components/AddLeadPanel";
+import { FIXTURE_LEADS, READY } from "./fixtures";
 
 // Made-up business.
 current.business = buildBusiness({ name: "Test Roofing Co", city: "Testville", state: "TS" });
-const html = renderToStaticMarkup(<LeadsPage />);
+const html = renderToStaticMarkup(<LeadsPage result={READY} />);
 
 describe("Sources panel service area", () => {
   it("names the business's own city and state", () => {
@@ -35,7 +36,7 @@ describe("Sources panel service area", () => {
   });
   it("leaves the service area out when the business has no city or state", () => {
     current.business = buildBusiness({});
-    const empty = renderToStaticMarkup(<LeadsPage />);
+    const empty = renderToStaticMarkup(<LeadsPage result={READY} />);
     current.business = buildBusiness({ name: "Test Roofing Co", city: "Testville", state: "TS" });
     expect(empty).not.toContain("Service area");
     expect(empty).toContain("leads of this week.</p>");
@@ -44,13 +45,13 @@ describe("Sources panel service area", () => {
   it("names city, county and state, as the design does, when the business has a county", () => {
     // The shell's business facts may carry the county (custom value business_main_county).
     current.business = { ...buildBusiness({ city: "Testville", state: "TS" }), county: "Test County" };
-    const full = renderToStaticMarkup(<LeadsPage />);
+    const full = renderToStaticMarkup(<LeadsPage result={READY} />);
     current.business = buildBusiness({ name: "Test Roofing Co", city: "Testville", state: "TS" });
     expect(full).toContain("Service area: Testville, Test County, TS.");
   });
   it("shows only the city when there is no state", () => {
     current.business = buildBusiness({ city: "Testville" });
-    const city = renderToStaticMarkup(<LeadsPage />);
+    const city = renderToStaticMarkup(<LeadsPage result={READY} />);
     current.business = buildBusiness({ name: "Test Roofing Co", city: "Testville", state: "TS" });
     expect(city).toContain("Service area: Testville.");
   });
@@ -64,8 +65,8 @@ describe("LeadsPage markup", () => {
   });
 
   it("shows the three tiles with the waiting count", () => {
-    expect(html).toMatch(/<p class="fd-smv">4<\/p><p class="fd-sml">New today/);
-    expect(html).toMatch(/<p class="fd-smv">13<\/p><p class="fd-sml">This week/);
+    expect(html).toMatch(/<p class="fd-smv">8<\/p><p class="fd-sml">New today/);
+    expect(html).toMatch(/<p class="fd-smv">8<\/p><p class="fd-sml">This week/);
     expect(html).toMatch(/<p class="fd-smv">3<\/p><p class="fd-sml">Wait on you/);
   });
 
@@ -107,9 +108,9 @@ describe("LeadsPage markup", () => {
 
   it("shows the source panel with the week total and the service area from the business facts", () => {
     expect(html).toContain("Where your leads come from");
-    expect(html).toContain("The 13 leads of this week. Service area: Testville, TS.");
+    expect(html).toContain("The 8 leads of this week. Service area: Testville, TS.");
     expect(html).toContain("Added by you");
-    expect(html).toContain("--w:100%");
+    expect(html).toContain("--w:50%");
   });
 
   it("keeps the Add a lead sheet closed, with an empty form and no visible errors", () => {
@@ -126,12 +127,10 @@ describe("LeadsPage markup", () => {
     expect(html).toMatch(/data-action=""><button[^>]*fx-accb[^>]*>.*Add a lead<\/button>/);
   });
 
-  it("offers the 42 old leads and the automatic switch, with nothing sent", () => {
-    expect(html).toContain("42 leads with no contact in 3 months");
-    expect(html).toContain("Text them a check-in");
-    expect(html).not.toContain("Send to 42 people");
-    expect(html).toContain("Make it automatic");
-    expect(html).toContain("Or let it run by itself, so nobody goes cold again.");
+  it("shows no old-leads panel while no real count exists, so nothing can be sent", () => {
+    expect(html).not.toContain("leads with no contact in 3 months");
+    expect(html).not.toContain("Text them a check-in");
+    expect(html).not.toContain("Make it automatic");
   });
 
   it("starts with no empty state", () => {
@@ -162,8 +161,9 @@ describe("Add a lead panel: a dialog only as the phone sheet", () => {
   });
 });
 
-describe("searchRows", () => {
-  it("exports typed rows that open /leads", () => {
+describe("leadSearchRows", () => {
+  it("builds typed rows that open /leads", () => {
+    const searchRows = leadSearchRows(FIXTURE_LEADS);
     expect(searchRows.length).toBeGreaterThan(0);
     expect(searchRows.every((r) => r.page === "leads" && r.href === "/leads")).toBe(true);
   });

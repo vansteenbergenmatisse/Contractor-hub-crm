@@ -1,51 +1,42 @@
 "use client";
 
+import { Suspense, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { PAGE_PATH, PageAction, useShell, type PageKey } from "@/features/app-shell";
-import { nextLabel, nextStop, nextTodo, numClass, openCount } from "../api/selectors";
-import { useToday } from "../hooks/use-today";
-import { INVOICES_TILE, JOBS_TILE, LEADS, STOPS, TODOS } from "../mock";
-import { CalendarCard } from "./CalendarCard";
+import { PAGE_PATH, useShell, type PageKey } from "@/features/app-shell";
 import { Greeting } from "./Greeting";
-import { LeadsCard } from "./LeadsCard";
+import { LeadsTile } from "./LeadsTile";
 import { MoneyCards } from "./MoneyCards";
-import { NeedsCard } from "./NeedsCard";
-import { Tiles, type TileView } from "./Tiles";
+import { NotAvailableCard } from "./NotAvailableCard";
+import { TodayLeadsCard } from "./TodayLeadsCard";
+import { Tiles, type PageTile } from "./Tiles";
+
+const NOT_WIRED: readonly PageTile[] = [
+  { page: "calendar", label: "Appointments", value: null, sub: "", aria: "Appointments: not available yet. Open the calendar" },
+  { page: "pipeline", label: "Jobs this week", value: null, sub: "", aria: "Jobs this week: not available yet. Open the job stages in the pipeline" },
+  { page: "invoices", label: "Invoices to send", value: null, sub: "", aria: "Invoices to send: not available yet. Open Invoices" },
+];
 
 // The page content only. The shell adds the `fd-view` wrapper, the top bar and the tab bar.
-// Phase 2: mock data, state on screen only.
-export function TodayPage({ ownerFirst }: { ownerFirst?: string }) {
+// `leadsTile` and `leadsCard` are the server's slots for the tenant's real leads. Every other section
+// has no real source yet and says so. With no slot, the lead sections show the unavailable state.
+export function TodayPage({ ownerFirst, leadsTile, leadsCard }: { ownerFirst?: string; leadsTile?: ReactNode; leadsCard?: ReactNode }) {
   const router = useRouter();
   // The shell's details follow a Settings edit; the server's name is only the fallback.
   const first = useShell().business?.first ?? ownerFirst;
-  const today = useToday(TODOS);
-  const { state } = today;
-  const next = nextTodo(state, TODOS);
-  const stop = nextStop(STOPS);
-  const leadsToday = LEADS.filter((l) => l.ago).length;
-
-  const tiles: TileView[] = [
-    { page: "leads", label: "New leads", value: leadsToday, unit: "today", sub: `${LEADS.length} this week`, aria: `New leads: ${leadsToday} today, ${LEADS.length} this week. Open leads` },
-    { page: "calendar", label: "Appointments", value: STOPS.length, unit: "today", sub: stop ? `Next at ${stop.time}` : "", aria: `Appointments: ${STOPS.length} today${stop ? `, next at ${stop.time}` : ""}. Open the calendar` },
-    { page: "pipeline", label: "Jobs this week", value: JOBS_TILE.value, sub: `${JOBS_TILE.today} today`, aria: `Jobs this week: ${JOBS_TILE.value}, ${JOBS_TILE.today} today. Open the job stages in the pipeline` },
-    { page: "invoices", label: "Invoices to send", value: INVOICES_TILE.value, sub: `${INVOICES_TILE.ready} is ready now`, aria: `Invoices to send: ${INVOICES_TILE.value}. Open Invoices` },
-  ];
-
   return (
     <>
-      <Greeting first={first} left={openCount(state, TODOS)} numClass={numClass(state)} />
-      <Tiles tiles={tiles} onOpen={(page: PageKey) => router.push(PAGE_PATH[page])} />
-      <NeedsCard todos={TODOS} state={state} onFilter={today.setFilter} onPress={today.press} onUndo={today.undo} />
+      <Greeting first={first} />
+      <Tiles
+        first={<Suspense fallback={<LeadsTile result={null} />}>{leadsTile ?? <LeadsTile result={{ state: "unavailable" }} />}</Suspense>}
+        tiles={NOT_WIRED}
+        onOpen={(page: PageKey) => router.push(PAGE_PATH[page])}
+      />
+      <NotAvailableCard id="fd-need-h" title="Needs you" index={5} className="fd-need" />
       <div className="fd-two">
-        <CalendarCard stops={STOPS} state={state} />
-        <LeadsCard range={state.range} onRange={today.setRange} />
+        <NotAvailableCard id="fd-cal-h" title="Today’s calendar" index={6} />
+        <Suspense fallback={<TodayLeadsCard result={null} />}>{leadsCard ?? <TodayLeadsCard result={{ state: "unavailable" }} />}</Suspense>
       </div>
       <MoneyCards />
-      {next ? (
-        <PageAction>
-          <button type="button" className="fd-btn fx-accb" onClick={today.pressNext}>{nextLabel(next)}</button>
-        </PageAction>
-      ) : null}
     </>
   );
 }
