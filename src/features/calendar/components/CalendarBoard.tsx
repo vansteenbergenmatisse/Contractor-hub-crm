@@ -15,6 +15,7 @@ import { CalendarHeader } from "./CalendarHeader";
 import { ConfirmDelete } from "./ConfirmDelete";
 import { Glyph } from "./Glyph";
 import { StopDetail } from "./StopDetail";
+import { StopEvent } from "./StopEvent";
 
 const HOURS = ["7 AM", "8 AM", "9 AM", "10 AM", "11 AM", "12 PM", "1 PM", "2 PM", "3 PM", "4 PM", "5 PM"];
 const DESKTOP = 1024;
@@ -215,23 +216,23 @@ export function CalendarBoard({ now, business, row = null }: { now: Date; busine
           {[0, 1, 2, 3, 4, 5, 6].map((d) => <i key={d} className={`fd-ccol is-d${d}${state.wk === 0 && now.getDay() === d ? " is-today" : ""}`} />)}
           {v.now ? <><i className="fd-now" style={nowStyle} aria-hidden="true" /><i className="fx-nowl" style={{ gridRow: v.now.row }} aria-hidden="true">{v.now.label}</i></> : null}
           {v.events.map((e) => (
-            <button
+            <StopEvent
               key={e.id}
-              type="button"
-              className={e.cls}
-              aria-pressed={e.selected}
-              data-row-id={e.id}
+              event={e}
               onPointerDown={(ev) => { if (!e.cls.includes("is-past")) drag.onPointerDown(ev, e.id, e.len); }}
               onClick={() => { if (!drag.consumeClick()) dispatch({ type: "pick", id: e.id }); }}
-            >
-              <span className="fd-et1">{e.start} · {e.kind === "J" ? "Job" : "Estimate"}</span>
-              <span className="fd-et2"><b>{e.start}</b>{e.added ? null : <i>to {e.end}</i>}</span>
-              {e.added ? null : <span className="fd-ekt"><span className={`fd-kind ${e.kind === "J" ? "is-job" : "is-estimate"}`}>{e.kind === "J" ? "Job" : "Estimate"}</span></span>}
-              <span className="fd-enm">{e.name}</span>
-              <span className="fd-esv">{e.added ? "Added by you" : e.service}</span>
-              {e.added ? null : <span className="fd-ead"><Glyph name="pin" size={14} />{e.address}</span>}
-              {e.added ? null : <span className="fd-ech" aria-hidden="true"><Icon name="right" size={18} strokeWidth={2.2} /></span>}
-            </button>
+              onOpen={() => dispatch({ type: "pick", id: e.id })}
+              // As in the design (`uxItems`): the stop opens first, then its own button is pressed. A stop
+              // you added has no panel with those buttons, so for it the item only opens its line.
+              onReschedule={() => {
+                if (!e.selected) dispatch({ type: "pick", id: e.id });
+                if (!e.added) dispatch({ type: "openReschedule" });
+              }}
+              onDelete={() => {
+                if (!e.selected) dispatch({ type: "pick", id: e.id });
+                if (!e.added) dispatch({ type: "askDelete", id: e.id });
+              }}
+            />
           ))}
           <div className={v.emptyCls}><p>Nothing booked this day.</p><button type="button" className="fd-btn is-plain" onClick={() => dispatch({ type: "openAdd", kind: "E" })}>Add estimate</button></div>
           <StopDetail

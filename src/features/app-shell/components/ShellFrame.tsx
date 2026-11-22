@@ -18,6 +18,7 @@ import { useEdgeSwipe } from "../hooks/use-edge-swipe";
 import { usePullToRefresh } from "../hooks/use-pull-to-refresh";
 import type { Business, PageKey, ReasonRequest, SearchRow, SendTimerRequest } from "../types";
 import { FeedbackSheet } from "./FeedbackSheet";
+import { useGestures } from "./GestureLayer";
 import { Icon } from "./Icon";
 import { PageStateProvider } from "./PageState";
 import { ReasonDialog } from "./ReasonDialog";
@@ -40,6 +41,7 @@ export type ShellFrameProps = {
 // The frame itself (AppShell wraps it in the gesture layer).
 export function ShellFrame({ business: serverBusiness, searchRows, initialInboxCount = 0, children, said, onSay: setSaid }: ShellFrameProps) {
   const router = useRouter();
+  const gestures = useGestures();
   const page: PageKey = pageFromPath(usePathname() ?? "/");
   const [drawer, setDrawer] = useState(false);
   const [feedback, setFeedback] = useState(false);
@@ -105,14 +107,15 @@ export function ShellFrame({ business: serverBusiness, searchRows, initialInboxC
   }, [said, setSaid]);
 
   // The design's keyboard shortcuts (logic `uxKeys`). Sheets catch Escape and Tab themselves.
-  const keys = useRef({ search, help, modal: false, page });
+  const keys = useRef({ search, help, page });
   useEffect(() => {
-    keys.current = { search, help, modal: send !== null || reason !== null, page };
+    keys.current = { search, help, page };
   });
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const now = keys.current;
-      if (now.search || now.help || event.defaultPrevented) return;
+      // An open row menu takes the keyboard: only Escape, which the gesture layer handles (design `uxKeys`).
+      if (now.search || now.help || gestures.isMenuOpen() || event.defaultPrevented) return;
       const action = shortcutFor(event, isTyping(event.target));
       if (action === "search") {
         event.preventDefault();
@@ -121,7 +124,6 @@ export function ShellFrame({ business: serverBusiness, searchRows, initialInboxC
         setSearch(true);
       } else if (action === "help") {
         event.preventDefault();
-        if (now.modal) return;
         setDrawer(false);
         drawerBack.forget();
         setHelp(true);
@@ -145,7 +147,7 @@ export function ShellFrame({ business: serverBusiness, searchRows, initialInboxC
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [drawerBack, router, undo, setSaid]);
+  }, [drawerBack, gestures, router, undo, setSaid]);
 
   const openDrawer = () => {
     setFeedback(false);
@@ -213,8 +215,11 @@ export function ShellFrame({ business: serverBusiness, searchRows, initialInboxC
   const go = useCallback((key: PageKey) => {
     setDrawer(false);
     drawerBack.forget();
+    // Choosing the page already open still closes the feedback sheet (design `nav`).
+    setFeedback(false);
+    feedbackBack.forget();
     if (key !== page) router.push(PAGE_PATH[key]);
-  }, [page, router, drawerBack]);
+  }, [page, router, drawerBack, feedbackBack]);
 
   // When the frame goes away, Settings' hand-set colors go with it (api/brand-cleanup.ts).
   useEffect(() => {

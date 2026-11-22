@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
-import { ROW_PICK_EVENT, useBusiness, useBusinessValues, usePushed, useRowFocus, useSearchRows } from "@/features/app-shell";
+import { ROW_PICK_EVENT, useBusiness, useBusinessValues, usePushed, useSearchRows } from "@/features/app-shell";
 import { conversationOfRow, deliveryLabel, doneLabel, filterCounts, isVisible, replyLabel, rowIdOf, rowSnippet, rowTime, summarize, visibleCount } from "../api/state";
 import { toSearchRows } from "../api/search-rows";
 import { bookingLinkOf, fillText } from "../api/text";
@@ -122,7 +122,6 @@ export function InboxPage({ row = null }: { row?: string | null } = {}) {
     window.addEventListener(ROW_PICK_EVENT, onPick);
     return () => window.removeEventListener(ROW_PICK_EVENT, onPick);
   }, [conversations, dispatch]);
-  useRowFocus(conversations.map(rowIdOf));
 
   function open(id: string, byKeyboard: boolean) {
     if (byKeyboard) focusNext.current = "composer";
@@ -190,26 +189,17 @@ export function InboxPage({ row = null }: { row?: string | null } = {}) {
               <h2 className="fd-thn"><span className="fd-h">{current.name}</span></h2>
               <p className="fd-ths"><span className="fd-h">{current.channel} · {current.sub}</span><span className="fd-thc"> · <span className="fd-h">{current.contact}</span></span></p>
             </div>
-            {/* The design always shows Call. With a number it dials; without one (Facebook, Instagram, email)
-                it is the design's plain button. BACKEND: Phase 3 dials the contact's phone from HighLevel. */}
+            {/* The design's plain Call button, on every conversation. BACKEND: Phase 3 dials the contact's phone from HighLevel. */}
             <span className="fd-tha">
-              {current.phone ? (
-                <a className="fd-btn is-plain fd-tcall" href={`tel:${current.phone.replace(/[^\d+]/g, "")}`} aria-label={`Call ${current.name}`}>
-                  {PHONE}<span>Call</span>
-                </a>
-              ) : (
-                <button type="button" className="fd-btn is-plain fd-tcall" aria-label={`Call ${current.name}`}>
-                  {PHONE}<span>Call</span>
-                </button>
-              )}
+              <button data-fx-noact="1" type="button" className="fd-btn is-plain fd-tcall" aria-label="Call">
+                {PHONE}<span>Call</span>
+              </button>
             </span>
           </header>
           {/* Only the status line and the Delivered/Seen line are live, so opening another conversation
               does not read the whole thread out again. */}
           <div ref={threadRef} className={`fd-tm${state.event === "open" ? ` is-sw-${state.swaps % 2 ? "a" : "b"}` : ""}`}>
-            <div className="fd-tcv">
-              <ThreadBody conversation={current} business={BUSINESS} sent={sent} fresh={fresh} />
-            </div>
+            <ThreadBody conversation={current} business={BUSINESS} sent={sent} fresh={fresh} />
             <p className={`fx-dlv${delivery.show ? "" : " is-off"}`} aria-live="polite"><span className="fd-h">{delivery.text}</span></p>
             <p className="fd-tst" aria-live="polite">
               <span className={`fd-chip ${waitLevelClass(current.minutesWaiting)}${needs ? "" : " is-off"}`}>

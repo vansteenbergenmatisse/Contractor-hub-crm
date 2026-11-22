@@ -129,7 +129,10 @@ export function SearchSheet({ rows, onClose, onOpen, viewportWidth, isMac, recen
     }
     if (e.key !== "Tab" || !dialog.current) return;
     const items = Array.from(dialog.current.querySelectorAll<HTMLElement>("input, button")).filter((el) => el.tabIndex >= 0 && el.getClientRects().length > 0);
-    const to = trapTab(items.indexOf(document.activeElement as HTMLElement), items.length, e.shiftKey);
+    const index = items.indexOf(document.activeElement as HTMLElement);
+    // Forward Tab from anything the trap does not list stays with the browser (design `uxSearch`).
+    if (index < 0 && !e.shiftKey) return;
+    const to = trapTab(index, items.length, e.shiftKey);
     if (to === null) return;
     e.preventDefault();
     items[to].focus();

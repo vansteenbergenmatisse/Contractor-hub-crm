@@ -235,8 +235,8 @@ describe("send me a test", () => {
     ];
     const out = [...texts.map((x) => fillBusiness(x, NONE)), testLine(NONE)].join("\n");
     for (const bad of ["Northway", "Mike", "undefined", "null", "  ", " ,", " ()", "this is  "]) expect(out).not.toContain(bad);
-    expect(fillBusiness(texts[0], NONE)).toBe("Hi {first name}, this is our team. Thanks for reaching out. How can we help?");
-    expect(fillBusiness(texts[1], NONE)).toBe("You are booked, {first name}. Our team comes {day} at {time}.");
+    expect(fillBusiness(texts[0], NONE)).toBe("Hi {first name}. Thanks for reaching out. How can we help?");
+    expect(fillBusiness(texts[1], NONE)).toBe("You are booked, {first name}. We come {day} at {time}.");
   });
 });
 

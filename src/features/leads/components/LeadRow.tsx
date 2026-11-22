@@ -31,11 +31,11 @@ export function LeadRow({ lead, status, main, onCall, onReply, onBook }: Props) 
   const reply = status === "reply";
   // The row's buttons as its menu (long press, right-click, ContextMenu key, Shift+F10), in their order.
   // A swipe right runs the main button (Call or Reply); the row has no Mark done, so a swipe left does
-  // nothing (design logic `uxActs` + `uxItems`; labels are the buttons' accessible names).
+  // nothing (design logic `uxActs` + `uxItems`; the design's buttons read "Call" and "Reply").
   const actions: RowAction[] = [
     reply
-      ? { label: `Reply to ${lead.name}`, onAction: onReply, swipe: "right" }
-      : { label: `Call ${lead.name}`, onAction: onCall, swipe: "right" },
+      ? { label: "Reply", onAction: onReply, swipe: "right" }
+      : { label: "Call", onAction: onCall, swipe: "right" },
     { label: status === "booked" ? "Undo booking" : "Book visit", onAction: onBook },
   ];
   const gestures = useRowGestures<HTMLDivElement>({ label: lead.name, actions });

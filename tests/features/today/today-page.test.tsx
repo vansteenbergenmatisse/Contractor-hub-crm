@@ -125,17 +125,17 @@ describe("CalendarCard", () => {
     expect(after).toContain(">No-show<");
   });
 
-  it("labels each Directions link and opens it safely", () => {
+  it("labels each Directions button and links nowhere, as in the design", () => {
     const out = renderToStaticMarkup(<CalendarCard stops={STOPS} state={initialState(TODOS)} />);
     expect(out).toContain('aria-label="Directions to Linda Park"');
-    expect(out).toContain('rel="noopener noreferrer"');
+    expect(out).not.toContain("maps.google.com");
   });
 
-  it("shows Directions only for a stop with an address, opening a new tab safely", () => {
+  it("shows Directions only for a stop with an address, as a plain button", () => {
     const out = renderToStaticMarkup(<CalendarCard stops={[{ ...STOPS[0], address: "" }, { ...STOPS[1], address: "  " }, STOPS[2]]} state={initialState(TODOS)} />);
     expect((out.match(/class="fd-link fd-dir"/g) ?? []).length).toBe(1);
     expect(out).toContain(`aria-label="Directions to ${STOPS[2].name}"`);
-    expect(out).toMatch(/class="fd-link fd-dir" href="https:\/\/maps\.google\.com\/\?q=[^"]+" target="_blank" rel="noopener noreferrer"/);
+    expect(out).toMatch(/<button[^>]*class="fd-link fd-dir"/);
   });
 
   it("has no stops without error (empty list)", () => {

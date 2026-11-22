@@ -6,7 +6,7 @@ import { sheetOnTop } from "../api/gestures";
 
 // Send feedback. Phase 2: the note goes nowhere (no backend yet); the thank-you is real UI only.
 // While open: focus moves to the note, Tab stays inside, Escape closes, focus goes back to the
-// opener. Send stays off until something is typed. Every opening starts on an empty form (design
+// opener. Send always works, also on an empty note (design `sendFb`). Every opening starts on an empty form (design
 // `openFb`: fbView 'form'). A page sheet open on top takes Escape first (design `uxEsc`).
 // Without a first name the thank-you reads "Thanks." (a missing value shows nothing).
 export function FeedbackSheet({ open, first, onClose }: { open: boolean; first: string; onClose: () => void }) {
@@ -34,7 +34,6 @@ export function FeedbackSheet({ open, first, onClose }: { open: boolean; first: 
     return () => clearTimeout(id);
   }, [open]);
   const send = () => {
-    if (!note.trim()) return;
     setSent(true);
     setNote("");
     setTimeout(() => closeButton.current?.focus(), 0);
@@ -47,7 +46,7 @@ export function FeedbackSheet({ open, first, onClose }: { open: boolean; first: 
         <textarea ref={field} id="fd-fb-text" name="feedback" className="fd-fbi" rows={4} aria-label="Your feedback" placeholder="Type it here" value={note} onChange={(event) => setNote(event.target.value)} />
         <div className="fd-fbb">
           <button type="button" className="fd-btn is-plain" onClick={close}>Cancel</button>
-          <button type="button" className="fd-btn is-fill" disabled={!note.trim()} onClick={send}>Send</button>
+          <button type="button" className="fd-btn is-fill" onClick={send}>Send</button>
         </div>
       </div>
       <div className={`fd-part${sent ? " is-new" : " is-off"}`}>

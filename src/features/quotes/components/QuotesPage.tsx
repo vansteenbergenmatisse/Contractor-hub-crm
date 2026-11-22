@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useMemo } from "react";
 import { useBusiness, useBusinessValues, usePushed, useRowFocus, useSearchRows, useShell } from "@/features/app-shell";
 import { buildDraftOf, checkBuild, filterCounts, quoteSearchRows, rowFillId, sendRequest, totals, uploadName } from "../api/quotes";
 import { sheetBusiness } from "../api/sheet-business";
@@ -40,8 +40,6 @@ export function QuotesPage() {
   const shell = useShell();
   const business = sheetBusiness(useBusinessValues(), useBusiness().logoUrl ?? null);
   const [state, dispatch] = useQuotes();
-  const fileInput = useRef<HTMLInputElement>(null);
-  const uploadFor = useRef<string | null>(null);
   usePushed(state.doc);
   // Search finds the quotes as they are now (design: search reads the rendered rows).
   useSearchRows("quotes", useMemo(() => quoteSearchRows(state.quotes), [state.quotes]));
@@ -94,14 +92,10 @@ export function QuotesPage() {
     const check = checkBuild(service, priceRaw);
     if (check.ok) dispatch({ type: "build", id, low: check.low, high: check.high, lines: mockBuildLines(check.service, check.low) });
   };
-  // The owner's own quote file: only the file name is kept. Nothing is read or uploaded.
-  const askUpload = (id: string) => { uploadFor.current = id; fileInput.current?.click(); };
-  const picked = (files: FileList | null) => {
-    const id = uploadFor.current;
+  // "Upload your own quote", as the design: attaches a sample file name at once and opens no file picker.
+  const attachSample = (id: string) => {
     const q = state.quotes.find((x) => x.id === id);
-    if (id && q) dispatch({ type: "attach", id, file: files?.[0]?.name || uploadName(q.name) });
-    uploadFor.current = null;
-    if (fileInput.current) fileInput.current.value = "";
+    if (q) dispatch({ type: "attach", id, file: uploadName(q.name) });
   };
 
   return (
@@ -147,7 +141,7 @@ export function QuotesPage() {
                 onLost={() => lose(q.id)}
                 onUndo={() => dispatch({ type: "undo" })}
                 onBuild={(service, priceRaw) => build(q.id, service, priceRaw)}
-                onUpload={() => askUpload(q.id)}
+                onUpload={() => attachSample(q.id)}
               />
             ))}
           </div>
@@ -167,14 +161,13 @@ export function QuotesPage() {
               onEdit={() => dispatch({ type: "edit-start" })}
               onCancel={() => dispatch({ type: "edit-cancel" })}
               onSave={(name, lines) => dispatch({ type: "edit-save", id: selected.id, name, lines })}
-              onUpload={() => askUpload(selected.id)}
+              onUpload={() => attachSample(selected.id)}
               onRemoveFile={() => dispatch({ type: "detach", id: selected.id })}
               onApprove={() => approve(selected.id)}
             />
           ) : null}
         </div>
       </div>
-      <input ref={fileInput} type="file" hidden tabIndex={-1} accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" onChange={(e) => picked(e.target.files)} />
     </div>
   );
 }

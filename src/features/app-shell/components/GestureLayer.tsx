@@ -94,6 +94,24 @@ export function GestureLayer({ children, onSay }: { children: ReactNode; onSay?:
     }, 0);
   };
 
+  // Escape closes the open menu wherever focus is (design `uxKeys`); the menu handles its other keys.
+  const closeMenu = useRef(close);
+  useEffect(() => {
+    closeMenu.current = close;
+  });
+  const menuOn = menu !== null;
+  useEffect(() => {
+    if (!menuOn) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      closeMenu.current();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [menuOn]);
+
   const shown = menu !== null || swipe !== null || pull !== null;
   const layer = useFxLayer(shown);
   return (

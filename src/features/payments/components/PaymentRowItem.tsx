@@ -22,7 +22,7 @@ export function PaymentRowItem({ row, state, onRemind, onPaid, onUndo }: Props) 
   const actions: RowAction[] = rowActionSpecs(row, state).map(({ key, ...spec }) => ({ ...spec, onAction: () => run[key](row.id) }));
   const gestures = useRowGestures<HTMLDivElement>({ label: row.name, actions });
   return (
-    <div {...gestures} tabIndex={0} className={`fd-rw${paid ? " is-done" : ""}`} data-row-id={`payments-${row.id}`}>
+    <div {...gestures} className={`fd-rw${paid ? " is-done" : ""}`} data-row-id={`payments-${row.id}`}>
       <div className="fd-rm">
         <span className="fd-av" aria-hidden="true">{row.initials}</span>
         <div className="fd-rbx">

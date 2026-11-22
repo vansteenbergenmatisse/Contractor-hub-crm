@@ -44,7 +44,7 @@ export function QuoteRow(p: QuoteRowProps) {
   const gestures = useRowGestures<HTMLDivElement>({ label: q.name, actions: quoteRowActions(q, { ...p, onBuild: build }), disabled: !isVisible(q, p.filter) });
 
   return (
-    <div {...gestures} className={"fd-rw" + (isVisible(q, p.filter) ? "" : " is-off") + (p.selected ? " is-sel" : "")} id={`fd-qt-${q.id}`} data-row-id={`quote-${q.id}`} tabIndex={0}>
+    <div {...gestures} className={"fd-rw" + (isVisible(q, p.filter) ? "" : " is-off") + (p.selected ? " is-sel" : "")} id={`fd-qt-${q.id}`} data-row-id={`quote-${q.id}`}>
       <div className="fd-rm">
         <span className="fd-av" aria-hidden="true">{initialsOf(q.name)}</span>
         <div className="fd-rbx">
@@ -58,14 +58,14 @@ export function QuoteRow(p: QuoteRowProps) {
       </div>
       <div className="fd-rac">
         <span className="fd-ram">{amountLabel(q)}</span>
-        <button type="button" className="fd-btn is-plain" id={`fd-qt-v-${q.id}`} onClick={p.onSee} aria-label={`See the quote for ${q.name}`}>See the quote</button>
+        <button type="button" className="fd-btn is-plain" id={`fd-qt-v-${q.id}`} onClick={p.onSee}>See the quote</button>
         {canApprove(q) ? (
-          <button type="button" className={"fd-btn" + (p.filled ? " is-fill" : "")} onClick={p.onApprove} aria-label={`Approve and send the quote to ${q.name}`}>Approve and send</button>
+          <button type="button" className={"fd-btn" + (p.filled ? " is-fill" : "")} onClick={p.onApprove}>Approve and send</button>
         ) : null}
         {q.status === "sent" ? (
           <>
-            <button type="button" className="fd-btn is-plain" onClick={p.onWon} aria-label={`${q.name} accepted`}>Accepted</button>
-            <button type="button" className="fd-btn is-plain" onClick={p.onLost} aria-label={`${q.name} lost`}>Lost</button>
+            <button type="button" className="fd-btn is-plain" onClick={p.onWon}>Accepted</button>
+            <button type="button" className="fd-btn is-plain" onClick={p.onLost}>Lost</button>
           </>
         ) : null}
       </div>

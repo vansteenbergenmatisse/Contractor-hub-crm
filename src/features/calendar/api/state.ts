@@ -116,7 +116,8 @@ export function calendarReducer(s: CalendarState, a: CalendarAction): CalendarSt
       const deleted = { ...s.deleted };
       delete deleted[l.id];
       const p = placementOf(s, stop);
-      return go(s, { deleted, lastDelete: null, selId: l.id, wk: p.week, sd: p.day });
+      // A stop you added comes back closed and leaves the selection as it is (design `undoDel`); a booked stop opens again.
+      return go(s, { deleted, lastDelete: null, selId: stop.added ? s.selId : l.id, wk: p.week, sd: p.day });
     }
     case "openAdd":
       return go(s, { add: { kind: a.kind, slot: a.slot ?? null }, addError: "", selId: a.slot ? null : s.selId });

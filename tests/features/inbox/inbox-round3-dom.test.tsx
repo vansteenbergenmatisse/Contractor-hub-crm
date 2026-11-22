@@ -31,7 +31,8 @@ const ix = () => document.querySelector(".fd-ix") as HTMLElement;
 const row = (name: string) => Array.from(document.querySelectorAll<HTMLElement>(".fd-cr")).find((b) => b.textContent?.includes(name)) as HTMLElement;
 const heading = () => document.querySelector(".fd-thn")?.textContent;
 const composer = () => document.getElementById("fd-reply") as HTMLInputElement;
-const sentShown = () => Array.from(document.querySelectorAll(".fd-tcv .fd-m.is-out .fd-mb")).map((p) => p.textContent);
+const sentRows = () => Array.from(document.querySelector(".fd-tcv")!.parentElement!.children).filter((el) => el.matches(".fd-m.is-out"));
+const sentShown = () => sentRows().map((el) => el.querySelector(".fd-mb")!.textContent);
 const setWidth = (w: number) => Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: w });
 
 beforeEach(() => {
@@ -118,13 +119,13 @@ describe("Inbox: composer", () => {
       await user.click(screen.getByRole("button", { name: "Send" }));
     }
     expect(sentShown()).toEqual(["two", "three", "four", "five"]);
-    expect(document.querySelectorAll(".fd-tcv .fd-m.is-out.is-new-a, .fd-tcv .fd-m.is-out.is-new-b")).toHaveLength(1);
+    expect(sentRows().filter((el) => el.matches(".is-new-a, .is-new-b"))).toHaveLength(1);
     expect(row("Jordan Reyes")).toHaveTextContent("You: five");
   });
 });
 
 describe("Inbox: Call in the thread header", () => {
-  it("shows Call on every conversation, as the design does; it dials when there is a number", async () => {
+  it("shows Call on every conversation, as the design does, as a plain button", async () => {
     const user = userEvent.setup();
     render(<InboxPage />);
     for (const name of ["Dana Kim", "Bright Daycare", "Hannah Brooks", "Harlan Realty"]) {
@@ -132,10 +133,11 @@ describe("Inbox: Call in the thread header", () => {
       const call = document.querySelector(".fd-thh .fd-tha .fd-tcall") as HTMLElement;
       expect(call, name).not.toBeNull();
       expect(call).toHaveTextContent("Call");
-      expect(call).toHaveAccessibleName(`Call ${name}`);
+      expect(call).toHaveAccessibleName("Call");
     }
     await user.click(row("Jordan Reyes"));
-    expect(document.querySelector(".fd-tcall")).toHaveAttribute("href", "tel:6145550178");
+    expect(document.querySelector(".fd-tcall")?.tagName).toBe("BUTTON");
+    expect(document.querySelector(".fd-tcall")).not.toHaveAttribute("href");
   });
 });
 

@@ -27,7 +27,7 @@ export function AutomationRow({ a, does, selected, asking, onToggle, onEdit, onA
   const actions: RowAction[] = rowActionSpecs(a, asking).map(({ key, ...spec }) => ({ ...spec, onAction: run[key] }));
   const gestures = useRowGestures<HTMLDivElement>({ label: a.name, actions });
   return (
-    <div {...gestures} tabIndex={0} className={`fd-rw${selected ? " is-sel" : ""}`} id={`fd-au-${a.id}`}>
+    <div {...gestures} className={`fd-rw${selected ? " is-sel" : ""}`} id={`fd-au-${a.id}`}>
       <div className="fd-rm">
         <div className="fd-rbx">
           <div className="fd-rtg fd-auh">

@@ -1,6 +1,7 @@
 import type { Business } from "@/features/app-shell";
 import type { CustomValues } from "../types";
 import { COLOR_KEYS } from "./fields";
+import { safeHttpsUrl } from "@/shared/lib/safe-https-url";
 
 // What a good Save changes on screen for this browser session. Nothing is written to HighLevel
 // (write-back is Phase 3, off by default).
@@ -63,17 +64,7 @@ const text = (values: CustomValues, key: string) => (values[key] ?? "").trim();
 // A link is used only when the URL parser accepts it as https, and then in its parsed form (`href`,
 // which percent-encodes quotes and spaces), the same as the server's brand path. The raw text never
 // reaches a CSS `url("...")` or an href.
-export function safeHttpsUrl(raw: string | undefined): string | null {
-  const v = (raw ?? "").trim();
-  if (!v) return null;
-  let url: URL;
-  try {
-    url = new URL(v);
-  } catch {
-    return null;
-  }
-  return url.protocol === "https:" ? url.href : null;
-}
+export { safeHttpsUrl };
 const https = (values: CustomValues, key: string) => safeHttpsUrl(values[key]);
 
 // The shell's business details from the custom values, for this browser session. Only filled-in

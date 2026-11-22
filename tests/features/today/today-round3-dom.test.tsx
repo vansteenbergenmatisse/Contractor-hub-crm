@@ -91,7 +91,7 @@ describe("Today: row gestures on Needs you", () => {
   it("the menu lists the row's buttons; a done row offers Undo", async () => {
     render(<GestureLayer><TodayPage ownerFirst="Pat" /></GestureLayer>);
     const tom = todoRow("Tom Becker");
-    expect(tom).toHaveAttribute("tabindex", "0");
+    expect(tom).not.toHaveAttribute("tabindex");
     fireEvent.contextMenu(tom, { clientX: 100, clientY: 120 });
     expect(screen.getByRole("menu", { name: "Actions for Tom Becker" })).toBeInTheDocument();
     expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["No-show", "Visit done"]);

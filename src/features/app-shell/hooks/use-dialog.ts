@@ -12,6 +12,9 @@ import { createFocusReturn, trapFocus } from "../api/focus";
 // drawer behind a page's stop sheet), so this one leaves Escape and Tab alone for that sheet to handle.
 export type DialogOptions = { yieldTo?: () => boolean };
 
+// Search, a row menu and the shortcut list sit above every sheet and take these keys first (design `uxKeys`).
+const FX_ON_TOP = ".fx-search, .fx-mbox, .fx-help";
+
 export function useDialog(root: RefObject<HTMLElement | null>, onEscape: () => void, active = true, options: DialogOptions = {}): void {
   const escape = useRef(onEscape);
   const yieldTo = useRef(options.yieldTo);
@@ -25,7 +28,7 @@ export function useDialog(root: RefObject<HTMLElement | null>, onEscape: () => v
     back.remember(document.activeElement);
     const box = root.current;
     const onKey = (event: KeyboardEvent) => {
-      if ((event.key === "Escape" || event.key === "Tab") && yieldTo.current?.()) return;
+      if ((event.key === "Escape" || event.key === "Tab") && (yieldTo.current?.() || document.querySelector(FX_ON_TOP))) return;
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();

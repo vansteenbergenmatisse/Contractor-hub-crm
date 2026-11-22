@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, render, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 // The URL the page sees. A search result on the same route changes it without remounting the page.
@@ -100,7 +100,7 @@ describe("Quotes state survives moving between pages", () => {
     const user = userEvent.setup();
     const Page = ({ on }: { on: boolean }) => (on ? <QuotesPage /> : <p>Other page</p>);
     const view = render(<Page on />);
-    await user.click(view.getByRole("button", { name: "Harlan Realty accepted" }));
+    await user.click(within(row("q2")).getByRole("button", { name: "Accepted" }));
     expect(row("q2").textContent).toContain("Accepted. Booking link sent.");
     view.rerender(<Page on={false} />);
     expect(document.getElementById("fd-qt-q2")).toBeNull();

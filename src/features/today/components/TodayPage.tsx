@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { PAGE_PATH, PageAction, type PageKey } from "@/features/app-shell";
+import { PAGE_PATH, PageAction, useShell, type PageKey } from "@/features/app-shell";
 import { nextLabel, nextStop, nextTodo, numClass, openCount } from "../api/selectors";
 import { useToday } from "../hooks/use-today";
 import { INVOICES_TILE, JOBS_TILE, LEADS, STOPS, TODOS } from "../mock";
@@ -16,6 +16,8 @@ import { Tiles, type TileView } from "./Tiles";
 // Phase 2: mock data, state on screen only.
 export function TodayPage({ ownerFirst }: { ownerFirst?: string }) {
   const router = useRouter();
+  // The shell's details follow a Settings edit; the server's name is only the fallback.
+  const first = useShell().business?.first ?? ownerFirst;
   const today = useToday(TODOS);
   const { state } = today;
   const next = nextTodo(state, TODOS);
@@ -31,7 +33,7 @@ export function TodayPage({ ownerFirst }: { ownerFirst?: string }) {
 
   return (
     <>
-      <Greeting first={ownerFirst} left={openCount(state, TODOS)} numClass={numClass(state)} />
+      <Greeting first={first} left={openCount(state, TODOS)} numClass={numClass(state)} />
       <Tiles tiles={tiles} onOpen={(page: PageKey) => router.push(PAGE_PATH[page])} />
       <NeedsCard todos={TODOS} state={state} onFilter={today.setFilter} onPress={today.press} onUndo={today.undo} />
       <div className="fd-two">

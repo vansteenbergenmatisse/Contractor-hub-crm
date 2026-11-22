@@ -19,7 +19,7 @@ export function TodoRow({ todo, state, className, onPrimary, onSecondary, onUndo
   const actions = rowActions(todo, state.status[todo.id] ?? 0, { primary: onPrimary, secondary: onSecondary, undo: onUndo });
   const gestures = useRowGestures<HTMLLIElement>({ label: todo.name, actions });
   return (
-    <li className={className} tabIndex={0} {...gestures}>
+    <li className={className} {...gestures}>
       <div className="fd-rx">
         <p className="fd-rt"><span className="fd-strike">{todo.titleBefore} <b>{todo.name}</b></span></p>
         <div className="fd-rsw">

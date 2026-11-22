@@ -1,14 +1,15 @@
 import type { SearchRow } from "@/features/app-shell";
 import type { AddedLead } from "../types";
 import { MOCK_LEADS } from "../mock";
-import { SOURCE_LABEL } from "./leads-logic";
+import { joinParts } from "@/shared/lib/join-parts";
+import { SOURCE_LABEL, rowWhen } from "./leads-logic";
 
 // Rows the global search can find (mock, Phase 2). Each opens the Leads page.
 export const searchRows: SearchRow[] = MOCK_LEADS.map((l) => ({
   id: l.id,
   page: "leads",
   name: l.name,
-  sub: `${l.need} · ${SOURCE_LABEL[l.source]}`,
+  sub: joinParts([SOURCE_LABEL[l.source], l.need, rowWhen(l)]),
   href: "/leads",
 }));
 

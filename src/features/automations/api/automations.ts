@@ -179,7 +179,7 @@ export function returnTarget(prevEdit: string | null, prevItems: Automation[], i
   return items.some((a) => a.id === prevEdit && !a.gone) ? prevEdit : null;
 }
 
-// A missing name reads "our team"; a missing keyword is left out; a missing review link keeps its token.
+// A missing name is left out of the sentence; a missing keyword is left out; a missing review link keeps its token.
 export function fillBusiness(text: string, business: AutomationBusiness): string {
   return fillFacts(text, {
     businessToken: "business",

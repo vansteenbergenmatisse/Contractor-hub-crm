@@ -8,6 +8,7 @@ import { searchRows as paymentRows } from "@/features/payments";
 import { searchRows as pipelineRows } from "@/features/pipeline";
 import { searchRows as quoteRows } from "@/features/quotes";
 import { loadBusiness } from "@/features/brand";
+import { frameKey } from "@/shared/lib/frame-key";
 import { getRequestUser } from "../session";
 
 export const dynamic = "force-dynamic";
@@ -25,8 +26,9 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   if (!user) redirect("/sign-in");
   if (user.role === "admin" || !user.tenantId) redirect("/admin/clients");
   const business = await loadBusiness(user.tenantId, user.name);
+  // Keyed by user and tenant (hashed, keys reach the browser): another signed-in user gets a new frame.
   return (
-    <AppShell business={business} searchRows={SEARCH_ROWS} initialInboxCount={INBOX_WAITING_COUNT}>
+    <AppShell key={frameKey(user.id, user.tenantId)} business={business} searchRows={SEARCH_ROWS} initialInboxCount={INBOX_WAITING_COUNT}>
       {children}
     </AppShell>
   );

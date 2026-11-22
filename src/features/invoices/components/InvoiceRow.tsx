@@ -27,7 +27,7 @@ export function InvoiceRow({ inv, s }: { inv: Invoice; s: InvoicesState }) {
     disabled: !shown,
   });
   return (
-    <div {...gestures} className={cls} id={`fd-iv-r${inv.no}`} data-row-id={`invoice-${inv.no}`} tabIndex={0}>
+    <div {...gestures} className={cls} id={`fd-iv-r${inv.no}`} data-row-id={`invoice-${inv.no}`}>
       <div className="fd-rm">
         <InvoiceAvatar name={inv.name} />
         <div className="fd-rbx">

@@ -1,4 +1,4 @@
-import { mapsUrl, visitChip } from "../api/selectors";
+import { visitChip } from "../api/selectors";
 import type { Stop, TodayState } from "../types";
 import { Chip } from "./Chip";
 import { Glyph } from "./Glyph";
@@ -22,11 +22,11 @@ export function CalendarCard({ stops, state }: { stops: readonly Stop[]; state: 
                 </p>
                 <p className="fd-ss"><span className={`fd-kind is-${stop.kind}`}>{stop.kind === "job" ? "Job" : "Estimate"}</span> {stop.address}</p>
               </div>
-              {/* Directions only when there is an address to go to. */}
+              {/* Directions only when there is an address. A plain button with no action, as in the design. */}
               {stop.address.trim() ? (
-                <a className="fd-link fd-dir" href={mapsUrl(stop.address)} target="_blank" rel="noopener noreferrer" aria-label={`Directions to ${stop.name}`}>
+                <button data-fx-noact="1" type="button" className="fd-link fd-dir" aria-label={`Directions to ${stop.name}`}>
                   <Glyph name="pin" size={17} strokeWidth={1.9} /><span className="fd-lg">Directions</span>
-                </a>
+                </button>
               ) : null}
             </li>
           );

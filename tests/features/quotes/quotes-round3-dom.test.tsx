@@ -90,13 +90,13 @@ describe("See the quote and Back", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     setWidth(1280);
     render(<Page />);
-    const see = screen.getByRole("button", { name: "See the quote for Harlan Realty" });
+    const see = (document.getElementById("fd-qt-v-q2") as HTMLElement);
     see.focus();
     await act(async () => { see.click(); });
     await act(async () => { vi.advanceTimersByTime(200); });
     expect(document.activeElement).toBe(see);
     setWidth(390);
-    const see2 = screen.getByRole("button", { name: "See the quote for Raj Patel" });
+    const see2 = (document.getElementById("fd-qt-v-q3") as HTMLElement);
     await act(async () => { see2.click(); });
     await act(async () => { vi.advanceTimersByTime(200); });
     expect(document.activeElement?.id).toBe("fd-qt-sheet");
@@ -106,7 +106,7 @@ describe("See the quote and Back", () => {
   it("Back to the list gives the focus back to the row's See the quote button", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     render(<Page />);
-    await act(async () => { screen.getByRole("button", { name: "See the quote for Raj Patel" }).click(); });
+    await act(async () => { (document.getElementById("fd-qt-v-q3") as HTMLElement).click(); });
     await act(async () => { screen.getByRole("button", { name: "Back to the list" }).click(); });
     await act(async () => { vi.advanceTimersByTime(200); });
     expect(document.activeElement?.id).toBe("fd-qt-v-q3");
@@ -122,7 +122,7 @@ describe("drafts survive a page change (kept state)", () => {
     await user.clear(service);
     await user.type(service, "Gutter fix");
     await user.type(document.getElementById("fd-qt-pr-q1") as HTMLInputElement, "950");
-    await user.click(screen.getByRole("button", { name: "See the quote for Derek Olsen" }));
+    await user.click((document.getElementById("fd-qt-v-q0") as HTMLElement));
     await user.click(screen.getByRole("button", { name: "Edit" }));
     const name = document.getElementById("fd-qe-name") as HTMLInputElement;
     await user.clear(name);

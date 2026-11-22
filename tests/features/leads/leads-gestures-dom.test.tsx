@@ -80,7 +80,7 @@ describe("a lead row's menu and swipe", () => {
       fireEvent.keyDown(within(maria).getByRole("button", { name: "Call Maria Alvarez" }), { key: "F10", shiftKey: true });
     });
     const menu = await screen.findByRole("menu", { name: "Actions for Maria Alvarez" });
-    expect(within(menu).getAllByRole("menuitem").map((b) => b.textContent)).toEqual(["Call Maria Alvarez", "Book visit"]);
+    expect(within(menu).getAllByRole("menuitem").map((b) => b.textContent)).toEqual(["Call", "Book visit"]);
     act(() => {
       within(menu).getByRole("menuitem", { name: "Book visit" }).click();
     });
@@ -93,7 +93,7 @@ describe("a lead row's menu and swipe", () => {
       fireEvent.contextMenu(row("ld-4")!, { clientX: 0, clientY: 0 });
     });
     let menu = await screen.findByRole("menu", { name: "Actions for Sam Whitaker" });
-    expect(within(menu).getAllByRole("menuitem").map((b) => b.textContent)).toEqual(["Call Sam Whitaker", "Undo booking"]);
+    expect(within(menu).getAllByRole("menuitem").map((b) => b.textContent)).toEqual(["Call", "Undo booking"]);
     act(() => {
       fireEvent.keyDown(menu, { key: "Escape" });
     });
@@ -102,7 +102,7 @@ describe("a lead row's menu and swipe", () => {
       fireEvent.contextMenu(row("ld-2")!, { clientX: 0, clientY: 0 });
     });
     menu = await screen.findByRole("menu", { name: "Actions for Jordan Reyes" });
-    expect(within(menu).getAllByRole("menuitem")[0]).toHaveTextContent("Reply to Jordan Reyes");
+    expect(within(menu).getAllByRole("menuitem")[0]).toHaveTextContent(/^Reply$/);
   });
 
   it("a full swipe right runs the main button (Call)", () => {

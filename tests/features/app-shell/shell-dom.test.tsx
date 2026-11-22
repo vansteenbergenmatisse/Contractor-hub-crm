@@ -365,7 +365,7 @@ describe("drawer, feedback and skip link", () => {
     expect(menu).toHaveFocus();
   });
 
-  it("feedback takes focus, is modal, and Send waits for a note", async () => {
+  it("feedback takes focus, is modal, and Send is always enabled, as in the design", async () => {
     const user = setupUser();
     shell(<p>page</p>);
     await user.click(screen.getAllByRole("button", { name: "Send feedback" })[0]);
@@ -373,9 +373,9 @@ describe("drawer, feedback and skip link", () => {
     const sheet = screen.getByRole("dialog", { name: "Send feedback" });
     expect(sheet).toHaveAttribute("aria-modal", "true");
     expect(screen.getByRole("textbox", { name: "Your feedback" })).toHaveFocus();
-    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Send" })).toBeEnabled();
     await user.keyboard("   ");
-    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Send" })).toBeEnabled();
     await user.keyboard("More colors");
     await user.click(screen.getByRole("button", { name: "Send" }));
     expect(screen.getByText(/Sent\. We read every note\./)).toBeInTheDocument();

@@ -9,10 +9,10 @@ describe("fillFacts", () => {
     const out = fillFacts("Hi, this is {name}. {first} from {name} calls. {site}", { ...base, business: "Test Co", person: "Sam", values: { site: "test.example" } });
     expect(out).toBe("Hi, this is Test Co. Sam from Test Co calls. test.example");
   });
-  it("reads 'our team' for a missing name or person, capitalised at a sentence start", () => {
+  it("drops the clause of a missing name, and a missing subject reads 'we' with its verb", () => {
     const none = { ...base, business: "", person: "" };
-    expect(fillFacts("This is {name}. {first} calls.", none)).toBe("This is our team. Our team calls.");
-    expect(fillFacts("{first} from {name} visits.", none)).toBe("Our team visits.");
+    expect(fillFacts("This is {name}. {first} calls.", none)).toBe("We call.");
+    expect(fillFacts("{first} from {name} visits.", none)).toBe("We visit.");
     expect(fillFacts("{first} from {name} visits.", { ...none, business: "Test Co" })).toBe("Test Co visits.");
   });
   it("leaves out an empty value and closes the gap", () => {

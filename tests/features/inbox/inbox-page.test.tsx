@@ -96,8 +96,8 @@ describe("InboxPage markup", () => {
     expect(empty).not.toContain(">Booking link</button>");
     expect(empty).toContain(">Thanks</button>");
   });
-  it("lets the call button dial only when there is a number", () => {
-    expect(html).toContain('href="tel:6145550134"');
+  it("keeps Call a plain button with no dial link, as in the design", () => {
+    expect(html).not.toContain('href="tel:');
   });
   it("does not call fetch while rendering", () => {
     expect(countCalls).toBe(0);

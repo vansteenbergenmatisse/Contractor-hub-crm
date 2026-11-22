@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
-import { EDGE_PX, LONG_PRESS, ROW_SWIPE, isPhone, point, rowSwipeFrame, rowSwipeIntent, snap, suppressClick, swipeActions, swipeText, type RowAction } from "../api/gestures";
+import { EDGE_PX, LONG_PRESS, ROW_SWIPE, findBack, isPhone, point, rowSwipeFrame, rowSwipeIntent, snap, suppressClick, swipeActions, swipeText, type RowAction } from "../api/gestures";
 import { useGestures } from "../components/GestureLayer";
 
 export type RowGestureOptions = {
@@ -10,6 +10,8 @@ export type RowGestureOptions = {
   // What the row can do: the menu lists them all; the one marked swipe "right" / "left" runs on a full swipe.
   actions: readonly RowAction[];
   disabled?: boolean;
+  // false: the row has the menu but no swipe, and a sideways drag stays a native pan (design: calendar stops).
+  swipe?: boolean;
 };
 
 export type RowGestureBindings<T extends HTMLElement> = {
@@ -68,8 +70,9 @@ export function useRowGestures<T extends HTMLElement = HTMLElement>(options: Row
         lp.fired = true;
         open.current(row, lp.x, lp.y, true, false);
       }, LONG_PRESS.ms);
-      // the left edge belongs to the edge swipe on a phone
-      if (p.x <= EDGE_PX && isPhone()) return;
+      if (latest.current.swipe === false) return;
+      // on a phone the left edge belongs to the edge swipe, only while the page shows a Back (design `uxSwipe`)
+      if (p.x <= EDGE_PX && isPhone() && findBack(row.closest("[data-pg]"))) return;
       st = { x: p.x, y: p.y, on: false, right: null, left: null, go: false, act: null };
     };
 
@@ -156,8 +159,10 @@ export function useRowGestures<T extends HTMLElement = HTMLElement>(options: Row
     ref: setElement,
     onContextMenu: (event) => {
       const o = latest.current;
-      if (o.disabled || !o.actions.length) return;
+      if (o.disabled) return;
+      // a row with no actions still has no browser menu; it just opens none (design `uxCtx`, `uxMenu`)
       event.preventDefault();
+      if (!o.actions.length) return;
       // a long press already opened it (touch devices also send contextmenu)
       if (fx.isMenuOpen() && Date.now() - fx.menuOpenedAt() < LONG_PRESS.reopenGuardMs) return;
       const keyboard = !event.clientX && !event.clientY;
