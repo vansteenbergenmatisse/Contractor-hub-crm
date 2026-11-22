@@ -7,6 +7,7 @@ import { readSession } from "./session";
 import { checkInviteEligibility } from "./invite-check";
 import { createInviteService, newInviteCode } from "./invites";
 import { hitRateLimit } from "../db/rate-limit";
+import { isTenantUninstalled } from "../db/tenant-status";
 import {
   claimInvite,
   deleteInvite,
@@ -65,7 +66,7 @@ export async function authRoute(request: Request): Promise<Response> {
 const sessionFromRequest = (request: Request) => readSession(getAuth(), request.headers);
 
 export function getGuards() {
-  return createGuards({ getSession: sessionFromRequest });
+  return createGuards({ getSession: sessionFromRequest, isTenantUninstalled });
 }
 
 // Invites, built per call (cheap). The log-only sender means no real email goes out for now.

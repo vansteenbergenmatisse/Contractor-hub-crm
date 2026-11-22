@@ -20,6 +20,9 @@ export class TenancyError extends Error {
 
 export type GuardDeps = {
   getSession: (request: Request) => Promise<SessionUser | null>;
+  // True when the tenant's app was uninstalled in HighLevel: its users are then signed out at once.
+  // A throw counts as "not signed in". Left out, the status is not checked.
+  isTenantUninstalled?: (tenantId: string) => Promise<boolean>;
 };
 
 export function createGuards(deps: GuardDeps) {
@@ -33,6 +36,13 @@ export function createGuards(deps: GuardDeps) {
     if (!user || !isRole(user.role) || user.disabledAt) return null;
     const hasTenant = typeof user.tenantId === "string" && user.tenantId.length > 0;
     if (user.role === "admin" ? user.tenantId !== null : !hasTenant) return null;
+    if (deps.isTenantUninstalled && user.tenantId !== null) {
+      try {
+        if (await deps.isTenantUninstalled(user.tenantId)) return null;
+      } catch {
+        return null;
+      }
+    }
     return user;
   }
 

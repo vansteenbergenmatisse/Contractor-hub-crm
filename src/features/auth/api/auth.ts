@@ -7,7 +7,9 @@ import { isRole, MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, type Role } from "../
 // Better Auth, email and password only, invite only: the public sign-up endpoint is closed and a
 // user is created by `createInvitedUser` after an invite is accepted. The role, the tenant and the
 // off switch are server-only fields: `input: false` stops a user from setting them.
-const LONG_SESSION_SECONDS = 60 * 60 * 24 * 30;
+// One year, renewed once a day while the session is used (updateAge): a person logs in once at
+// onboarding and stays signed in. Browsers cap a cookie's lifetime at about 400 days.
+const LONG_SESSION_SECONDS = 60 * 60 * 24 * 365;
 const RESET_TOKEN_SECONDS = 60 * 60;
 
 export type CreateAuthOptions = {
