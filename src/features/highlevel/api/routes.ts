@@ -6,6 +6,7 @@ import { listCustomValuesWithRetry } from "./custom-values";
 import type { CustomValue, HighLevelUser, SearchUsersQuery } from "../types";
 import { createTokenService } from "./token-service";
 import { handleOAuthStart } from "./start";
+import { resolveScopes } from "./scopes";
 import { handleOAuthCallback } from "./callback";
 import { handleWebhook } from "./webhook";
 import {
@@ -108,6 +109,8 @@ export async function oauthStartRoute(request: Request, guard?: AdminGuard): Pro
       installBaseUrl: env.GHL_INSTALL_BASE_URL,
       clientId: env.GHL_CLIENT_ID,
       redirectUri: env.GHL_REDIRECT_URI,
+      versionId: process.env.GHL_APP_VERSION_ID,
+      scopes: resolveScopes(process.env.GHL_OAUTH_SCOPES),
     },
     isAdmin: guard?.isAdmin ?? noAdmin,
     getAdminId: guard?.adminId,

@@ -255,17 +255,22 @@ describe("OAuth callback: install", () => {
     }
   });
 
-  it("logs no token, code or upstream message, and a 502 has an empty body", async () => {
+  // Policy changed by the user (2026-11-21): the log carries the step, message and stack; a token or
+  // code in key=value form is redacted. The 502 response stays empty.
+  it("logs the step and the real message but no token or code, and a 502 has an empty body", async () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    client.exchangeAgencyCode.mockRejectedValue(new Error("secret-detail agency-access code-1"));
+    client.exchangeAgencyCode.mockRejectedValue(new Error("secret-detail access_token=agency-access code=code-1"));
     const response = await handleOAuthCallback(callback(good), deps);
     expect(response.status).toBe(502);
     expect(await response.text()).toBe("");
     client.exchangeAgencyCode.mockResolvedValue(agencyToken);
-    client.mintLocationToken.mockRejectedValue(new Error("secret-detail agency-access"));
+    client.mintLocationToken.mockRejectedValue(new Error("mint-detail access_token=agency-access"));
     await handleOAuthCallback(callback(good), deps);
     const logged = JSON.stringify(spy.mock.calls);
-    for (const secret of ["secret-detail", "agency-access", "agency-refresh", "code-1"]) {
+    expect(logged).toContain("secret-detail");
+    expect(logged).toContain("mint-detail");
+    expect(logged).toContain("token exchange");
+    for (const secret of ["agency-access", "agency-refresh", "code-1"]) {
       expect(logged).not.toContain(secret);
     }
     expect(spy).toHaveBeenCalled();

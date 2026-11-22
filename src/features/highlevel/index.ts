@@ -1,5 +1,7 @@
 // Public API of the highlevel feature. Other code imports from "@/features/highlevel" only.
 export { createHighLevelClient, HighLevelHttpError, isRejectedByHighLevel } from "./api/client";
+export { describeError, logError, redact } from "./api/log-error";
+export { OAUTH_SCOPES, resolveScopes } from "./api/scopes";
 export { createTokenService, TokenServiceError } from "./api/token-service";
 export type { TokenServiceDeps, TokenServiceErrorCode } from "./api/token-service";
 export { handleOAuthStart } from "./api/start";

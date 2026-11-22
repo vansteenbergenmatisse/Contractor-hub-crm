@@ -67,6 +67,10 @@ export type OAuthStartConfig = {
   installBaseUrl: string;
   clientId: string;
   redirectUri: string;
+  // Draft app version id (`GHL_APP_VERSION_ID`); left out of the URL when empty.
+  versionId?: string;
+  // Replaces the default scope list (`GHL_OAUTH_SCOPES`).
+  scopes?: readonly string[];
 };
 
 export type WebhookEventInput = {

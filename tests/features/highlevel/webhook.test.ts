@@ -284,14 +284,17 @@ describe("webhook: other events and hygiene", () => {
     expect(store.markLocationUninstalled).not.toHaveBeenCalled();
   });
 
-  it("never returns a body, a token or an error message, and logs the error type only", async () => {
+  // Policy changed by the user (2026-11-21): the server log now carries the real message and stack.
+  // The response stays empty, and tokens and secrets are redacted from the log line.
+  it("never returns a body or an error message, and logs the real error with tokens redacted", async () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    store.readAgencyAccessToken.mockRejectedValue(new Error("leak agency-access wh_1 company_1"));
+    store.readAgencyAccessToken.mockRejectedValue(new Error("leak access_token=agency-access"));
     const response = await handleWebhook(signed(install), deps);
     expect(response.status).toBe(500);
     expect(await response.text()).toBe("");
     const logged = JSON.stringify(spy.mock.calls);
-    for (const secret of ["leak", "agency-access", "wh_1", "company_1"]) expect(logged).not.toContain(secret);
+    expect(logged).toContain("leak");
+    expect(logged).not.toContain("agency-access");
     expect(spy).toHaveBeenCalled();
     spy.mockRestore();
   });

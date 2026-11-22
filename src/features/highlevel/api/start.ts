@@ -38,13 +38,17 @@ export async function handleOAuthStart(request: Request, deps: OAuthStartDeps): 
   }
   const state = newState(deps.stateSecret, (deps.now ?? (() => new Date()))(), adminId);
   const url = new URL("/oauth/chooselocation", deps.config.installBaseUrl);
-  url.search = new URLSearchParams({
+  const query = new URLSearchParams({
     response_type: "code",
     client_id: deps.config.clientId,
     redirect_uri: deps.config.redirectUri,
-    scope: OAUTH_SCOPES.join(" "),
+    scope: (deps.config.scopes ?? OAUTH_SCOPES).join(" "),
     state,
-  }).toString();
+  });
+  // A draft Marketplace app only installs with its version id.
+  const versionId = deps.config.versionId?.trim();
+  if (versionId) query.set("version_id", versionId);
+  url.search = query.toString();
   return new Response(null, {
     status: 302,
     headers: {

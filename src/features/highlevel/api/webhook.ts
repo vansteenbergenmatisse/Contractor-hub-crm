@@ -1,4 +1,5 @@
 import { verifyWebhookSignature } from "./webhook-signature";
+import { logError } from "./log-error";
 import type {
   InstalledLocation,
   LocationToken,
@@ -110,8 +111,8 @@ export async function handleWebhook(request: Request, deps: WebhookDeps): Promis
     await deps.store.markProcessed(webhookId, now);
     return reply(200);
   } catch (error) {
-    // Type only: a message could hold a token, an id or a query value.
-    console.error("HighLevel webhook failed:", error instanceof Error ? error.name : "unknown error");
+    // Name, redacted message, status, redacted body and stack go to the server log only.
+    logError("HighLevel webhook failed", error);
     return reply(500);
   }
 }

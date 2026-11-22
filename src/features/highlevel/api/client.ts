@@ -18,12 +18,16 @@ const USER_SEARCH_LIMIT = 25; // the docs' default page size; the invite check s
 const REQUEST_TIMEOUT_MS = 10_000; // a stalled HighLevel must not hold the route open
 
 // Carries the HTTP status (null: no response) and nothing else: never a body, token or secret.
+// `detail` holds the raw response text for the server log only (it is redacted and cut before it
+// is written, see log-error.ts) and is never part of `message`.
 export class HighLevelHttpError extends Error {
   readonly status: number | null;
-  constructor(message: string, status: number | null) {
+  readonly detail: string | null;
+  constructor(message: string, status: number | null, options: { body?: string } = {}) {
     super(message);
     this.name = "HighLevelHttpError";
     this.status = status;
+    this.detail = options.body ?? null;
   }
 }
 
@@ -64,7 +68,13 @@ export function createHighLevelClient(config: HighLevelClientConfig) {
       throw new HighLevelHttpError(`HighLevel ${what} could not reach HighLevel.`, null);
     }
     if (!response.ok) {
-      throw new HighLevelHttpError(`HighLevel ${what} failed (status ${response.status}).`, response.status);
+      let body: string | undefined;
+      try {
+        body = (await response.text()).slice(0, 2000);
+      } catch {
+        body = undefined;
+      }
+      throw new HighLevelHttpError(`HighLevel ${what} failed (status ${response.status}).`, response.status, { body });
     }
     let json: unknown;
     try {

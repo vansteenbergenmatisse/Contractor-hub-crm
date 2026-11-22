@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { STATE_COOKIE, clearStateCookie, isValidState } from "./oauth-state";
+import { logError } from "./log-error";
 import type {
   AgencyToken,
   InstalledLocation,
@@ -44,12 +45,11 @@ function sameState(a: string, b: string): boolean {
   return left.length === right.length && timingSafeEqual(left, right);
 }
 
-// Responses never carry a token, the code or an upstream error message; failures are logged by
-// type only (an upstream or database message could hold values).
-function fail(status: number, clearCookie: boolean, error?: unknown): Response {
-  if (error !== undefined) {
-    console.error("HighLevel install failed:", error instanceof Error ? error.name : "unknown error");
-  }
+// Responses never carry a token, the code or an upstream error message. The server log gets the
+// step, the error name, the redacted message and stack, and for a HighLevel call the status and the
+// redacted response body (see log-error.ts).
+function fail(status: number, clearCookie: boolean, step?: string, error?: unknown): Response {
+  if (error !== undefined) logError(`HighLevel install failed (${step ?? "unknown step"})`, error);
   const headers = new Headers(NO_STORE);
   if (clearCookie) headers.set("set-cookie", clearStateCookie());
   return new Response(null, { status, headers });
@@ -90,6 +90,10 @@ export async function handleOAuthCallback(request: Request, deps: OAuthCallbackD
   let agency: AgencyToken;
   try {
     agency = await deps.client.exchangeAgencyCode(code);
+  } catch (error) {
+    return fail(502, true, "token exchange", error);
+  }
+  try {
     await deps.store.saveAgencyConnection({
       companyId: agency.companyId,
       accessToken: agency.accessToken,
@@ -97,14 +101,14 @@ export async function handleOAuthCallback(request: Request, deps: OAuthCallbackD
       expiresAt: new Date(deps.now().getTime() + agency.expiresInSeconds * 1000),
     });
   } catch (error) {
-    return fail(502, true, error);
+    return fail(502, true, "save agency connection", error);
   }
 
   let locations: InstalledLocation[];
   try {
     locations = await deps.client.listInstalledLocations(agency.accessToken, agency.companyId);
   } catch (error) {
-    return fail(502, true, error);
+    return fail(502, true, "list installed locations", error);
   }
 
   // One at a time: stays far below the rate limit and keeps the failure count simple.
@@ -128,7 +132,7 @@ export async function handleOAuthCallback(request: Request, deps: OAuthCallbackD
       installed += 1;
     } catch (error) {
       failed += 1;
-      console.error("HighLevel install failed for one location:", error instanceof Error ? error.name : "unknown error");
+      logError("HighLevel install failed for one location (mint or save)", error);
     }
   }
 

@@ -97,3 +97,26 @@ describe("OAuth start", () => {
     expect(Number(state.split(".")[1])).toBe(now.getTime() + 600_000);
   });
 });
+
+describe("OAuth start: draft app version and scope override", () => {
+  const paramsOf = async (extra: Record<string, unknown>) => {
+    const response = await handleOAuthStart(request, {
+      config: { ...config, ...extra },
+      isAdmin: async () => true,
+      stateSecret: SECRET,
+    });
+    return new URL(response.headers.get("location") as string).searchParams;
+  };
+
+  it("adds version_id when a draft app version id is configured", async () => {
+    expect((await paramsOf({ versionId: "ver-1" })).get("version_id")).toBe("ver-1");
+  });
+
+  it.each([undefined, "", "   "])("leaves version_id out when it is %j", async (versionId) => {
+    expect((await paramsOf({ versionId })).has("version_id")).toBe(false);
+  });
+
+  it("uses the configured scopes instead of the default list", async () => {
+    expect((await paramsOf({ scopes: ["a.read", "b.write"] })).get("scope")).toBe("a.read b.write");
+  });
+});
