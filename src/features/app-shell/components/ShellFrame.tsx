@@ -284,7 +284,7 @@ export function ShellFrame({ business: serverBusiness, searchRows, initialInboxC
           <div className="fd-me">
             <span className="fd-av" aria-hidden="true"><span>{business.ownerInit}</span></span>
             <span className="fd-bt"><span className="fd-mname">{business.owner}</span><span className="fd-bsub">Owner</span></span>
-            <button type="button" className="fd-link fd-out" onClick={signOut}>Sign out</button>
+            <button type="button" className="fd-link fd-out" onClick={() => void signOut().catch(() => setSaid("Could not sign out. Try again."))}>Sign out</button>
           </div>
         </nav>
         <main ref={mainRef} id="fd-main" tabIndex={-1} className={`fd-main${isPushed ? "" : ` fx-cap${hasAction ? " fx-capacc" : ""}`}`} onScroll={(event) => onMainScroll(event.currentTarget)}>

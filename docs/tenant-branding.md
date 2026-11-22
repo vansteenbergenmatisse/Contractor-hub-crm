@@ -27,3 +27,7 @@ Different sub-accounts use different spellings for the same thing (the live one 
 - Opening the installed app starts at `/`, which signs the person in with their year-long session (or shows `/sign-in`).
 - NOT VERIFIED: that the logo image renders in the icon route for every logo type (an SVG on HighLevel's file host is the JCR case; the route falls back to initials when the logo fails the checks below); the install prompt on Android Chrome; Add to Home Screen on iOS Safari; that the app opens in standalone mode. Test on a real phone with a connected sub-account.
 - No service worker yet, so there is no offline mode and no install banner built by us.
+
+## Direction from the user (2026-11-22)
+
+Every client is set up by creating a HighLevel sub-account and filling in its custom values; the app must then take everything from them: colors, font, logo, favicon, sign-in background, business details and connection states. JCR Landscaping is the reference sub-account for the key list. Not yet wired (see PROGRESS.md Next up 00): the font keys, the sign-in background (`business_main_background_video_or_image` is parsed but unused), connection states (Settings shows mock statuses), and branding on the signed-out sign-in page.

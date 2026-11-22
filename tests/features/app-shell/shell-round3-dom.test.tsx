@@ -205,6 +205,15 @@ describe("sign-out and tenant colors (security 1)", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
+  it("stays on the page and says so when the server did not end the session", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 500 })));
+    const assign = vi.spyOn(window.location, "assign").mockImplementation(() => {});
+    shell(<p>page</p>);
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Sign out" })); });
+    expect(assign).not.toHaveBeenCalled();
+    expect(await screen.findByText("Could not sign out. Try again.")).toBeInTheDocument();
+  });
+
   it("offers the same sign-out to pages through useShell", async () => {
     const fetchMock = vi.fn(async () => new Response("{}"));
     vi.stubGlobal("fetch", fetchMock);

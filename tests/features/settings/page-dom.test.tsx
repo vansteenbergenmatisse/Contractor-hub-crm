@@ -129,6 +129,16 @@ describe("Settings in the browser", () => {
     await waitFor(() => expect(assign).toHaveBeenCalledWith(new URL("/sign-in", window.location.href).href));
   });
 
+  it("Sign out stays on the page when the shell could not end the session", async () => {
+    const user = userEvent.setup();
+    const assign = vi.spyOn(window.location, "assign").mockImplementation(() => {});
+    signOut.mockRejectedValueOnce(new Error("Sign-out failed"));
+    render(<SettingsPage initialValues={{}} />);
+    await user.click(screen.getByRole("button", { name: "Sign out" }));
+    expect(signOut).toHaveBeenCalledTimes(1);
+    expect(assign).not.toHaveBeenCalled();
+  });
+
   it("a ?section= link opens its section even when the kept state has it, and again after Back", async () => {
     const user = userEvent.setup();
     function Host() {
