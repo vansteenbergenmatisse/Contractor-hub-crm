@@ -99,11 +99,45 @@ describe("decryptUserContext", () => {
   });
 
   it("never puts the payload or the secret in the error message", () => {
+    expect.assertions(3);
     try {
       decryptUserContext("secret-looking-payload", SECRET);
     } catch (error) {
+      expect(error).toBeInstanceOf(EmbedError);
       expect(String((error as Error).message)).not.toContain("secret-looking-payload");
       expect(String((error as Error).message)).not.toContain(SECRET);
     }
+  });
+
+  it("refuses an empty secret even for a payload that was encrypted with an empty secret", () => {
+    expect(code(() => decryptUserContext(CryptoJS.AES.encrypt(JSON.stringify(json), "").toString(), ""))).toBe("invalid_payload");
+  });
+
+  it("enforces the size limit: the largest real payload that fits in 8192 characters passes, the next size up does not", () => {
+    // Real ciphertexts only grow in steps, so find the two payloads on each side of the limit by padding
+    // an ignored key.
+    let fits = "";
+    let over = "";
+    for (let pad = 5800; pad < 6400 && !over; pad++) {
+      const text = encrypt({ email: "a@b.test", activeLocation: "l", padding: "x".repeat(pad) });
+      if (text.length <= 8192) fits = text;
+      else over = text;
+    }
+    expect(fits.length).toBeGreaterThan(8000);
+    expect(fits.length).toBeLessThanOrEqual(8192);
+    expect(over.length).toBeGreaterThan(8192);
+    expect(decryptUserContext(fits, SECRET).email).toBe("a@b.test");
+    expect(code(() => decryptUserContext(over, SECRET))).toBe("invalid_payload");
+  });
+
+  it("accepts an email of 254 characters and refuses one of 255", () => {
+    const email = (length: number) => `${"a".repeat(length - "@b.test".length)}@b.test`;
+    expect(decryptUserContext(encrypt({ email: email(254), activeLocation: "l" }), SECRET).email).toHaveLength(254);
+    expect(code(() => decryptUserContext(encrypt({ email: email(255), activeLocation: "l" }), SECRET))).toBe("invalid_payload");
+  });
+
+  it("trims the sub-account id and the optional fields, and handles non-ASCII text", () => {
+    const result = decryptUserContext(encrypt({ email: "Jörg@Exämple.test", activeLocation: "  loc_ü  ", companyId: " co " }), SECRET);
+    expect(result).toEqual({ email: "jörg@exämple.test", activeLocation: "loc_ü", companyId: "co" });
   });
 });

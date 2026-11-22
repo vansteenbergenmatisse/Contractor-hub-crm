@@ -95,6 +95,16 @@ describe("startHandshake", () => {
     expect(parent.postMessage).not.toHaveBeenCalled();
   });
 
+  it("stop() before the request settles means no result is reported afterwards", async () => {
+    const { answer, stop, results, fetchImpl } = setup();
+    answer({ message: "REQUEST_USER_DATA_RESPONSE", payload: "cipher" });
+    stop();
+    await vi.waitFor(() => expect(fetchImpl).toHaveBeenCalled());
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(results).toEqual([]);
+  });
+
   it("stop removes the listener and the timers", () => {
     const { stop, removed, parent, results } = setup();
     stop();
