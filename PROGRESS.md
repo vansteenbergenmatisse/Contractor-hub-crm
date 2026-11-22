@@ -39,7 +39,8 @@ Single source of truth for where the project stands. Read it at the start of eve
 ## In progress
 
 - 2026-11-22 PHASE 3 NEXT STEP: P3-1 to P3-3 are built (see Log) but NOT proven on real HighLevel data. Blocker: Neon `develop` holds no JCR tenant or stored connection, and `.env.local` has none of the `GHL_*` variables or `TOKEN_ENCRYPTION_KEY`. Connect JCR on the dev site, then run the read-only shape check and confirm the contact fields before wiring Inbox.
-- 2026-11-22 WAITING ON THE USER: push the install URL fix, set `GHL_INSTALL_BASE_URL` to `https://marketplace.leadconnectorhq.com` for Vercel's develop environment (Preview, branch `develop`), redeploy, and retry `/api/integrations/oauth/start` as admin. Staging and production need the same value before their installs.
+- 2026-11-22 WAITING ON THE USER: finish the JCR install from `/api/integrations/oauth/start` as admin. Install URL fix is pushed (CI and Vercel green) and HighLevel now shows the Test app's Install page. At 22:46 UTC Neon `develop` still had no agency connection and no JCR tenant, so the install has NOT completed. Staging and production need the same `GHL_INSTALL_BASE_URL` before their installs.
+- 2026-11-22 User asked for an install SOP for test, staging and production: `docs/sop-highlevel-install.md`. Steps not yet run for real are marked in it.
 - User decisions 2026-11-22 (chat): (a) Claude may read JCR's contacts, opportunities and whatever else must be read; no writes. (b) MUST BE GLOBAL: a new client is made from a snapshot of JCR with the same variables, and each client sees their own data on login. No JCR-specific id, name or value in code; pipelines, stages and calendars are looked up per sub-account. (c) The app stays read-only for now; changes to automations and tags will happen elsewhere through webhooks later. (d) Pages not wired yet show "Not available yet" instead of sample data. (e) Leads shows the received time; the waiting chip is hidden until a real wait time exists.
 - 2026-11-22 RESUME HERE: START PHASE 3 (user decision: Phase 3 is next, in a fresh session). Nothing is mid-edit. `develop` is pushed through 29e3761 plus this docs commit, which is local until pushed. All migrations are on Neon `develop`. Read `docs/greenlane/plan.md` "Phase 3: wire each page to HighLevel" first, then plan the first ticket here. Items 5 (Google login) and 6 (Settings write-back) wait; Google needs an OAuth client from the user.
 - 2026-11-22 USER REQUIREMENT (chat, Claude's reading): (a) everything follows the sub-account's custom values, with branding and business essentials the most important; (b) every signed-in user is tied to one sub-account and sees that sub-account's HighLevel leads and email; (c) if email is not connected yet, the user is told to connect it. Values differ per client and are fixed per user.
@@ -83,6 +84,9 @@ Single source of truth for where the project stands. Read it at the start of eve
 - `develop` lacks the two merge commits GitHub created on `staging` and `main`. Harmless; merge `staging` into `develop` if it ever matters.
 
 ## Log
+
+### 2026-11-22 - SOP for installing the HighLevel app
+- Added `docs/sop-highlevel-install.md` at the user's request: one install per app and agency, adding a new client, and the steps for dev, staging and production. Written from the code, the build prompt and today's install attempts. No install has completed yet, so automatic pickup of new sub-accounts is marked as not proven.
 
 ### 2026-11-22 - Fix the HighLevel install URL for white-label apps
 - Symptom: HighLevel's install screen answered "No integration found" for the Test app id. The id is correct: it matches the build prompt's Test app and the `appId` on stored webhook events.
