@@ -4,6 +4,10 @@ Source: `docs/greenlane/build-prompt.md` (spec) and `docs/greenlane/greenlane-da
 
 Per-ticket loop (all tickets): plan in `PROGRESS.md` "In progress", test first, code, `pnpm check`, Playwright where UI, independent verifier agent, update `PROGRESS.md`, local commit on `develop`, then tell the user what to test on staging. Max 3 revision rounds; stop after 2 rounds with no progress. No push, merge, migration or dependency install without asking.
 
+## Principle: no automation is written in this app
+
+Every automation we run for a client lives in HighLevel as a workflow. This app never sends a follow-up text, a reminder, a review request or a payment chase by itself, and it holds no scheduler or rule engine for them. When a card moves from New Lead to Following Up, to Estimate Booked, to Job Done and so on, the app only changes the opportunity's stage in HighLevel; HighLevel fires the workflows that use "Pipeline Stage Changed" and does the rest. The same goes for a lead added by hand (it posts to the form webhook so the lead-capture workflow runs) and for the Automations page (it lists, switches and edits the sub-account's workflows through the HighLevel workflow API). We build each workflow once, as a template, and copy it to every new client (a HighLevel snapshot or workflow copy; the exact copy mechanism is not yet verified). The only server-side timing the app owns is the 20-second send hold on quotes and invoices (build prompt rule 10), which is a safety delay, not an automation. In Phase 2 no automation exists at all: buttons change mock state on screen only.
+
 ## Phase 1: HighLevel install flow, then login
 
 1. Rename feature `home` to `today`; add env parsing in `shared/config` (fails loudly on missing names, never prints values).
@@ -19,7 +23,7 @@ Per-ticket loop (all tickets): plan in `PROGRESS.md` "In progress", test first, 
 
 ## Phase 2: UI on mock data
 
-Mock data sits in one marked module. Layout shell first (side menu, phone top bar, tab bar, bottom sheets), then one page per ticket in this order: Today, Inbox, Pipeline, Leads, Quotes, Invoices, Payments, Calendar, Automations, Settings. Each page: Playwright at the 14 widths, 44 pt targets, 390x844 thumb check, then `fe:review-final`.
+Mock data sits in marked mock modules (`MOCK DATA` header, one `mock.ts` per feature, all fed from one shared set of sample people and amounts in `src/shared/mock/`), replaced field by field in Phase 3. No automation is written here (see the principle above). Layout shell first (side menu, phone top bar, tab bar, bottom sheets), then one page per ticket in this order: Today, Inbox, Pipeline, Leads, Quotes, Invoices, Payments, Calendar, Automations, Settings. Each page: Playwright at the 14 widths, 44 pt targets, 390x844 thumb check, then `fe:review-final`.
 
 ## Phase 3: wire each page to HighLevel
 

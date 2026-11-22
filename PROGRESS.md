@@ -38,7 +38,12 @@ Single source of truth for where the project stands. Read it at the start of eve
 
 ## In progress
 
-- After that, queued from the user's later request (not started): persistent login (long sessions), end sessions of uninstalled tenants, rotation runbook, then Phase 2 (layout shell and ten pages on mock data) with the plan note that no automation lives in this app: every automation is a HighLevel workflow, set up once and copied to each client.
+- Phase 2 (user said "do phase 2 fully", 2026-11-21), started. PLAN (the user's go is given; the design is the spec, `docs/greenlane/greenlane-dashboard.html`, its CSS already in `src/app/globals.css`, nothing restyled):
+  1. Shell (me): route group `src/app/(app)/` with one layout: side menu (1024px and up), phone top bar, floating tab bar (Today, Pipeline, Inbox, Calendar, More + Search), More sheet, bottom-sheet primitive, page action bar slot, feedback sheet; nav config in one file; shared mock people in `src/shared/mock/`; routes `/`, `/inbox`, `/pipeline`, `/calendar`, `/leads`, `/quotes`, `/invoices`, `/payments`, `/automations`, `/settings`, each guarded by the existing session guard (signed out goes to `/sign-in`), tenant from the session only. New features, one per page, each with `components/ mock.ts types.ts index.ts` and tests under `tests/features/<name>/`.
+  2. Pages (parallel agents, one per page, each owns only its feature folder, its route file and its tests): today (replaces the placeholder home), inbox, pipeline, calendar, leads, quotes, invoices, payments, automations, settings. Then shared pieces: search, send timer sheet, reason sheet, send feedback (built in the shell ticket as primitives, used by pages).
+  3. Per page: tests first (render with Testing Library only if approved, else pure logic tests plus a Chrome check, because a DOM test library is a new dependency and needs approval), `pnpm check`, browser check at phone and computer width, `fe:review-final` and an independent reviewer.
+  4. NO AUTOMATION is written in this app (principle recorded in `docs/greenlane/plan.md`): every automation is a HighLevel workflow, set up once and copied to each client; moving a card only changes the stage in HighLevel (later, in Phase 3). In Phase 2 buttons change mock state on screen only and call nothing.
+  5. Not in Phase 2: any HighLevel call, any database table, any dependency, any push of `staging` or `main`.
 
 ## Next up
 
@@ -64,6 +69,13 @@ Single source of truth for where the project stands. Read it at the start of eve
 - `develop` lacks the two merge commits GitHub created on `staging` and `main`. Harmless; merge `staging` into `develop` if it ever matters.
 
 ## Log
+
+### 2026-11-21 - Phase 2, step 1: the shell (`app-shell` feature, `src/app/(app)/`)
+- Built test-first: new feature `app-shell` (side menu, phone top bar, drawer, floating tab bar, page action bar, feedback sheet, search sheet with scope bar and recent searches, shared send timer and reason sheet, `PageAction` and `usePushed` hooks for pages). Pure logic in `api/` (send timer state machine, search scoring, business names). Route group `src/app/(app)/` with one server layout: signed out goes to `/sign-in`, an admin goes to `/admin/clients`, tenant from the session only, business name and owner from the custom values (plain fallback, no made-up name). The old placeholder home was removed; ten page stubs exist (`/`, `/inbox`, `/pipeline`, `/calendar`, `/leads`, `/quotes`, `/invoices`, `/payments`, `/automations`, `/settings`) for the page tickets to replace. Sample business data is in `src/shared/mock/business.ts` (marked MOCK; not used by the layout, which reads real custom values).
+- Design CSS reused unchanged (`globals.css`). Specs per page were cut from the design file into `scratchpad/spec/` (derived, not committed).
+- Not built in the shell (a later "UX layer" ticket, because the design does it with imperative DOM scripts that must not be ported): swipe on rows, long-press and right-click menus, pull to refresh, swipe from the left edge, the keyboard shortcuts list (only Cmd/Ctrl-F and Esc exist), the title moving into the top bar (partly: it switches at 8px scroll), search following the phone keyboard.
+- The search index is empty until the page features add their sample rows (`SEARCH_ROWS` in the layout).
+- Tests: `tests/features/app-shell/` (send timer, search, nav, business, markup via `react-dom/server` because no DOM test library is installed). `pnpm check` exit 0: 717 passed, 9 skipped. Not yet looked at in a browser.
 
 ### 2026-11-21 - Stay signed in, end sessions of uninstalled tenants, rotation runbook
 - Decisions by the user (chat, 2026-11-21): people should log in once at onboarding and stay signed in; they should also be able to sign in on our own `/sign-in` without going through HighLevel (that page already exists; "Keep me signed in" is on by default). Embed stays for people who open the CRM inside HighLevel. Eventually each client gets their own app and domain (not planned yet).
