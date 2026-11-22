@@ -281,6 +281,7 @@ async function handleWebhookRequest(request: Request, publicKeyPem: string | und
     },
     client,
     hooks,
+    companylessInstall: { listAgencyCompanyIds, findTenant: findTenantByLocation },
     reconcile: {
       listInstalledLocations: client.listInstalledLocations,
       readLocationCompanyId,

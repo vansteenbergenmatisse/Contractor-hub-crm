@@ -38,6 +38,9 @@ Single source of truth for where the project stands. Read it at the start of eve
 
 ## In progress
 
+- 2026-11-22 AUTOMATIC CLIENT CONNECT is built (see Log) but NOT proven with a real future-location event. To prove it: install with "Select all N sub-accounts" and create a new test sub-account. On develop only JCR is selected, on purpose: selecting all would create CRM accounts for the agency's 3 other sub-accounts (user's call). Staging and production get the code through the normal PRs, then need their one install.
+- 2026-11-22 PENDING FROM USER: the file teaching the design laws. After it arrives: one agent per law across the CRM (user request; this overrides "keep the design as it is" for those changes), then a full docs update and `compact-ultra`.
+
 - 2026-11-22 PHASE 3 NEXT STEP: P3-1 to P3-3 are built (see Log) but NOT proven on real HighLevel data. Blocker: Neon `develop` holds no JCR tenant or stored connection, and `.env.local` has none of the `GHL_*` variables or `TOKEN_ENCRYPTION_KEY`. Connect JCR on the dev site, then run the read-only shape check and confirm the contact fields before wiring Inbox.
 - 2026-11-22 NEXT: JCR IS CONNECTED on dev (user uninstalled and reinstalled from the install link, 22:52 UTC). Neon `develop` has one agency connection, a JCR tenant with an unexpired location token and one linked user. Next: open the CRM as a JCR user on dev to prove real leads render, confirm the contact response shape, then wire Inbox. Staging and production need the same `GHL_INSTALL_BASE_URL` before their installs.
 - 2026-11-22 SOPs: `docs/sop-highlevel-install.md` (repo) and `~/Downloads/SOP-New-Client-From-JCR-Snapshot.md` (user's copy, outside the repo). Not proven: a second sub-account connecting by itself, whether a snapshot carries the app, install to future sub-accounts.
@@ -86,6 +89,13 @@ Single source of truth for where the project stands. Read it at the start of eve
 - `develop` lacks the two merge commits GitHub created on `staging` and `main`. Harmless; merge `staging` into `develop` if it ever matters.
 
 ## Log
+
+### 2026-11-22 - New sub-accounts connect automatically after a "select all" install
+- HighLevel's docs say an INSTALL for a future location may omit `companyId`. The webhook used to ignore those. Now, with exactly one stored agency whose own installed list contains the location, it mints the token, saves the client and syncs its users. With zero or several agencies it answers 200 and creates nothing. A connected tenant is left alone, with no HighLevel call. Not listed, a failed list or no usable token answers 500 so HighLevel retries.
+- Sync: reads all agencies' lists first and never onboards a location listed by two agencies. A save no longer revives a tenant uninstalled after the list was read (company-less path only).
+- Admin: `/admin/clients` has a "Connect sub-accounts" link to the install route.
+- Security review rejected the first version (fan-out over all agencies, replay cost, retries); rebuilt as above. The rebuilt version was not reviewed a second time. Left open: a tiny race on the uninstall check (no row lock), sync cannot detect sharing with an agency whose list failed, no stable dedupe key for INSTALL events without `webhookId`.
+- `pnpm check` exit 0: 2516 passed, 9 skipped, build compiled. No existing test edited. NOT VERIFIED: a real future-location webhook, the admin link in a browser.
 
 ### 2026-11-22 - SOP for installing the HighLevel app
 - Added `docs/sop-highlevel-install.md` at the user's request: one install per app and agency, adding a new client, and the steps for dev, staging and production. Written from the code, the build prompt and today's install attempts. No install has completed yet, so automatic pickup of new sub-accounts is marked as not proven.

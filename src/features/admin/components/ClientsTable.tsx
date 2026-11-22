@@ -45,6 +45,13 @@ export function ClientsTable({ clients }: { clients: ClientRow[] }) {
   return (
     <main style={{ padding: 24, fontFamily: "system-ui, sans-serif" }}>
       <h1>Clients</h1>
+      <p>
+        {/* A plain anchor on purpose: this route redirects off-site, so it needs a full page load. */}
+        <a className="fd-btn" href="/api/integrations/oauth/start" style={{ textDecoration: "none" }}>
+          Connect sub-accounts
+        </a>{" "}
+        <span>In production, select all sub-accounts so new clients connect automatically.</span>
+      </p>
       {message ? <p role="status">{message}</p> : null}
       {rows.length === 0 ? <p>No clients yet. A client appears here after the app is installed on their sub-account.</p> : null}
       {rows.length > 0 ? (

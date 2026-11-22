@@ -61,6 +61,8 @@ export type SaveLocationConnectionInput = {
   accessToken: string;
   refreshToken: string | null;
   expiresAt: Date;
+  // When HighLevel's list was read. A tenant uninstalled after this moment is not revived.
+  listedAt?: Date;
 };
 
 export type OAuthStartConfig = {

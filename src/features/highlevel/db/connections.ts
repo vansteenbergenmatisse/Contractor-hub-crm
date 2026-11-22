@@ -31,10 +31,13 @@ export async function saveLocationConnection(
     // A location must not silently move to another agency (a transfer or an upstream mistake).
     const existing = await tx.tenant.findUnique({
       where: { locationId: input.locationId },
-      select: { companyId: true },
+      select: { companyId: true, uninstalledAt: true },
     });
     if (existing?.companyId && existing.companyId !== input.companyId) {
       throw new Error("Location already belongs to a different agency.");
+    }
+    if (input.listedAt && existing?.uninstalledAt && existing.uninstalledAt > input.listedAt) {
+      throw new Error("Location was uninstalled after the list was read.");
     }
     const tenant = await tx.tenant.upsert({
       where: { locationId: input.locationId },

@@ -7,7 +7,7 @@ Written 2026-11-22 from the code, `docs/greenlane/build-prompt.md` and that day'
 ## The short version
 
 - **You do not install per sub-account.** The intended setup is one install per environment, from the agency, with "all sub-accounts" selected in production.
-- **A new client should then appear by itself (not proven).** HighLevel sends an `INSTALL` event for the new sub-account, and the app creates the client and its users. A daily sync at 05:00 UTC is the backstop.
+- **A new client should then appear by itself (not proven).** Tick **"Select all N sub-accounts"** on HighLevel's install screen. HighLevel then sends an `INSTALL` event for each new sub-account, and the app creates the client and its users, even when the event has no company id. A daily sync at 05:00 UTC is the backstop. `/admin/clients` has a **Connect sub-accounts** button that opens the install link.
 - **Always start the install from our link**, `<environment URL>/api/integrations/oauth/start`, signed in as a CRM admin. An install started from HighLevel's App Marketplace page is not accepted by our callback and leaves the client unconnected.
 
 ## Environments
