@@ -1,5 +1,5 @@
 import { HighLevelHttpError } from "./client";
-import type { CustomValue } from "../types";
+import type { CustomValue, LocationState } from "../types";
 
 // The custom values of one tenant's sub-account, with one refresh-and-retry on a 401 (same rule as
 // searchUsersWithRetry). The tenant id comes from the server, never from request input.
@@ -19,5 +19,26 @@ export async function listCustomValuesWithRetry(
   } catch (error) {
     if (!(error instanceof HighLevelHttpError) || error.status !== 401) throw error;
     return deps.listCustomValues(await deps.getLocationToken(tenantId, { rejectedToken: token }), locationId);
+  }
+}
+
+// For anonymous pages. Reads with the token already stored and nothing else: no refresh, no mint, no
+// lock, no status change, no retry. Null when there is no connected, unexpired token or HighLevel
+// answers 401; the caller shows cached or neutral content.
+export async function readCustomValuesWithStoredToken(
+  deps: {
+    readState: (tenantId: string) => Promise<Pick<LocationState, "status" | "accessToken" | "locationId" | "expiresAt"> | null>;
+    listCustomValues: (accessToken: string, locationId: string) => Promise<CustomValue[]>;
+    now: () => Date;
+  },
+  tenantId: string,
+): Promise<CustomValue[] | null> {
+  const state = await deps.readState(tenantId);
+  if (!state || state.status !== "connected" || state.expiresAt.getTime() <= deps.now().getTime()) return null;
+  try {
+    return await deps.listCustomValues(state.accessToken, state.locationId);
+  } catch (error) {
+    if (error instanceof HighLevelHttpError && error.status === 401) return null;
+    throw error;
   }
 }

@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { AuthCard } from "./AuthCard";
 import { Field } from "./Field";
+import { clientHref } from "./client-href";
+import type { SignInBrand } from "@/features/brand";
 
-export function SignInForm() {
+export function SignInForm({ brand }: { brand?: SignInBrand | null }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -44,7 +46,7 @@ export function SignInForm() {
   }
 
   return (
-    <AuthCard title="Sign in" subtitle="Use the email and password for your account.">
+    <AuthCard title="Sign in" subtitle="Use the email and password for your account." brand={brand}>
       <form className="fd-lf" onSubmit={submit} noValidate>
         <Field label="Email" name="email" type="email" autoComplete="username" value={email} onChange={setEmail} />
         <Field label="Password" name="password" type="password" autoComplete="current-password" value={password} onChange={setPassword} />
@@ -53,7 +55,7 @@ export function SignInForm() {
             <input type="checkbox" checked={keep} onChange={(event) => setKeep(event.target.checked)} />
             <span>Keep me signed in</span>
           </label>
-          <Link className="fd-link fd-lforgot" href="/forgot-password">Forgot password?</Link>
+          <Link className="fd-link fd-lforgot" href={clientHref("/forgot-password", brand)}>Forgot password?</Link>
         </div>
         {error ? <p className="fd-lerr" role="alert">{error}</p> : null}
         <button type="submit" className="fd-btn is-fill fd-lgo" disabled={busy || email.length === 0 || password.length === 0}>

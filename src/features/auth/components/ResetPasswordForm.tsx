@@ -4,9 +4,11 @@ import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { AuthCard } from "./AuthCard";
 import { Field } from "./Field";
+import { clientHref } from "./client-href";
+import type { SignInBrand } from "@/features/brand";
 import { MIN_PASSWORD_LENGTH } from "../types";
 
-export function ResetPasswordForm({ token }: { token: string | null }) {
+export function ResetPasswordForm({ token, brand }: { token: string | null; brand?: SignInBrand | null }) {
   const [password, setPassword] = useState("");
   const [again, setAgain] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -15,15 +17,15 @@ export function ResetPasswordForm({ token }: { token: string | null }) {
 
   if (!token) {
     return (
-      <AuthCard title="This link does not work" subtitle="It may have expired or been used already. Ask for a new one.">
-        <Link className="fd-btn is-fill fd-lgo" href="/forgot-password">Ask for a new link</Link>
+      <AuthCard title="This link does not work" subtitle="It may have expired or been used already. Ask for a new one." brand={brand}>
+        <Link className="fd-btn is-fill fd-lgo" href={clientHref("/forgot-password", brand)}>Ask for a new link</Link>
       </AuthCard>
     );
   }
   if (done) {
     return (
-      <AuthCard title="Password changed" subtitle="You are signed out everywhere. Sign in with your new password.">
-        <Link className="fd-btn is-fill fd-lgo" href="/sign-in">Sign in</Link>
+      <AuthCard title="Password changed" subtitle="You are signed out everywhere. Sign in with your new password." brand={brand}>
+        <Link className="fd-btn is-fill fd-lgo" href={clientHref("/sign-in", brand)}>Sign in</Link>
       </AuthCard>
     );
   }
@@ -50,7 +52,7 @@ export function ResetPasswordForm({ token }: { token: string | null }) {
   }
 
   return (
-    <AuthCard title="Choose a new password" subtitle={`Use at least ${MIN_PASSWORD_LENGTH} characters.`}>
+    <AuthCard title="Choose a new password" subtitle={`Use at least ${MIN_PASSWORD_LENGTH} characters.`} brand={brand}>
       <form className="fd-lf" onSubmit={submit} noValidate>
         <Field label="New password" name="new-password" type="password" autoComplete="new-password" value={password} onChange={setPassword} />
         <Field label="New password again" name="new-password-again" type="password" autoComplete="new-password" value={again} onChange={setAgain} />

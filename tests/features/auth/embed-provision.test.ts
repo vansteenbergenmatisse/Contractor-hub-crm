@@ -40,7 +40,7 @@ describe("resolveEmbedLogin", () => {
   it("creates the user on the spot when the location is installed and HighLevel lists the person", async () => {
     expect(await call(good)).toBe("new-user");
     expect(listTenantUsers).toHaveBeenCalledWith("t1");
-    expect(provisionGhlUser).toHaveBeenCalledWith(expect.anything(), { tenantId: "t1", ghlUserId: "g1", email: "pat@x.test", name: "Pat Lee", ghlRole: "admin", ghlRoleType: "account" });
+    expect(provisionGhlUser).toHaveBeenCalledWith(expect.anything(), { tenantId: "t1", ghlUserId: "g1", email: "pat@x.test", name: "Pat Lee", ghlRole: "admin", ghlRoleType: "account", moveProof: { kind: "embed", readSourceEmails: expect.any(Function) } });
   });
 
   it("signs in an existing user without calling HighLevel or provisioning", async () => {

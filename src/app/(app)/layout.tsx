@@ -8,6 +8,7 @@ import { searchRows as paymentRows } from "@/features/payments";
 import { searchRows as pipelineRows } from "@/features/pipeline";
 import { searchRows as quoteRows } from "@/features/quotes";
 import { loadBusiness } from "@/features/brand";
+import { loadMailboxPrompt, MailboxPromptCard } from "@/features/mailbox-prompt";
 import { scheduleVisitSync } from "@/features/onboarding";
 import { frameKey } from "@/shared/lib/frame-key";
 import { getRequestUser } from "../session";
@@ -28,10 +29,12 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   if (user.role === "admin" || !user.tenantId) redirect("/admin/clients");
   // Runs after the response; the page never waits for it and a failure never reaches it.
   scheduleVisitSync(user.tenantId);
-  const business = await loadBusiness(user.tenantId, user.name);
+  // The reminder never throws and has a short read limit, so it cannot break or hold up the page.
+  const [business, mailboxPrompt] = await Promise.all([loadBusiness(user.tenantId, user.name), loadMailboxPrompt(user)]);
   // Keyed by user and tenant (hashed, keys reach the browser): another signed-in user gets a new frame.
   return (
     <AppShell key={frameKey(user.id, user.tenantId)} business={business} searchRows={SEARCH_ROWS} initialInboxCount={INBOX_WAITING_COUNT}>
+      {mailboxPrompt.show ? <MailboxPromptCard token={mailboxPrompt.token} /> : null}
       {children}
     </AppShell>
   );

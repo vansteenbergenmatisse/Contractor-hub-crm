@@ -22,6 +22,9 @@ import {
 import { createEmailSenderFromEnv, createLogEmailSender } from "./email-sender";
 import { findLink, findLinkByUserId, findUserByEmail, findUserById, insertLink, relinkUser, setLinkDeleted } from "../db/ghl-links";
 import { prismaAuthDatabase } from "../db/auth-database";
+import { createMoveStore } from "../db/account-move";
+import { readSourceUnproven } from "./account-move";
+import type { EmbedResolution } from "./embed-login";
 
 // The /embed sign-in: decrypt HighLevel's user data with the shared secret, find the CRM user, and,
 // when the sub-account is installed but the person has no account yet, check with HighLevel that
@@ -29,6 +32,12 @@ import { prismaAuthDatabase } from "../db/auth-database";
 // HighLevel env is read here, per call, so local dev and the build need no HighLevel values.
 // Log lines carry step names, reason codes and key names only: no email, no ids, no payload.
 export async function resolveEmbedLogin(payload: string, options: { provision?: boolean } = {}): Promise<string | null | { reason: string }> {
+  const result = await resolveEmbedSession(payload, options);
+  return result !== null && typeof result === "object" && "userId" in result ? result.userId : (result as string | null | { reason: string });
+}
+
+// The same, naming the tenant the sign-in is for, so the session can be bound to it.
+async function resolveEmbedSession(payload: string, options: { provision?: boolean } = {}): Promise<EmbedResolution> {
   let context;
   try {
     context = decryptUserContext(payload, parseEnv("highlevel").GHL_APP_SHARED_SECRET);
@@ -39,7 +48,11 @@ export async function resolveEmbedLogin(payload: string, options: { provision?: 
   const present = Object.entries(context).filter(([, v]) => v !== undefined).map(([k]) => k).sort().join(",");
   console.info(JSON.stringify({ audit: "embed_resolve", step: "decrypt", ok: true, fields: present }));
   const access = await resolveEmbedAccess(context, { findCandidate: findEmbedCandidate, findTenant: findEmbedTenant });
-  if (access.kind === "user") return access.userId;
+  if (access.kind === "user") {
+    if (options.provision === false) return access.userId; // a plain lookup: no session follows
+    const tenant = await findEmbedTenant(context.activeLocation).catch(() => null);
+    return tenant ? { userId: access.userId, tenantId: tenant.tenantId } : { reason: "lookup_failed" };
+  }
   if (access.kind === "denied") {
     console.info(JSON.stringify({ audit: "embed_resolve", step: "access", reason: access.reason }));
     return options.provision === false ? null : { reason: access.reason };
@@ -58,9 +71,11 @@ export async function resolveEmbedLogin(payload: string, options: { provision?: 
       name: match.name,
       ghlRole: match.role,
       ghlRoleType: match.roleType,
+      // A HighLevel-signed sign-in for this location, and the location lists the person.
+      moveProof: { kind: "embed", readSourceEmails: readSourceUnproven },
     });
     console.info(JSON.stringify({ audit: "embed_resolve", step: "provision", outcome: result.outcome }));
-    return result.userId ?? { reason: result.outcome };
+    return result.userId ? { userId: result.userId, tenantId: access.tenantId } : { reason: result.outcome };
   } catch (error) {
     console.error("Embed provisioning failed:", error instanceof Error ? error.name : "unknown error");
     return { reason: "provision_failed" };
@@ -97,6 +112,7 @@ export function getProvisionDeps(): ProvisionDeps {
     randomPassword: () => randomBytes(32).toString("base64url"),
     store: { findLink, findLinkByUserId, relinkUser, insertLink, setLinkDeleted, findUserByEmail, findUserById },
     now: () => new Date(),
+    moves: createMoveStore(),
   };
 }
 
@@ -112,8 +128,12 @@ export function getAuth(): Auth {
       secret: env.BETTER_AUTH_SECRET,
       baseURL: env.BETTER_AUTH_URL,
       emailSender: createEmailSenderFromEnv(),
-      embedLogin: { resolveUserId: (payload) => resolveEmbedLogin(payload) },
+      embedLogin: {
+        resolveUserId: (payload) => resolveEmbedSession(payload),
+        confirmSession: (input) => createMoveStore().confirmSessionTenant(input),
+      },
       isTenantBlocked: isTenantUninstalled,
+      clearUnusedMarker: (userId) => createMoveStore().clearMarker(userId),
     });
   }
   return instance;

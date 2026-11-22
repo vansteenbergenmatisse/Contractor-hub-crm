@@ -33,6 +33,15 @@ export function ClientsTable({ clients }: { clients: ClientRow[] }) {
     setEmail("");
   }
 
+  async function copyLink(path: string) {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}${path}`);
+      setMessage("Link copied.");
+    } catch {
+      setMessage("Could not copy. Select the link and copy it by hand.");
+    }
+  }
+
   return (
     <main style={{ padding: 24, fontFamily: "system-ui, sans-serif" }}>
       <h1>Clients</h1>
@@ -46,6 +55,7 @@ export function ClientsTable({ clients }: { clients: ClientRow[] }) {
               <th align="left">Status</th>
               <th align="left">Users</th>
               <th align="left">Login</th>
+              <th align="left">Sign-in link</th>
               <th align="left">Actions</th>
             </tr>
           </thead>
@@ -56,6 +66,18 @@ export function ClientsTable({ clients }: { clients: ClientRow[] }) {
                 <td>{row.status}</td>
                 <td>{row.users}</td>
                 <td>{row.login}</td>
+                <td>
+                  {row.signInPath ? (
+                    <>
+                      <code>{row.signInPath}</code>{" "}
+                      <button type="button" aria-label={`Copy sign-in link for ${row.name}`} onClick={() => copyLink(row.signInPath as string)}>
+                        Copy
+                      </button>
+                    </>
+                  ) : (
+                    "Not available yet"
+                  )}
+                </td>
                 <td>
                   {inviteFor === row.tenantId ? (
                     <>

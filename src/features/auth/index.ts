@@ -7,7 +7,9 @@ export { createEmailSenderFromEnv, createLogEmailSender, createResendEmailSender
 export type { EmailMessage, EmailSender } from "./api/email-sender";
 export { createAuth, createInvitedUser, setUserDisabled } from "./api/auth";
 export { deactivateGhlUser, mapGhlRole, provisionGhlUser } from "./api/provision";
-export type { GhlUserInput, ProvisionDeps, ProvisionOutcome } from "./api/provision";
+export type { GhlUserInput, ProvisionDeps, ProvisionOutcome, ProvisionResult } from "./api/provision";
+export { readSourceUnproven } from "./api/account-move";
+export type { MoveProof, MoveReason, SourceList } from "./api/account-move";
 export type { Auth, CreateAuthOptions, InvitedUserInput } from "./api/auth";
 export { authRoute, getAuth, currentUserFromHeaders, getGuards, getInviteLimiter, getInviteService, getProvisionDeps, resolveEmbedLogin } from "./api/instance";
 export { listActiveLinks } from "./db/ghl-links";

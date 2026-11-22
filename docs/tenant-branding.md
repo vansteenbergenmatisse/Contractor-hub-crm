@@ -17,7 +17,7 @@ Different sub-accounts use different spellings for the same thing (the live one 
 - Logo: the round mark in the side menu (`BrandLogo`): initials until the image has loaded, initials for good when the link is broken. https links only.
 - Favicon: the browser tab icon.
 - Name and owner: menu, greeting, tab title, texts. City and state: the tag line under the name.
-- Phone, email, address, hours: quotes, invoices and texts. Booking links (`request_a_job_booking_link`, `request_a_quote_booking_link`): Calendar and texts. Google review link: review request texts.
+- Phone, email, address, hours: quotes, invoices and texts. Hours: `business_hours` wins when set. When it is empty, the line is built from `business_hours_weekdays|saturday|sunday_open|close` (24-hour `HH:MM`) in the design's wording, for example `Mon - Fri: 8:00 AM - 5:00 PM, Sat: 9:00 AM - 1:00 PM`. Neighbouring days with the same hours share a range. A day with a missing, malformed or contradictory value is left out, and "Closed" shows only when a value says it. Booking links (`request_a_job_booking_link`, `request_a_quote_booking_link`): Calendar and texts. Google review link: review request texts.
 - Settings: the sub-account's real values, including keys the design did not list.
 
 ## Installable app (Add to Home Screen)
@@ -27,6 +27,20 @@ Different sub-accounts use different spellings for the same thing (the live one 
 - Opening the installed app starts at `/`, which signs the person in with their year-long session (or shows `/sign-in`).
 - NOT VERIFIED: that the logo image renders in the icon route for every logo type (an SVG on HighLevel's file host is the JCR case; the route falls back to initials when the logo fails the checks below); the install prompt on Android Chrome; Add to Home Screen on iOS Safari; that the app opens in standalone mode. Test on a real phone with a connected sub-account.
 - No service worker yet, so there is no offline mode and no install banner built by us.
+
+## Personal sign-in link (`/sign-in?client=<slug>`)
+
+The owner chose a personal link per client for branding before login. `/admin/clients` shows each client's link with a copy button (admin only).
+
+- **Cosmetic only.** The link grants nothing and is not sent to sign-in. A person's tenant comes only from their account.
+- **Public fields (allowlist):** business name (control and invisible format characters removed), logo, the brand colors, and the background from `business_main_background_video_or_image` when its path ends in png, jpg, jpeg, webp, gif or avif. A video or anything else shows no background. Nothing else from the custom values reaches the page.
+- **Safety:** colors are hex only and follow the contrast rule; images must pass `safeHttpsUrl` and the logo host allowlist (`assets.cdn.filesafe.space` plus `LOGO_HOST_ALLOWLIST`).
+- **Neutral page:** an unknown, malformed, uninstalled or disconnected client, a missing table, a slow lookup (3 seconds) or a failed HighLevel read all render the plain page, identical to having no `client`. A malformed value causes no lookup.
+- **Load limits (per server instance):** custom values through the 5-minute brand cache, one slug lookup per minute per slug, 300 new lookups per minute, and a one-minute wait after a failed HighLevel read. An uninstall can take up to a minute to show.
+- **No token side effects:** a signed-out visit reads custom values only with the stored, unexpired token. It never refreshes or mints a token, takes a lock, retries, or changes connection state, and a 401 marks nothing. Otherwise it shows the last branding cached on that server instance, or the neutral page.
+- **Between pages:** sign-in, forgot password and reset keep the validated slug as a query value on fixed paths. It is never a redirect target.
+- **Slug:** table `TenantSignInLink` (unique slug, unique tenant, migration `20261122210000_tenant_sign_in_link`, not applied yet). Made from the tenant name when an admin opens `/admin/clients`, with `-2`, `-3` on a collision. It does not change when the business is renamed. Until the migration is applied, every link shows the neutral page and admin works without links.
+- NOT VERIFIED: the page in a real browser with a real client's values, and that a client's background value has an image file extension (one without is treated as "anything else").
 
 ## Direction from the user (2026-11-22)
 

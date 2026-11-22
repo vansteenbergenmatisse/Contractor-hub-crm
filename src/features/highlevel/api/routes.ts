@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { parseEnv, type EnvValues } from "@/shared/config";
 import { createHighLevelClient } from "./client";
 import { searchUsersWithRetry } from "./search-users";
-import { listCustomValuesWithRetry } from "./custom-values";
+import { listCustomValuesWithRetry, readCustomValuesWithStoredToken } from "./custom-values";
 import { listLocationUsersWithRetry } from "./location-users";
 import type { AgencyLocation, CustomValue, HighLevelUser, InstalledLocation, SaveLocationConnectionInput, SearchUsersQuery } from "../types";
 import { createTokenService } from "./token-service";
@@ -156,6 +156,20 @@ export async function listTenantCustomValues(tenantId: string): Promise<CustomVa
       getLocationToken: tokens.getLocationToken,
       readLocationId: async (id) => (await readLocationState(id, env.TOKEN_ENCRYPTION_KEY))?.locationId ?? null,
       listCustomValues: client.listCustomValues,
+    },
+    tenantId,
+  );
+}
+
+// Custom values for a signed-out page: the stored token only, never a refresh or a state change.
+export async function readTenantCustomValuesStored(tenantId: string): Promise<CustomValue[] | null> {
+  const env = parseEnv("highlevel");
+  const client = buildClient(env);
+  return readCustomValuesWithStoredToken(
+    {
+      readState: (id) => readLocationState(id, env.TOKEN_ENCRYPTION_KEY),
+      listCustomValues: client.listCustomValues,
+      now: () => new Date(),
     },
     tenantId,
   );

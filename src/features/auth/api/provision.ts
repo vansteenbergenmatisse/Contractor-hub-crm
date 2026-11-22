@@ -4,6 +4,7 @@ import { normalizeEmail } from "./invite-check";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/;
 import type { LinkRow, UserRow } from "../db/ghl-links";
 import type { Role } from "../types";
+import { tryMoveAccount, type MoveProof, type MoveReason, type MoveStore } from "./account-move";
 
 // Creates, links, updates and deactivates CRM users from HighLevel users (no invite, nobody asks for
 // access). Decisions (PROGRESS.md, 2026-11-22):
@@ -25,10 +26,14 @@ export type GhlUserInput = {
   // False on the on-visit sync, whose user list can be older than a removal: a blocked user stays
   // blocked and no link moves ("skipped_removed"). Left out: restoring is allowed.
   mayRestore?: boolean;
+  // What proves this person belongs here when their email sits in another client. Left out: no move.
+  moveProof?: MoveProof;
 };
 
 export type ProvisionOutcome =
-  | "created" | "linked" | "exists" | "restored" | "skipped_agency" | "skipped_conflict" | "skipped_invalid" | "skipped_removed" | "capped";
+  | "created" | "linked" | "exists" | "restored" | "skipped_agency" | "skipped_conflict" | "skipped_invalid" | "skipped_removed" | "capped" | "moved";
+
+export type ProvisionResult = { outcome: ProvisionOutcome; userId: string | null; reason?: MoveReason };
 
 export type ProvisionDeps = {
   createUser(input: InvitedUserInput): Promise<{ userId: string }>;
@@ -49,13 +54,15 @@ export type ProvisionDeps = {
     findUserById(id: string): Promise<UserRow | null>;
   };
   now(): Date;
+  // Moving a never-used account between clients. Left out: an email conflict always stays a conflict.
+  moves?: MoveStore;
 };
 
 export function mapGhlRole(role: string | null): Extract<Role, "owner" | "office"> {
   return role?.toLowerCase() === "admin" ? "owner" : "office";
 }
 
-export async function provisionGhlUser(deps: ProvisionDeps, input: GhlUserInput): Promise<{ outcome: ProvisionOutcome; userId: string | null }> {
+export async function provisionGhlUser(deps: ProvisionDeps, input: GhlUserInput): Promise<ProvisionResult> {
   if (input.ghlRoleType?.toLowerCase() === "agency") return { outcome: "skipped_agency", userId: null };
   const role = mapGhlRole(input.ghlRole);
   const email = normalizeEmail(input.email);
@@ -83,10 +90,16 @@ export async function provisionGhlUser(deps: ProvisionDeps, input: GhlUserInput)
     return { outcome: "exists", userId: link.userId };
   }
 
-  const linkExisting = async (): Promise<{ outcome: ProvisionOutcome; userId: string | null } | null> => {
+  const linkExisting = async (): Promise<ProvisionResult | null> => {
     const existing = await deps.store.findUserByEmail(email);
     if (!existing) return null;
-    if (existing.tenantId !== input.tenantId || existing.role === "admin") return { outcome: "skipped_conflict", userId: null };
+    if (existing.tenantId !== input.tenantId || existing.role === "admin") {
+      const moved = await tryMoveAccount(deps.moves, input.moveProof, existing, {
+        tenantId: input.tenantId, ghlUserId: input.ghlUserId, role, email, mayRestore: input.mayRestore,
+      });
+      if (moved === "moved") return { outcome: "moved", userId: existing.id };
+      return { outcome: "skipped_conflict", userId: null, reason: moved };
+    }
     const old = await deps.store.findLinkByUserId(existing.id);
     if (old) {
       // Any relink clears the link's deleted mark, so a path that may not restore never relinks.
@@ -115,6 +128,12 @@ export async function provisionGhlUser(deps: ProvisionDeps, input: GhlUserInput)
     throw error;
   }
   await deps.store.insertLink(input.tenantId, input.ghlUserId, created.userId);
+  try {
+    await deps.moves?.markUnused(created.userId, input.tenantId);
+  } catch (error) {
+    // No marker means the account counts as used: it is never moved, and nothing else changes.
+    console.error("Onboarding: unused marker failed:", error instanceof Error ? error.name : "unknown error");
+  }
   try {
     await deps.sendSetPassword(email);
   } catch (error) {

@@ -10,11 +10,16 @@ type Entry = { values: BrandValue[]; brand: Brand };
 // decides), and the failure is not cached. The cache lives in one server instance's memory.
 export function createBrandService(deps: {
   fetchValues: (tenantId: string) => Promise<BrandValue[]>;
+  // For anonymous pages: reads without refreshing a token or changing connection state. Null when
+  // the stored token cannot be used.
+  readStoredValues?: (tenantId: string) => Promise<BrandValue[] | null>;
   now: () => number;
   ttlMs: number;
 }) {
   const cache = new Map<string, { entry: Entry; expiresAt: number }>();
   const inflight = new Map<string, Promise<Entry>>();
+  // Separate from `inflight`: a signed-in read must never wait on, or fail with, an anonymous one.
+  const readOnlyInflight = new Map<string, Promise<BrandValue[]>>();
   // Bumped by invalidate: a fetch that started before an invalidate must not put its (older) result
   // back into the cache.
   const generation = new Map<string, number>();
@@ -54,13 +59,42 @@ export function createBrandService(deps: {
     return (await getEntry(tenantId)).values;
   }
 
+  async function loadReadOnly(tenantId: string): Promise<BrandValue[]> {
+    const started = generation.get(tenantId) ?? 0;
+    const values = await deps.readStoredValues?.(tenantId).catch(() => null);
+    if (values) {
+      if ((generation.get(tenantId) ?? 0) === started) {
+        cache.set(tenantId, { entry: { values, brand: buildBrand(values) }, expiresAt: deps.now() + deps.ttlMs });
+      }
+      return values;
+    }
+    const stale = cache.get(tenantId);
+    if (stale) return stale.entry.values;
+    throw new Error("No readable custom values.");
+  }
+
+  // For anonymous pages. A fresh cache entry, else a read with the stored token, else the last
+  // cached values. Rejects when there are none. Never reaches the token refresh of `fetchValues`.
+  function getValuesReadOnly(tenantId: string): Promise<BrandValue[]> {
+    const hit = cache.get(tenantId);
+    if (hit && hit.expiresAt > deps.now()) return Promise.resolve(hit.entry.values);
+    const pending = readOnlyInflight.get(tenantId);
+    if (pending) return pending;
+    const request = loadReadOnly(tenantId).finally(() => {
+      if (readOnlyInflight.get(tenantId) === request) readOnlyInflight.delete(tenantId);
+    });
+    readOnlyInflight.set(tenantId, request);
+    return request;
+  }
+
   // Called by the onboarding feature's LocationUpdate webhook hook (tenant resolved from the signed
   // event's location). Per server instance only: other instances keep their entry until the TTL.
   function invalidate(tenantId: string) {
     generation.set(tenantId, (generation.get(tenantId) ?? 0) + 1);
     inflight.delete(tenantId);
+    readOnlyInflight.delete(tenantId);
     cache.delete(tenantId);
   }
 
-  return { getBrand, getValues, invalidate };
+  return { getBrand, getValues, getValuesReadOnly, invalidate };
 }

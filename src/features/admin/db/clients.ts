@@ -1,3 +1,4 @@
+import { ensureSignInSlugs, signInPath } from "@/features/brand";
 import { getPrisma } from "@/shared/lib/prisma";
 import { toClientRow } from "../api/clients";
 import type { ClientRow } from "../types";
@@ -20,8 +21,11 @@ export async function listClients(): Promise<ClientRow[]> {
     if (!user.disabledAt) entry.active += 1;
     counts.set(user.tenantId, entry);
   }
+  // A personal link is a convenience: when it cannot be made, the client list still works.
+  const slugs = await ensureSignInSlugs(tenants.map(({ id, name }) => ({ id, name }))).catch(() => new Map<string, string>());
   return tenants.map((tenant) => {
     const entry = counts.get(tenant.id) ?? { users: 0, active: 0 };
-    return toClientRow(tenant, entry.users, entry.active);
+    const slug = slugs.get(tenant.id);
+    return { ...toClientRow(tenant, entry.users, entry.active), signInPath: slug ? signInPath(slug) : null };
   });
 }

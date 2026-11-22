@@ -20,9 +20,13 @@ const RATE_MAX_REQUESTS = 10; // proposal, not a measured number
 export type EmbedLoginOptions = {
   // Returns the CRM user id for an encrypted payload, null, or { reason } to say why nobody signs in
   // (a short code for the log and the audit line, never shown to the browser). Must not throw; a
-  // throw counts as null.
-  resolveUserId: (payload: string) => Promise<string | null | { reason: string }>;
+  // throw counts as null. `{ userId, tenantId }` binds the session to the tenant it was resolved for.
+  resolveUserId: (payload: string) => Promise<EmbedResolution>;
+  // After the session is inserted: true only if the account is still in that tenant.
+  confirmSession?: (input: { userId: string; tenantId: string; sessionToken: string }) => Promise<boolean>;
 };
+
+export type EmbedResolution = string | null | { reason: string } | { userId: string; tenantId: string };
 
 export function embedLoginPlugin(options: EmbedLoginOptions & { appOrigin: string }): BetterAuthPlugin {
   return {
@@ -49,20 +53,31 @@ export function embedLoginPlugin(options: EmbedLoginOptions & { appOrigin: strin
           audit("embed_login", { outcome: "denied", reason: "bad_request" });
           throw new APIError("BAD_REQUEST", { message: "Invalid request" });
         }
-        let resolved: string | null | { reason: string } = null;
+        let resolved: EmbedResolution = null;
         try {
           resolved = await options.resolveUserId(payload);
         } catch {
           resolved = null;
         }
-        if (resolved !== null && typeof resolved === "object") throw refuse(resolved.reason);
-        const userId = resolved;
+        if (resolved !== null && typeof resolved === "object" && "reason" in resolved) throw refuse(resolved.reason);
+        const bound = resolved !== null && typeof resolved === "object" ? resolved : null;
+        const userId = bound ? bound.userId : (resolved as string | null);
         if (!userId) throw refuse("no_match");
         const user = await ctx.context.internalAdapter.findUserById(userId);
         if (!user) throw refuse("no_user");
         // The session create hook (api/auth.ts) refuses a turned-off user: no session comes back.
         const session = await ctx.context.internalAdapter.createSession(userId, true).catch(() => null);
         if (!session) throw refuse("no_session");
+        if (bound) {
+          // The account may have moved to another client since it was resolved. Fails closed.
+          const stillThere = await Promise.resolve()
+            .then(() => options.confirmSession?.({ userId: bound.userId, tenantId: bound.tenantId, sessionToken: session.token }) ?? false)
+            .catch(() => false);
+          if (!stillThere) {
+            await ctx.context.internalAdapter.deleteSession(session.token).catch(() => {});
+            throw refuse("tenant_changed");
+          }
+        }
         await setSessionCookie(ctx, { session, user }, true, { sameSite: "none", secure: true });
         audit("embed_login", { outcome: "ok", userId });
         return ctx.json({ ok: true });

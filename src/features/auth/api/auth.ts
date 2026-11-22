@@ -23,6 +23,8 @@ export type CreateAuthOptions = {
   embedLogin?: EmbedLoginOptions;
   // True when the user's tenant was uninstalled in HighLevel: no new session is created for them.
   isTenantBlocked?: (tenantId: string) => Promise<boolean>;
+  // Removes the "never used" marker before a session is created. A failure never blocks sign-in.
+  clearUnusedMarker?: (userId: string) => Promise<void>;
 };
 
 export function createAuth(options: CreateAuthOptions) {
@@ -89,6 +91,15 @@ export function createAuth(options: CreateAuthOptions) {
                 if (await options.isTenantBlocked(user.tenantId)) return false;
               } catch {
                 return false; // fail closed
+              }
+            }
+            if (options.clearUnusedMarker) {
+              try {
+                await options.clearUnusedMarker(session.userId);
+              } catch (error) {
+                // A stale marker is safe: a move also refuses on any session or changed password.
+                const code = (error as { code?: unknown } | null)?.code;
+                console.error(`Auth: unused marker not cleared: ${typeof code === "string" && /^P\d{4}$/.test(code) ? code : error instanceof Error ? error.name : "unknown error"}`);
               }
             }
             return { data: session };

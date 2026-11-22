@@ -114,8 +114,21 @@ model User {
   sessions       Session[]
   accounts       Account[]
   invitesCreated Invite[]
+  unusedMarker   UnusedAccountMarker?
 
   @@index([tenantId])
+}
+
+// Exists only while an account is provably never used (docs/onboarding.md, decision 3). Written when
+// the sync creates the account, deleted by the session-create hook or by a move. `credentialFingerprint`
+// is a SHA-256 of the first password hash, so a password that was set shows up as a mismatch. No row
+// means "counts as used": such an account is never moved to another client.
+model UnusedAccountMarker {
+  userId                String   @id
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenantId              String
+  credentialFingerprint String
+  createdAt             DateTime @default(now())
 }
 
 model Session {
@@ -227,4 +240,26 @@ model TenantSyncState {
   lastClaimedAt DateTime?
   mailDay       DateTime? @db.Date
   mailCount     Int       @default(0)
+}
+
+// ---- feature: mailbox-prompt ----
+// One row when this user dismissed the "check your mailbox" card in this tenant. No row means the
+// card may show. It says nothing about whether a mailbox is connected: HighLevel does not expose that.
+// No relations, so the User and Tenant models stay untouched.
+model MailboxPromptDismissal {
+  userId      String
+  tenantId    String
+  dismissedAt DateTime @default(now())
+
+  @@id([userId, tenantId])
+}
+
+// ---- feature: brand ----
+// A client's personal sign-in link (/sign-in?client=<slug>). Cosmetic only: it picks the branding of
+// the signed-out page and grants nothing. The slug stays the same when the business name changes.
+// No relation, so the Tenant model stays untouched.
+model TenantSignInLink {
+  tenantId  String   @id
+  slug      String   @unique
+  createdAt DateTime @default(now())
 }

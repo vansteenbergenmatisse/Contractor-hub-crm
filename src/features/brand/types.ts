@@ -35,4 +35,15 @@ export type BusinessProfile = {
   referralReward: string | null;
 };
 
+// What the signed-out sign-in page may show for a personal link. Public: add a field only if it is
+// safe for anyone on the internet to read.
+export type SignInBrand = {
+  client: string;
+  name: string | null;
+  logoUrl: string | null;
+  backgroundUrl: string | null;
+  // One CSS rule of validated hex colors.
+  css: string;
+};
+
 export type BrandValue = { key: string; value: string };

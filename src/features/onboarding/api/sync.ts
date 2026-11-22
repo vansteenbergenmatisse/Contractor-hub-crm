@@ -112,7 +112,7 @@ export async function runSync(deps: SyncDeps): Promise<SyncSummary> {
     }
   }
   summary.usersCreated = users.created;
-  console.info(`Sync: companies=${summary.companies} installed=${summary.installedLocations} onboarded=${summary.onboarded} usersCreated=${users.created} usersLinked=${users.linked} usersDeactivated=${users.deactivated} userFailures=${users.failed} conflicts=${users.skippedConflict} capped=${users.capped} suspicious=${users.suspicious} missingApp=${summary.missingApp} alertsSent=${summary.alertsSent} failures=${summary.failures}`);
+  console.info(`Sync: companies=${summary.companies} installed=${summary.installedLocations} onboarded=${summary.onboarded} usersCreated=${users.created} usersLinked=${users.linked} usersMoved=${users.moved} usersDeactivated=${users.deactivated} userFailures=${users.failed} conflicts=${users.skippedConflict} capped=${users.capped} suspicious=${users.suspicious} missingApp=${summary.missingApp} alertsSent=${summary.alertsSent} failures=${summary.failures}`);
   return summary;
 }
 

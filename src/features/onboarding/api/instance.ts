@@ -8,7 +8,7 @@ import { createWebhookHooks } from "./hooks";
 import { createMailCap } from "./mail-cap";
 import { onboardLocation, type OnboardDeps } from "./onboard";
 import { handleSync, runSync, type SyncDeps } from "./sync";
-import { syncTenantUsers, type UserSyncDeps } from "./users";
+import { syncTenantUsers, withSyncMoveProof, type UserSyncDeps } from "./users";
 import { deferVisitSync, runVisitSync, syncUsersOnVisit } from "./visit-sync";
 
 // The real wiring: HighLevel API + token store, auth provisioning, the database. Built per call
@@ -25,7 +25,7 @@ function build() {
     provision: (input) =>
       provisionGhlUser(
         { ...provisionDeps, sendSetPassword: (email) => mailCap.send(input.tenantId, () => provisionDeps.sendSetPassword(email)) },
-        input,
+        withSyncMoveProof(input),
       ),
     deactivate: (tenantId, ghlUserId) => deactivateGhlUser(provisionDeps, tenantId, ghlUserId),
     activeLinks: listActiveLinks,

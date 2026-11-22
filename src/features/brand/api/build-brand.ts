@@ -60,6 +60,56 @@ function first(byKey: Map<string, string>, ...keys: string[]): string | null {
   return null;
 }
 
+const HOURS_DAYS = [
+  { first: "Mon", last: "Fri", key: "weekdays" },
+  { first: "Sat", last: "Sat", key: "saturday" },
+  { first: "Sun", last: "Sun", key: "sunday" },
+] as const;
+const TIME_24H = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+function time12h(raw: string): string | null {
+  const match = TIME_24H.exec(raw);
+  if (!match) return null;
+  const hour = Number(match[1]);
+  return `${hour % 12 || 12}:${match[2]} ${hour < 12 ? "AM" : "PM"}`;
+}
+
+// One day's text from its two values, or null when they are missing, malformed or contradict each
+// other. "Closed" appears only when a value says it.
+function dayHours(open: string | null, close: string | null): string | null {
+  const isClosed = (value: string | null) => value?.toLowerCase() === "closed";
+  if (isClosed(open) || isClosed(close)) {
+    return (isClosed(open) || !open) && (isClosed(close) || !close) ? "Closed" : null;
+  }
+  const from = open && time12h(open);
+  const to = close && time12h(close);
+  return from && to ? `${from} - ${to}` : null;
+}
+
+// The design's wording ("Mon - Sat: 7:00 AM - 6:00 PM"), built from the structured keys. Neighbouring
+// days with the same hours share one range; a day without usable values is left out.
+function structuredHours(byKey: Map<string, string>): string | null {
+  const ranges: { first: string; last: string; hours: string; index: number }[] = [];
+  HOURS_DAYS.forEach(({ first: firstDay, last, key }, index) => {
+    const hours = dayHours(
+      first(byKey, `business_hours_${key}_open`),
+      first(byKey, `business_hours_${key}_close`),
+    );
+    if (!hours) return;
+    const previous = ranges.at(-1);
+    if (previous && previous.hours === hours && previous.index === index - 1) {
+      previous.last = last;
+      previous.index = index;
+    } else {
+      ranges.push({ first: firstDay, last, hours, index });
+    }
+  });
+  if (ranges.length === 0) return null;
+  return ranges
+    .map((r) => `${r.first === r.last ? r.first : `${r.first} - ${r.last}`}: ${r.hours}`)
+    .join(", ");
+}
+
 function buildProfile(byKey: Map<string, string>): BusinessProfile {
   const link = (...keys: string[]) => httpsUrl(first(byKey, ...keys) ?? undefined);
   return {
@@ -71,7 +121,7 @@ function buildProfile(byKey: Map<string, string>): BusinessProfile {
     city: first(byKey, "business_address_city", "business_main_city"),
     state: first(byKey, "business_address_state", "business_main_state_abbreviation"),
     county: first(byKey, "business_main_county"),
-    hours: first(byKey, "business_hours"),
+    hours: first(byKey, "business_hours") ?? structuredHours(byKey),
     keyword: first(byKey, "business_main_keyword"),
     websiteUrl: link("business_website_url"),
     universalCta: first(byKey, "universal_cta"),
