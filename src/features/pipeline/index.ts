@@ -1,0 +1,17 @@
+// Public API of the pipeline feature. Other code imports from "@/features/pipeline" only.
+import type { SearchRow } from "@/features/app-shell";
+import { buildSearchRows } from "./api/send";
+import { MOCK_CARDS } from "./mock";
+
+export { PipelinePage } from "./components/PipelinePage";
+
+// Rows the global search can find (sample cards, Phase 2).
+export const searchRows: SearchRow[] = buildSearchRows(MOCK_CARDS);
+
+// Pure logic, exported so the tests can reach it.
+export { STAGES, GROUPS, groupOf, secondButton, hasTrash } from "./api/stages";
+export { initialBoard, boardReducer, moveCard, loseCard, undoMove, pickStage, canUndo } from "./api/board";
+export { cardView, stubView, stageCounts, groupCounts, computeLayout, needsPrice, nextStageLabel } from "./api/view";
+export { buildSearchRows, sendDocFor } from "./api/send";
+export { MOCK_CARDS, MOCK_HIDDEN_COUNTS } from "./mock";
+export type { BoardState, CardView, MockCard } from "./types";
