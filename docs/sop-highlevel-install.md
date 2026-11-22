@@ -2,7 +2,7 @@
 
 Written 2026-11-22 from the code, `docs/greenlane/build-prompt.md` and that day's install attempts.
 
-**Status: no install has completed yet.** Steps marked **(not proven)** have not been run for real. After the first success in each environment, remove the mark or correct the step.
+**Status: the install from our link worked on dev for JCR on 2026-11-22.** Staging and production have not been installed. Steps marked **(not proven)** have not been run for real. After the first success in each environment, remove the mark or correct the step. A snapshot may not carry the app, so assume each new sub-account needs the Install steps.
 
 ## The short version
 
@@ -72,6 +72,6 @@ On dev and staging, a new test sub-account is not picked up automatically becaus
 | `Forbidden` on the start link | Not signed in as a CRM admin | Sign in as admin in the same browser |
 | `Password has not been set for the user` | That HighLevel login has no password | Use "Forgot password?", then restart from the start link |
 | Error after approving | The link expired, or a different browser or session was used | Restart from the start link |
-| Installed in HighLevel, but no client in the CRM | Install did not start from our link, so no agency token is stored | Run the Install steps from our link |
+| Installed in HighLevel, but no client in the CRM, and **Continue** is greyed out | Install did not start from our link, so no agency token is stored | Uninstall the app from that sub-account, then run the Install steps from our link |
 | Client shows `needs_reconnect` | HighLevel rejected the stored token | Run the Install steps again |
 | Leads says it can't load | Missing env, HighLevel error or read limit | Check the Vercel logs for `HighLevel contacts read failed: step=` |
