@@ -1,6 +1,6 @@
-# GreenLane build plan (proposal, awaiting the user's go)
+# GreenLane build plan
 
-Source: `docs/greenlane/build-prompt.md` (spec) and `docs/greenlane/greenlane-dashboard.html` (design). Decisions so far are in `PROGRESS.md` under "Current state". Status: proposal, not started.
+Source: `docs/greenlane/build-prompt.md` (spec) and `docs/greenlane/greenlane-dashboard.html` (design). Decisions so far are in `PROGRESS.md` under "Current state". Status on 2026-11-22: Phases 1 and 2 are built; Phase 3 is next. Current state and open items are in `PROGRESS.md`.
 
 Per-ticket loop (all tickets): plan in `PROGRESS.md` "In progress", test first, code, `pnpm check`, Playwright where UI, independent verifier agent, update `PROGRESS.md`, local commit on `develop`, then tell the user what to test on staging. Max 3 revision rounds; stop after 2 rounds with no progress. No push, merge, migration or dependency install without asking.
 
@@ -25,16 +25,27 @@ Every automation we run for a client lives in HighLevel as a workflow. This app 
 
 Mock data sits in marked mock modules (`MOCK DATA` header, one `mock.ts` per feature, all fed from one shared set of sample people and amounts in `src/shared/mock/`), replaced field by field in Phase 3. No automation is written here (see the principle above). Layout shell first (side menu, phone top bar, tab bar, bottom sheets), then one page per ticket in this order: Today, Inbox, Pipeline, Leads, Quotes, Invoices, Payments, Calendar, Automations, Settings. Each page: Playwright at the 14 widths, 44 pt targets, 390x844 thumb check, then `fe:review-final`.
 
-## Next work, in this order (user, 2026-11-22; recorded before a context clear, nothing built yet)
+## Next work (user, 2026-11-22). Status: items 1 to 4 built; items 5 and 6 wait until after Phase 3 starts (user: start Phase 3 next)
 
-1. **Finish Phase 2 polish**: the round 4 fix list R4-1..R4-12 in PROGRESS.md (lean review rounds: the user's API budget).
-2. **Sync in our own code, no n8n.** First the initial syncs: webhooks (INSTALL, UNINSTALL, LocationUpdate, UserCreate/Update/Delete) keep users and locations in step at once; the daily Vercel cron stays as a backstop (needs `CRON_SECRET`); add an on-visit sync (when a tenant user opens the app and that tenant last synced over 10 minutes ago, sync that tenant after the response, rate-limited per tenant). No n8n anywhere.
-3. **Pipeline drag and stage picker.** The owner must be able to drag a card to another stage and also select a card and choose another stage (keyboard and phone friendly), with Undo. Phase 2: mock state; Phase 3: the move changes the opportunity stage in HighLevel (no automation in this app).
-4. **Email conflicts across clients: option (c) (user decision, 2026-11-22).** One account per email stays (Better Auth's unique email). When HighLevel proves a person belongs to client B while their email sits in client A, and that A account has never signed in, the account moves to B; a used account is never moved (log it as a conflict for an admin). Forge Forward admins sign in across all clients. See `docs/onboarding.md` decision 3.
-5. **Login, kept simple (user).** Clients sign in with email and password or with Google, land in THEIR sub-account, and see only that sub-account's data (leads, contacts, everything). Admins can sign in too. Google sign-in needs a Google Cloud OAuth client (user to create; id and secret go in Vercel and `.env.local`).
-6. **Custom values drive everything, and Settings writes them back.** Brand colors (the 14 `02_Branding` keys, confirmed from the user's screenshot 2026-11-22; that folder has NO font keys), logo, favicon, sign-in background, business details, services and service areas all come from the sub-account's custom values (key catalogue in `docs/tenant-branding.md`). When the owner changes a value in our Settings, it must update the custom value in HighLevel (write-back; important to the user), and a change made in HighLevel shows in the app (brand cache invalidation on LocationUpdate exists; per server instance).
+1. **DONE. Finish Phase 2 polish**: the round 4 fix list R4-1..R4-12 in PROGRESS.md (lean review rounds: the user's API budget).
+2. **DONE. Sync in our own code, no n8n.** First the initial syncs: webhooks (INSTALL, UNINSTALL, LocationUpdate, UserCreate/Update/Delete) keep users and locations in step at once; the daily Vercel cron stays as a backstop (needs `CRON_SECRET`); add an on-visit sync (when a tenant user opens the app and that tenant last synced over 10 minutes ago, sync that tenant after the response, rate-limited per tenant). No n8n anywhere.
+3. **DONE on mock state. Pipeline drag and stage picker.** The owner must be able to drag a card to another stage and also select a card and choose another stage (keyboard and phone friendly), with Undo. Phase 2: mock state; Phase 3: the move changes the opportunity stage in HighLevel (no automation in this app).
+4. **SAFEGUARDS BUILT, NO ACCOUNT MOVES YET (see `docs/onboarding.md`). Email conflicts across clients: option (c) (user decision, 2026-11-22).** One account per email stays (Better Auth's unique email). When HighLevel proves a person belongs to client B while their email sits in client A, and that A account has never signed in, the account moves to B; a used account is never moved (log it as a conflict for an admin). Forge Forward admins sign in across all clients. See `docs/onboarding.md` decision 3.
+5. **NOT BUILT (Google needs the user's OAuth client). Login, kept simple (user).** Clients sign in with email and password or with Google, land in THEIR sub-account, and see only that sub-account's data (leads, contacts, everything). Admins can sign in too. Google sign-in needs a Google Cloud OAuth client (user to create; id and secret go in Vercel and `.env.local`).
+6. **READ SIDE BUILT, WRITE-BACK NOT BUILT (stays off for JCR). Custom values drive everything, and Settings writes them back.** Brand colors (the 14 `02_Branding` keys, confirmed from the user's screenshot 2026-11-22; that folder has NO font keys), logo, favicon, sign-in background, business details, services and service areas all come from the sub-account's custom values (key catalogue in `docs/tenant-branding.md`). When the owner changes a value in our Settings, it must update the custom value in HighLevel (write-back; important to the user), and a change made in HighLevel shows in the app (brand cache invalidation on LocationUpdate exists; per server instance).
 
 ## Phase 3: wire each page to HighLevel
+
+Start here (2026-11-22). The goal the user stated: once signed in, each person sees THEIR sub-account's real leads, conversations and so on. Today every working page is marked MOCK data, so a client sees sample roofing customers.
+
+Before the first ticket:
+- Verify each HighLevel endpoint, scope and response shape in the official docs and record it in `docs/greenlane/hl-api-notes.md`. Nothing is confirmed on a real response yet, including `GET /users/?locationId=`, which appears only in HighLevel's legacy API file.
+- Every read takes the tenant from the session and goes through a feature's `db/` or `api/` and the `highlevel` client. The browser never holds a token. JCR stays read-only (`loop-constraints.md` rules 12 and 13).
+- Decide what a page shows while HighLevel is slow, failing or empty: never sample data for a real client.
+
+Proposed order (proposal, not decided): Leads and Today's lead rows, then Inbox, Pipeline, Calendar, Quotes, Invoices, Payments, Automations, Settings connections.
+
+Open decisions for Phase 3: which manual Pipeline moves may fire a stage's HighLevel workflow (`pipeline/api/stage-sync.ts` carries `via: manual | send`); Calendar free times must use the client's real hours instead of 7:00 AM starts and no Sundays; how a failed send reopens the mailbox card (`reopenMailboxPrompt`).
 
 One ticket per page, replacing mock fields. Also: 20-second send timer on the server, simple per-tenant invoice template (own database, built after the invoice page works), AI quote builder (OpenAI, model name in an env var, tested Astra vs Sol first) with a per-quote usage log, Settings write-back behind an off-by-default flag.
 

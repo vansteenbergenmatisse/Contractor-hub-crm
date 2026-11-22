@@ -44,7 +44,7 @@ The owner chose a personal link per client for branding before login. `/admin/cl
 
 ## Direction from the user (2026-11-22)
 
-Every client is set up by creating a HighLevel sub-account and filling in its custom values; the app must then take everything from them: colors, font, logo, favicon, sign-in background, business details and connection states. JCR Landscaping is the reference sub-account for the key list. Not yet wired (see PROGRESS.md Next up 00): the font keys, the sign-in background (`business_main_background_video_or_image` is parsed but unused), connection states (Settings shows mock statuses), and branding on the signed-out sign-in page.
+Every client is set up by creating a HighLevel sub-account and filling in its custom values; the app must then take everything from them: colors, font, logo, favicon, sign-in background, business details and connection states. JCR Landscaping is the reference sub-account for the key list. State on 2026-11-22: colors, logo, favicon, name, owner, contact details and hours (including the structured `business_hours_*` keys) are wired; the signed-out sign-in page is branded through the personal link above. There are no font keys, so the design font stays. Connection states have no known source, so Settings shows "Not available yet". `universal_cta` reaches Settings only. Service names and areas are not used yet (Phase 3).
 
 ## Custom value key catalogue (from the user's screenshots of JCR Landscaping, 2026-11-22)
 
