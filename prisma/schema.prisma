@@ -31,6 +31,7 @@ model Tenant {
   webhookEvents WebhookEvent[]
   users         User[]
   invites       Invite[]
+  syncState     TenantSyncState?
 }
 
 // ---- feature: highlevel ----
@@ -208,11 +209,22 @@ model GhlUserLink {
 }
 
 // A sub-account that has no app installed. The sync alerts an admin about it at most once per
-// 24 hours, so a 10-minute sync does not send a mail every run.
+// 24 hours, so a repeated sync does not send a mail every run.
 model MissingAppAlert {
   locationId    String   @id
   companyId     String
   name          String?
   firstSeenAt   DateTime @default(now())
   lastAlertedAt DateTime
+}
+
+// When a tenant's on-visit user sync was last claimed, and how many set-password mails it was sent
+// on `mailDay` (UTC). A separate table so that both are atomic row updates across server instances
+// and the Tenant table is not altered.
+model TenantSyncState {
+  tenantId      String    @id
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lastClaimedAt DateTime?
+  mailDay       DateTime? @db.Date
+  mailCount     Int       @default(0)
 }

@@ -21,8 +21,16 @@ export type UserSyncDeps = {
 // Idempotent (keyed by tenant and HighLevel user id). One user failing does not stop the others.
 // An EMPTY list never deactivates anyone: an empty answer is more likely a HighLevel problem than a
 // sub-account with no users.
-export async function syncTenantUsers(deps: UserSyncDeps, tenantId: string, users: readonly HighLevelUser[]): Promise<UserCounts> {
+// The on-visit sync passes `mayDeactivate: false` and `mayRestore: false`: it never blocks or
+// unblocks anyone, and never moves a link.
+export async function syncTenantUsers(
+  deps: UserSyncDeps,
+  tenantId: string,
+  users: readonly HighLevelUser[],
+  options: { mayDeactivate: boolean; mayRestore?: boolean } = { mayDeactivate: true },
+): Promise<UserCounts> {
   const counts = emptyUserCounts();
+  let restoreSkipped = 0;
   const listed = new Set<string>();
   for (const user of users) {
     if (user.deleted) continue;
@@ -30,6 +38,7 @@ export async function syncTenantUsers(deps: UserSyncDeps, tenantId: string, user
     try {
       const { outcome } = await deps.provision({
         allowCreate: counts.created < MAX_NEW_USERS_PER_PASS,
+        mayRestore: options.mayRestore,
         tenantId,
         ghlUserId: user.id,
         email: user.email,
@@ -44,12 +53,14 @@ export async function syncTenantUsers(deps: UserSyncDeps, tenantId: string, user
       else if (outcome === "skipped_agency") counts.skippedAgency += 1;
       else if (outcome === "capped") counts.capped += 1;
       else if (outcome === "skipped_invalid") counts.skippedInvalid += 1;
+      else if (outcome === "skipped_removed") restoreSkipped += 1;
       else counts.skippedConflict += 1;
     } catch {
       counts.failed += 1;
     }
   }
-  if (users.length > 0) {
+  if (restoreSkipped > 0) console.info(`Onboarding: users left for the webhook or daily sync, restoreSkipped=${restoreSkipped}`);
+  if (options.mayDeactivate && users.length > 0) {
     const links = await deps.activeLinks(tenantId);
     const deletedIds = new Set(users.filter((u) => u.deleted).map((u) => u.id));
     const gone = links.filter((link) => !(listed.has(link.ghlUserId) && !deletedIds.has(link.ghlUserId)));

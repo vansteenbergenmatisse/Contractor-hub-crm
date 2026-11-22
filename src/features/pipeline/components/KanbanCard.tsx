@@ -1,6 +1,7 @@
 "use client";
 
 import { useRowGestures, type RowAction } from "@/features/app-shell";
+import { canMoveManually } from "../api/stage-move";
 import type { CardView } from "../types";
 
 const svgProps = { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true, focusable: false } as const;
@@ -14,6 +15,7 @@ export function KanbanCard({
   onUndo,
   onCalendar,
   onSeeQuote,
+  onMove,
 }: {
   view: CardView;
   onPress: () => void;
@@ -22,6 +24,7 @@ export function KanbanCard({
   onUndo: () => void;
   onCalendar: () => void;
   onSeeQuote: () => void;
+  onMove: () => void;
 }) {
   const { card, primary, second } = view;
   // A long press, a right-click, the ContextMenu key or Shift+F10 opens the card's menu: every button
@@ -33,6 +36,8 @@ export function KanbanCard({
   actions.push({ label: primary.label, onAction: onPress });
   if (second) actions.push({ label: second.label, onAction: onSecond });
   if (view.seeQuote) actions.push({ label: "See quote", onAction: onSeeQuote });
+  const movable = canMoveManually(view.stage);
+  if (movable) actions.push({ label: `Move ${card.name} to another stage`, onAction: onMove });
   if (view.trash) actions.push({ label: `Move ${card.name} to Lost`, onAction: onTrash, tone: "danger" });
   const gestures = useRowGestures<HTMLElement>({ label: card.name, actions });
   return (
@@ -69,6 +74,8 @@ export function KanbanCard({
         {card.amount ? <b>{card.amount}</b> : null}
         <span>{view.timeText}</span>
         {view.showUndo ? <button type="button" className="fd-link fd-kun" onClick={onUndo}>Undo</button> : null}
+        {/* Not in the design: the smallest way in to the stage sheet, styled as the Undo link beside it. */}
+        {movable ? <button type="button" className="fd-link fd-kun" style={view.showUndo ? { marginLeft: 0 } : undefined} aria-label={`Move ${card.name} to another stage`} aria-haspopup="dialog" onClick={onMove}>Move</button> : null}
       </p>
       <p className="fd-ka">
         <svg width="13" height="13" strokeWidth="2" {...svgProps}><path d="M13 2 4 14h7l-1 8 9-12h-7z" /></svg>

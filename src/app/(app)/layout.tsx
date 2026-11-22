@@ -8,6 +8,7 @@ import { searchRows as paymentRows } from "@/features/payments";
 import { searchRows as pipelineRows } from "@/features/pipeline";
 import { searchRows as quoteRows } from "@/features/quotes";
 import { loadBusiness } from "@/features/brand";
+import { scheduleVisitSync } from "@/features/onboarding";
 import { frameKey } from "@/shared/lib/frame-key";
 import { getRequestUser } from "../session";
 
@@ -25,6 +26,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const user = await getRequestUser();
   if (!user) redirect("/sign-in");
   if (user.role === "admin" || !user.tenantId) redirect("/admin/clients");
+  // Runs after the response; the page never waits for it and a failure never reaches it.
+  scheduleVisitSync(user.tenantId);
   const business = await loadBusiness(user.tenantId, user.name);
   // Keyed by user and tenant (hashed, keys reach the browser): another signed-in user gets a new frame.
   return (

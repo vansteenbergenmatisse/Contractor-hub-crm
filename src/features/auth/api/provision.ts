@@ -22,10 +22,13 @@ export type GhlUserInput = {
   // False once the caller has created its per-pass maximum of new users: a user who would have to be
   // created is then reported as "capped" and nothing is created or mailed.
   allowCreate?: boolean;
+  // False on the on-visit sync, whose user list can be older than a removal: a blocked user stays
+  // blocked and no link moves ("skipped_removed"). Left out: restoring is allowed.
+  mayRestore?: boolean;
 };
 
 export type ProvisionOutcome =
-  | "created" | "linked" | "exists" | "restored" | "skipped_agency" | "skipped_conflict" | "skipped_invalid" | "capped";
+  | "created" | "linked" | "exists" | "restored" | "skipped_agency" | "skipped_conflict" | "skipped_invalid" | "skipped_removed" | "capped";
 
 export type ProvisionDeps = {
   createUser(input: InvitedUserInput): Promise<{ userId: string }>;
@@ -62,6 +65,7 @@ export async function provisionGhlUser(deps: ProvisionDeps, input: GhlUserInput)
 
   const link = await deps.store.findLink(input.tenantId, input.ghlUserId);
   if (link) {
+    if (link.deletedAt && input.mayRestore === false) return { outcome: "skipped_removed", userId: null };
     const user = await deps.store.findUserById(link.userId);
     if (user) {
       const patch: { name?: string; role?: Role } = {};
@@ -85,6 +89,8 @@ export async function provisionGhlUser(deps: ProvisionDeps, input: GhlUserInput)
     if (existing.tenantId !== input.tenantId || existing.role === "admin") return { outcome: "skipped_conflict", userId: null };
     const old = await deps.store.findLinkByUserId(existing.id);
     if (old) {
+      // Any relink clears the link's deleted mark, so a path that may not restore never relinks.
+      if (input.mayRestore === false) return { outcome: "skipped_removed", userId: null };
       // HighLevel deleted and re-added this person (new id, same email): move the link, and undo the
       // block this sync put on them while the old id was missing.
       const wasBlockedBySync = old.deletedAt !== null;

@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { COLOR_GROUPS, CONNECTIONS, ESSENTIAL_FIELDS, SECTIONS, SOON_ITEMS, SWITCHES, labelOfKey } from "../api/fields";
 import type { SettingsState } from "../api/state";
-import { MOCK_CONNECTIONS } from "../api/connections";
+import { UNKNOWN_CONNECTIONS, connectionsIntro } from "../api/connections";
 import { useSettings } from "../hooks/use-settings";
 import { useSignOut } from "../hooks/use-sign-out";
 import type { ConnectionStatus, Field, SectionKey } from "../types";
@@ -26,8 +26,8 @@ const NAV_ICONS: Record<SectionKey, ReactNode> = {
 // `initialValues` is the signed-in sub-account's custom values (key to value), already filtered by the
 // server allowlist. When given, it replaces the sample values: keys it lacks show empty fields, and
 // allowed keys the design does not list show too. `initialSection` comes from `?section=` in the URL.
-// `connections` is each row's status in CONNECTIONS order; without it the marked MOCK statuses of
-// api/connections.ts apply (rows the system cannot read say "Not available yet").
+// `connections` is each row's real status in CONNECTIONS order; without it every row says
+// "Not available yet".
 type Props = {
   initial?: SettingsState;
   initialValues?: Record<string, string>;
@@ -35,7 +35,7 @@ type Props = {
   connections?: readonly ConnectionStatus[];
 };
 
-export function SettingsPage({ initial, initialValues, initialSection, connections = MOCK_CONNECTIONS }: Props) {
+export function SettingsPage({ initial, initialValues, initialSection, connections = UNKNOWN_CONNECTIONS }: Props) {
   const { state, dispatch, filter, extras, phone } = useSettings(initial, initialValues, initialSection, connections);
   const signOut = useSignOut();
   const { values, draft, err } = state;
@@ -155,7 +155,7 @@ export function SettingsPage({ initial, initialValues, initialSection, connectio
         {filter.sections.conn ? (
           <section className="fd-stsec fd-in" style={{ "--i": 4 } as React.CSSProperties} aria-labelledby="fd-st-4">
             <h2 className="fd-pnh" id="fd-st-4">Connections</h2>
-            <p className="fd-pns fd-sts">What is linked to your dashboard. A row that is not connected shows its steps.</p>
+            <p className="fd-pns fd-sts">{connectionsIntro(connections)}</p>
             <div className="fd-lst">
               {CONNECTIONS.map((c, i) =>
                 show(`conn-${i}`) ? (

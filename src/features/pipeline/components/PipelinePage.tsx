@@ -3,6 +3,7 @@
 import { useMemo, useRef } from "react";
 import { PageAction, useHorizontalSwipe, useRowFocus, useSearchRows } from "@/features/app-shell";
 import { buildSearchRows } from "../api/send";
+import { useCardDrag } from "../hooks/use-card-drag";
 import { useRevealRow } from "../hooks/use-reveal-row";
 import { usePipelineBoard } from "../hooks/use-pipeline-board";
 import { STAGES } from "../api/stages";
@@ -26,6 +27,7 @@ import { StageEmpty } from "./StageEmpty";
 import { StageHeader } from "./StageHeader";
 import { StageMore } from "./StageMore";
 import { StageMap } from "./StageMap";
+import { StagePicker } from "./StagePicker";
 
 // The Pipeline page body: 11 stages in 4 groups. Computer: group tabs and columns. Phone: the list
 // of stages, tap one to see its cards. Moving a card changes its stage on screen only (Phase 2).
@@ -35,7 +37,6 @@ export function PipelinePage() {
   const { state, cards, counts } = b;
   const layout = computeLayout(state);
   const stub = stubView(state, cards, layout);
-  const line = lineSelected(state);
   // A search result opens /pipeline?row=pipeline-N: open the stage the card is in now, then bring
   // the card into view. Only the cards of the open stage are offered, so the focus waits until
   // that stage shows.
@@ -47,6 +48,9 @@ export function PipelinePage() {
   // (design logic `uxSwipe2`, which presses the stage bar's arrows).
   const grid = useRef<HTMLDivElement | null>(null);
   useHorizontalSwipe(grid, { onSwipeLeft: b.next, onSwipeRight: b.prev, enabled: state.open });
+  // Computer: drag a card to a column. The column under the pointer takes the selected line.
+  const over = useCardDrag(grid, cards.length, { stage: state.stg, canDrag: b.canDrag, canDrop: b.canDrop, onDrop: b.dropOn, onView: b.pick });
+  const line = lineSelected(over >= 0 ? { ...state, stg: over } : state);
   useRowFocus(cards.flatMap((_, i) => (state.sg[i] === state.stg ? [`pipeline-${i}`] : [])));
 
   return (
@@ -57,8 +61,9 @@ export function PipelinePage() {
             <button type="button" className={"fd-ibtn fd-sprev" + (b.isFirst ? " is-dis" : "")} aria-label="Previous stage" aria-disabled={b.isFirst || undefined} onClick={b.prev}>
               <Arrow size={20} />
             </button>
-            <span className="fx-accst" aria-live="polite">
-              <b>{STAGES[state.stg].name}</b> <span>{counts[state.stg]}</span>
+            {/* Only the name is live: a count that changes with a move must not speak over the move's line. */}
+            <span className="fx-accst">
+              <b aria-live="polite">{STAGES[state.stg].name}</b> <span>{counts[state.stg]}</span>
             </span>
             <button type="button" className={"fd-ibtn" + (b.isLast ? " is-dis" : "")} aria-label="Next stage" aria-disabled={b.isLast || undefined} onClick={b.next}>
               <Arrow size={20} />
@@ -82,8 +87,8 @@ export function PipelinePage() {
           <Arrow size={16} />
           Stages
         </button>
-        <p className="fd-snow" aria-live="polite">
-          <span className="fd-snn">{STAGES[state.stg].name}</span>
+        <p className="fd-snow">
+          <span className="fd-snn" aria-live="polite">{STAGES[state.stg].name}</span>
           <span className="fd-kcn">{counts[state.stg]}</span>
         </p>
         <span className="fd-sarr">
@@ -116,6 +121,7 @@ export function PipelinePage() {
                 onUndo={b.undo}
                 onCalendar={() => b.openCalendar(view.card.name)}
                 onSeeQuote={() => b.openQuote(view.card.name)}
+                onMove={() => b.openPicker(i)}
               />
             );
           })}
@@ -130,6 +136,7 @@ export function PipelinePage() {
           </button>
         ) : null}
       </section>
+      {b.picking !== null ? <StagePicker name={cards[b.picking].name} stage={state.sg[b.picking]} onPick={b.chooseStage} onClose={b.closePicker} /> : null}
     </div>
   );
 }

@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useKeptReducer, useShell, useUndoShortcut } from "@/features/app-shell";
+import { useGestures, useKeptReducer, useShell, useUndoShortcut } from "@/features/app-shell";
 import { useQuotesKept } from "@/features/quotes";
-import { boardReducer, canUndo, initialBoard } from "../api/board";
+import { boardReducer, canUndo, initialBoard, type BoardAction } from "../api/board";
+import { canMoveManually, moveAnnouncement, planStageMove, stageChange } from "../api/stage-move";
+import { syncStageMove } from "../api/stage-sync";
 import { calendarHref, quoteHref } from "../api/links";
 import { pressPlan } from "../api/press";
 import { LAST_STAGE } from "../api/stages";
@@ -25,6 +27,26 @@ export function usePipelineBoard() {
   // goes to another page and comes back (mock state only, nothing is saved).
   const [state, dispatch] = useKeptReducer("pipeline", boardReducer, MOCK_CARDS, initialBoard);
   const { sendTimer, askReason } = useShell();
+  const { say } = useGestures();
+  // The card whose stage sheet is open.
+  const [picking, setPicking] = useState<number | null>(null);
+  const latest = useRef(state);
+  useEffect(() => {
+    latest.current = state;
+  });
+
+  // Every action that can change a card's stage runs here: the state changes, the one Phase 3 seam
+  // hears of it, and a screen reader is told.
+  const commit = useCallback(
+    (action: BoardAction) => {
+      const change = stageChange(latest.current, action);
+      dispatch(action);
+      if (!change) return;
+      syncStageMove(change);
+      say(moveAnnouncement(MOCK_CARDS[change.i].name, change.to, change.undone));
+    },
+    [dispatch, say],
+  );
   const router = useRouter();
   // The live Quotes state: a card in Quote to Send asks it whether its quote still needs a price, and
   // Send quote shows that quote (design logic 1142-1158).
@@ -45,8 +67,17 @@ export function usePipelineBoard() {
 
   const undo = useCallback(() => {
     if (state.last && state.stg !== state.last.from) scrollToTop();
-    dispatch({ type: "undo" });
-  }, [state.last, state.stg, dispatch]);
+    const card = state.last?.i;
+    commit({ type: "undo" });
+    // The pressed Undo is gone or hidden now (the note stays drawn, switched off). If focus was left
+    // there or nowhere, it goes to the card that came back.
+    setTimeout(() => {
+      const now = document.activeElement;
+      if (now && now !== document.body && !now.closest(".fd-kstub.is-off")) return;
+      const row = document.querySelector<HTMLElement>(`[data-row-id="pipeline-${card}"]`);
+      (row?.querySelector<HTMLElement>('[aria-haspopup="dialog"]') ?? row?.querySelector<HTMLElement>(".fd-k1"))?.focus();
+    }, 0);
+  }, [state.last, state.stg, commit]);
 
   // ⌘Z (Ctrl Z) runs the same Undo as the button, while that button shows. A move made by a send
   // has no Undo, so nothing is registered for it.
@@ -64,25 +95,57 @@ export function usePipelineBoard() {
     if (state.stg < LAST_STAGE) pick(state.stg + 1);
   }, [pick, state.stg]);
 
-  const moveTo = useCallback((i: number, to: number) => dispatch({ type: "move", i, to }), [dispatch]);
+  const moveTo = useCallback((i: number, to: number) => commit({ type: "move", i, to }), [commit]);
 
   const press = useCallback(
     (view: CardView) => {
       const plan = pressPlan(view, quotes);
-      if (plan.type === "dispatch") dispatch(plan.action);
+      if (plan.type === "dispatch") commit(plan.action);
       else if (plan.type === "navigate") router.push(plan.href);
       // A card moved by a send has no Undo: `plan.done` carries bySend.
-      else sendTimer({ ...plan.request, onDone: () => dispatch(plan.done) });
+      else sendTimer({ ...plan.request, onDone: () => commit(plan.done) });
     },
-    [router, sendTimer, dispatch, quotes],
+    [router, sendTimer, commit, quotes],
   );
 
   const lose = useCallback(
     (i: number) => {
-      askReason({ name: MOCK_CARDS[i].name, onPick: (reason) => dispatch({ type: "lose", i, reason }) });
+      askReason({ name: MOCK_CARDS[i].name, onPick: (reason) => commit({ type: "lose", i, reason }) });
     },
-    [askReason, dispatch],
+    [askReason, commit],
   );
+
+  const canDrag = useCallback((i: number) => canMoveManually(latest.current.sg[i]), []);
+  const canDrop = useCallback((i: number, to: number) => planStageMove(latest.current, i, to).type !== "none", []);
+
+  // A drag dropped card `i` on stage `to`. Lost asks for its reason first.
+  const dropOn = useCallback(
+    (i: number, to: number) => {
+      const plan = planStageMove(latest.current, i, to);
+      if (plan.type === "move") commit(plan.action);
+      else if (plan.type === "ask-reason") lose(i);
+    },
+    [commit, lose],
+  );
+
+  // The stage sheet's choice. The card may leave the screen, so focus goes to the Undo of the note it
+  // leaves behind. The reason sheet opens after this sheet has closed and given focus back.
+  const chooseStage = useCallback(
+    (to: number) => {
+      if (picking === null) return;
+      const i = picking;
+      const plan = planStageMove(latest.current, i, to);
+      setPicking(null);
+      if (plan.type === "ask-reason") {
+        setTimeout(() => lose(i), 0);
+      } else if (plan.type === "move") {
+        commit(plan.action);
+        setTimeout(() => document.querySelector<HTMLElement>(".fd-kstub:not(.is-off) .fd-sun")?.focus(), 0);
+      }
+    },
+    [picking, commit, lose],
+  );
+  const closePicker = useCallback(() => setPicking(null), []);
 
   const openCalendar = useCallback((name: string) => router.push(calendarHref(name)), [router]);
   const openQuote = useCallback((name: string) => router.push(quoteHref(name, "sheet")), [router]);
@@ -102,6 +165,13 @@ export function usePipelineBoard() {
     moveTo,
     press,
     lose,
+    canDrag,
+    canDrop,
+    dropOn,
+    picking,
+    openPicker: setPicking,
+    chooseStage,
+    closePicker,
     openCalendar,
     openQuote,
     isFirst: state.stg === 0,

@@ -126,7 +126,7 @@ describe("a card's menu", () => {
     });
     const menu = await screen.findByRole("menu", { name: "Actions for Derek Olsen" });
     const items = within(menu).getAllByRole("menuitem").map((b) => b.textContent);
-    expect(items).toEqual(["Send quote", "Job done", "See quote", "Move Derek Olsen to Lost"]);
+    expect(items).toEqual(["Send quote", "Job done", "See quote", "Move Derek Olsen to another stage", "Move Derek Olsen to Lost"]);
     act(() => {
       within(menu).getByRole("menuitem", { name: "Move Derek Olsen to Lost" }).click();
     });

@@ -40,7 +40,7 @@ export function buildAlertMessage(to: string, installLink: string, missing: Read
   };
 }
 
-// One pass over every agency we hold a token for. Idempotent: run it every 10 minutes.
+// One pass over every agency we hold a token for. Idempotent: safe to run at any time.
 //  1. Sub-accounts HighLevel says have the app but we do not know: onboard them (token, tenant, users).
 //  2. Sub-accounts we know: re-read their users (new people get accounts, removed people are blocked).
 //  3. Sub-accounts of the agency WITHOUT the app: one batched mail to the admin, at most once per day each.
@@ -124,7 +124,7 @@ function bearerMatches(header: string | null, secret: string): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-// POST (n8n) or GET (Vercel cron) /api/integrations/sync with `Authorization: Bearer <CRON_SECRET>`.
+// GET (Vercel cron) or POST /api/integrations/sync with `Authorization: Bearer <CRON_SECRET>`.
 // Fails closed: no secret configured answers 500, a wrong or missing header answers 401. The answer
 // holds only counts.
 export async function handleSync(request: Request, deps: { cronSecret: string | undefined; run: () => Promise<SyncSummary> }): Promise<Response> {

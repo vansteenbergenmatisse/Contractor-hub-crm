@@ -3,7 +3,7 @@ import { getPrisma } from "@/shared/lib/prisma";
 const ALERT_EVERY_MS = 24 * 3600_000;
 
 // Which of these sub-accounts may be alerted about now: never alerted, or last alerted over 24 hours
-// ago. Marks them as alerted (so the next 10-minute run stays quiet) and forgets sub-accounts that
+// ago. Marks them as alerted (so the next run stays quiet) and forgets sub-accounts that
 // have the app now. Returns only the ones to alert about.
 export async function claimAlerts(
   companyId: string,
@@ -15,7 +15,7 @@ export async function claimAlerts(
   const cutoff = new Date(now.getTime() - ALERT_EVERY_MS);
   const due: Array<{ locationId: string; name: string | null }> = [];
   for (const item of missing) {
-    // Atomic, so two overlapping runs (n8n and the daily cron) cannot both claim the same alert: a
+    // Atomic, so two overlapping sync runs cannot both claim the same alert: a
     // conditional update that only one of them can win, and an insert that fails for the second.
     const updated = await prisma.missingAppAlert.updateMany({
       where: { locationId: item.locationId, lastAlertedAt: { lt: cutoff } },

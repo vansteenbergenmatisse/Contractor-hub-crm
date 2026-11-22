@@ -1,19 +1,32 @@
+import { after } from "next/server";
 import { createEmailSenderFromEnv, deactivateGhlUser, getProvisionDeps, listActiveLinks, provisionGhlUser } from "@/features/auth";
 import { getBrandService } from "@/features/brand";
 import { getOnboardingApi, type OAuthCallbackDeps, type WebhookHooks } from "@/features/highlevel";
 import { claimAlerts, releaseAlerts } from "../db/alerts";
+import { claimVisitSync, reserveSetPasswordMail } from "../db/sync-state";
 import { createWebhookHooks } from "./hooks";
+import { createMailCap } from "./mail-cap";
 import { onboardLocation, type OnboardDeps } from "./onboard";
 import { handleSync, runSync, type SyncDeps } from "./sync";
 import { syncTenantUsers, type UserSyncDeps } from "./users";
+import { deferVisitSync, runVisitSync, syncUsersOnVisit } from "./visit-sync";
 
 // The real wiring: HighLevel API + token store, auth provisioning, the database. Built per call
 // (cheap); a missing env throws, and callers treat that as "not configured".
 function build() {
   const hl = getOnboardingApi();
   const provisionDeps = getProvisionDeps();
+  const mailCap = createMailCap({
+    now: () => new Date(),
+    gateOpen: () => process.env.ONBOARDING_SEND_SET_PASSWORD?.trim() === "true",
+    reserve: reserveSetPasswordMail,
+  });
   const userSync: UserSyncDeps = {
-    provision: (input) => provisionGhlUser(provisionDeps, input),
+    provision: (input) =>
+      provisionGhlUser(
+        { ...provisionDeps, sendSetPassword: (email) => mailCap.send(input.tenantId, () => provisionDeps.sendSetPassword(email)) },
+        input,
+      ),
     deactivate: (tenantId, ghlUserId) => deactivateGhlUser(provisionDeps, tenantId, ghlUserId),
     activeLinks: listActiveLinks,
   };
@@ -76,6 +89,25 @@ export function getWebhookHooks(): WebhookHooks | undefined {
   const { hl, userSync } = built;
   // Per server instance: other instances drop their cached brand only when its TTL runs out.
   return createWebhookHooks({ hl, userSync, invalidateBrand: (tenantId) => getBrandService().invalidate(tenantId) });
+}
+
+// Called while a signed-in tenant page renders, with the tenant from the session. All the work
+// (claim, HighLevel read, user sync) runs after the response. Same caps and mail gate as the webhooks
+// and the cron, but this path never blocks a user.
+export function scheduleVisitSync(tenantId: string): void {
+  deferVisitSync(after, () =>
+    runVisitSync(
+      {
+        now: () => new Date(),
+        claim: claimVisitSync,
+        syncUsers: async (id) => {
+          const { hl, userSync } = build();
+          return syncUsersOnVisit(userSync, id, await hl.usersOfTenant(id));
+        },
+      },
+      tenantId,
+    ),
+  );
 }
 
 // POST or GET /api/integrations/sync.

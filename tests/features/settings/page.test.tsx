@@ -47,24 +47,23 @@ describe("SettingsPage markup", () => {
     expect(usePushed).toHaveBeenCalledWith(false);
   });
 
-  it("marks the current section and shows each connection as build prompt lines 145-146 allow", () => {
+  it("marks the current section and shows every connection as Not available yet without a real status", () => {
     expect(html).toMatch(/aria-current="page"[^>]*>(?:(?!<\/button>).)*Business details/s);
-    // Phone, Facebook and Google My Business: Connected (MOCK, the design's sample). Instagram: Not
-    // connected (MOCK). Calendar and Online payments: no API reads them, so "Not available yet".
+    // No real status source exists yet, so every row says "Not available yet".
     const chips = [...html.matchAll(/<span class="fd-chip (is-ok|is-plain)">(?:(?!<\/span><\/span>).)*<span class="fd-h">([^<]*)<\/span><\/span>/gs)].map((m) => `${m[1]}:${m[2]}`);
     expect(chips).toEqual([
-      "is-ok:Connected", "is-plain:Not available yet", "is-ok:Connected", "is-plain:Not connected", "is-ok:Connected", "is-plain:Not available yet",
+      "is-plain:Not available yet", "is-plain:Not available yet", "is-plain:Not available yet", "is-plain:Not available yet", "is-plain:Not available yet", "is-plain:Not available yet",
     ]);
     // The calendar's name is not readable, so it is never claimed.
     expect(html).not.toContain("Connected: Google Calendar");
-    // No API gives the A2P status: the line says so and never claims it is verified.
-    expect(html).toContain("A2P status: Not available yet.");
+    // The A2P line belongs to a connected phone row, and it is never claimed as verified.
+    expect(html).not.toContain("A2P status: Not available yet.");
     expect(html).not.toContain("A2P verified. Your texts get delivered.");
-    // A row that is not connected shows its steps and the ask button; a connected row is collapsed.
-    expect((html.match(/>Ask Forge Forward to connect</g) ?? []).length).toBe(3);
-    expect((html.match(/class="fd-rex fd-how"/g) ?? []).length).toBe(3);
-    expect((html.match(/class="fd-rex fd-how is-off"/g) ?? []).length).toBe(3);
-    expect(html).toContain("Done when this row says Connected.");
+    // A row with no status is collapsed and offers no ask button.
+    expect((html.match(/>Ask Forge Forward to connect</g) ?? []).length).toBe(0);
+    expect((html.match(/class="fd-rex fd-how"/g) ?? []).length).toBe(0);
+    expect((html.match(/class="fd-rex fd-how is-off"/g) ?? []).length).toBe(0);
+    expect(html).not.toContain("Done when this row says Connected.");
     expect(html).not.toMatch(/>Connect</);
   });
 
@@ -77,7 +76,7 @@ describe("SettingsPage markup", () => {
     expect(out).toContain("Connected: Google Calendar");
     expect(out).toContain("A2P verified. Your texts get delivered.");
     expect((out.match(/Not connected/g) ?? []).length).toBe(2);
-    expect((out.match(/>Ask Forge Forward to connect</g) ?? []).length).toBe(3);
+    expect((out.match(/>Ask Forge Forward to connect</g) ?? []).length).toBe(2);
     expect((out.match(/class="fd-rex fd-how is-off"/g) ?? []).length).toBe(3);
   });
 
@@ -89,7 +88,7 @@ describe("SettingsPage markup", () => {
   });
 
   it("after Ask, says the request is noted on this screen only, never that it was received", () => {
-    const out = renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), sec: "conn", asked: { 1: true } }} />);
+    const out = renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), sec: "conn", asked: { 1: true } }} connections={[{ state: "connected" }, { state: "not-connected" }, { state: "connected" }, { state: "not-connected" }, { state: "connected" }, { state: "not-connected" }]} />);
     expect(out).toContain("Noted on this screen. The request is not sent to Forge Forward yet.");
     expect(out).not.toContain("got your request");
     expect((out.match(/>Ask Forge Forward to connect</g) ?? []).length).toBe(2);
@@ -139,7 +138,7 @@ describe("SettingsPage markup", () => {
   });
 
   it("keeps the save bar, the color group headings and the five section frames while searching, as the design does", () => {
-    const out = renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), q: "a2p" }} />);
+    const out = renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), q: "a2p" }} connections={[{ state: "connected" }]} />);
     expect(out).toContain("Save changes");
     expect(out).toContain('class="fd-cols fd-st2 fd-in"');
     expect(out).not.toContain('id="cv-business_name"');
@@ -147,7 +146,7 @@ describe("SettingsPage markup", () => {
   });
 
   it("finds a connection by its status, as the design's search reads the whole row", () => {
-    const out = renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), q: "not connected" }} />);
+    const out = renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), q: "not connected" }} connections={[{ state: "connected" }, { state: "unknown" }, { state: "connected" }, { state: "not-connected" }, { state: "connected" }, { state: "unknown" }]} />);
     expect(out).toContain(">Instagram<");
     expect(out).not.toContain(">Facebook page<");
     const live = renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), q: "on" }} />);

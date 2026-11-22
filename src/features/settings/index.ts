@@ -8,7 +8,7 @@ export { COLOR_KEYS, ESSENTIAL_KEYS, labelOfKey, sectionOfKey } from "./api/fiel
 export { MOCK_CUSTOM_VALUES } from "./mock";
 export { isKeyAllowedBy, isSettingsKeyAllowed, settingsValuesFrom } from "./api/allowlist";
 export { loadSettingsValues } from "./api/load-values";
-export { MOCK_CONNECTIONS, NOT_AVAILABLE, UNKNOWN_CONNECTIONS, connectionChip } from "./api/connections";
+export { NOT_AVAILABLE, UNKNOWN_CONNECTIONS, connectionChip } from "./api/connections";
 export { sectionFromParam } from "./api/section-param";
 export { applyBrandVars, brandCssVars, brandScopeRule, businessPatchFromValues, safeHttpsUrl } from "./api/live-save";
 export type { BusinessPatch } from "./api/live-save";

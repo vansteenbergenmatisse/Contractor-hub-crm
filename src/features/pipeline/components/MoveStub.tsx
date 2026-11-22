@@ -4,7 +4,8 @@ import type { StubView } from "../types";
 // (a description only), Show and Undo. A card moved by a send has no Undo (the CSS hides it).
 export function MoveStub({ view, onShow, onUndo }: { view: StubView; onShow: () => void; onUndo: () => void }) {
   return (
-    <div className={view.className} role="status" aria-live="polite">
+    // Not a live region: the board announces every move once, through the shell's spoken line.
+    <div className={view.className}>
       <p className="fd-kn">{view.name}</p>
       <p className="fd-stt">Moved to <b>{view.to}</b></p>
       <p className="fd-sta">
