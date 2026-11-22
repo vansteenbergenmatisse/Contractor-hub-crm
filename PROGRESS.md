@@ -39,6 +39,7 @@ Single source of truth for where the project stands. Read it at the start of eve
 ## In progress
 
 - 2026-11-22 PHASE 3 NEXT STEP: P3-1 to P3-3 are built (see Log) but NOT proven on real HighLevel data. Blocker: Neon `develop` holds no JCR tenant or stored connection, and `.env.local` has none of the `GHL_*` variables or `TOKEN_ENCRYPTION_KEY`. Connect JCR on the dev site, then run the read-only shape check and confirm the contact fields before wiring Inbox.
+- 2026-11-22 WAITING ON THE USER: push the install URL fix, set `GHL_INSTALL_BASE_URL` to `https://marketplace.leadconnectorhq.com` for Vercel's develop environment (Preview, branch `develop`), redeploy, and retry `/api/integrations/oauth/start` as admin. Staging and production need the same value before their installs.
 - User decisions 2026-11-22 (chat): (a) Claude may read JCR's contacts, opportunities and whatever else must be read; no writes. (b) MUST BE GLOBAL: a new client is made from a snapshot of JCR with the same variables, and each client sees their own data on login. No JCR-specific id, name or value in code; pipelines, stages and calendars are looked up per sub-account. (c) The app stays read-only for now; changes to automations and tags will happen elsewhere through webhooks later. (d) Pages not wired yet show "Not available yet" instead of sample data. (e) Leads shows the received time; the waiting chip is hidden until a real wait time exists.
 - 2026-11-22 RESUME HERE: START PHASE 3 (user decision: Phase 3 is next, in a fresh session). Nothing is mid-edit. `develop` is pushed through 29e3761 plus this docs commit, which is local until pushed. All migrations are on Neon `develop`. Read `docs/greenlane/plan.md` "Phase 3: wire each page to HighLevel" first, then plan the first ticket here. Items 5 (Google login) and 6 (Settings write-back) wait; Google needs an OAuth client from the user.
 - 2026-11-22 USER REQUIREMENT (chat, Claude's reading): (a) everything follows the sub-account's custom values, with branding and business essentials the most important; (b) every signed-in user is tied to one sub-account and sees that sub-account's HighLevel leads and email; (c) if email is not connected yet, the user is told to connect it. Values differ per client and are fixed per user.
@@ -83,6 +84,12 @@ Single source of truth for where the project stands. Read it at the start of eve
 
 ## Log
 
+### 2026-11-22 - Fix the HighLevel install URL for white-label apps
+- Symptom: HighLevel's install screen answered "No integration found" for the Test app id. The id is correct: it matches the build prompt's Test app and the `appId` on stored webhook events.
+- Cause found in the official `docs/oauth/Authorization.md`: the path is `/v2/oauth/chooselocation`, and white-labeled flows use `marketplace.leadconnectorhq.com`. Our code had no `/v2`, the build prompt names the `gohighlevel.com` host, and the stored INSTALL event has `isWhitelabelCompany: true`. Not proven until the retry succeeds.
+- Changed: `src/features/highlevel/api/start.ts`, two path assertions in `tests/features/highlevel/start.test.ts` (failed first, then passed), `docs/greenlane/hl-api-notes.md`. `pnpm check` exit 0: 2488 passed, 9 skipped, build compiled.
+- Not done: the Vercel value of `GHL_INSTALL_BASE_URL` (the user sets it; Claude cannot read or change it).
+
 ### 2026-11-22 - Phase 3 start: no sample data, real Leads and Today lead rows (read-only)
 - Research: HighLevel read endpoints checked in the public docs and recorded in `docs/greenlane/hl-api-notes.md`. Plan: `docs/greenlane/phase-3-adapter-plan.md`, approved by the user with the global rule (must work for any sub-account made from a JCR snapshot).
 - P3-1: the layout no longer sends sample search rows or an inbox count. Inbox, Pipeline, Quotes, Invoices, Payments, Calendar and Automations show "Not available yet". Settings keeps its real values; its two sample switches show "Not available yet".
@@ -91,7 +98,7 @@ Single source of truth for where the project stands. Read it at the start of eve
 - Security review: no blocking defect. Fixed: per-tenant limit of 60 contact reads a minute (a proposal, fails closed), row cap, 5 MiB body limit. Open: `locationId` on returned contacts is not required yet (add once the real shape is known); search rows stay until Leads is reopened; `contacts.write` is requested although this read does not need it.
 - Tests: Leads and Today render tests updated for the required data prop and the removal of samples; webhook fixture renamed from a client name to "Test Co". `pnpm check` exit 0: 2488 passed, 9 skipped, build compiled.
 - Browser (local dev, existing non-JCR session): all ten routes answer 200 with no sample name in the page payload; Today and Leads at 390 and Inbox at 1280 show no sideways scroll. Leads shows its "can't load" state because local env has no HighLevel settings.
-- NOT VERIFIED: any real HighLevel response, the ready state in a browser, the limiter against Postgres through this path, the `Version` header value. No live HighLevel request was sent. Not pushed.
+- NOT VERIFIED: any real HighLevel response, the ready state in a browser, the limiter against Postgres through this path, the `Version` header value. No live HighLevel request was sent. Pushed by the user (29e3761..ddb41c5): GitHub CI `check` success (`migrate` skipped, as on develop), Vercel success, dev site `/sign-in` and `/api/health/db` 200.
 
 ### 2026-11-22 - Migrations applied, pushed, verified on dev, docs synced for Phase 3
 - The user applied the four migrations to Neon `develop` and pushed `develop` (2dd9f45..29e3761). GitHub CI `check` success (`migrate` skipped, as on develop); Vercel Preview success; dev site `/sign-in` and `/api/health/db` 200. Claude restarted the local dev server on port 3000 at the user's request, so it uses the new Prisma client.

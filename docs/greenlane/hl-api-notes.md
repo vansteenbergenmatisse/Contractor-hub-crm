@@ -13,6 +13,8 @@ Read by a research agent from marketplace.gohighlevel.com. None of the pages sho
 
 ## Install and callback
 
+- **Install URL (official `docs/oauth/Authorization.md`, read 2026-11-22):** standard flow `https://marketplace.gohighlevel.com/v2/oauth/chooselocation`; white-labeled flow `https://marketplace.leadconnectorhq.com/v2/oauth/chooselocation`. Both of our apps are listed as white-label and the stored INSTALL event has `isWhitelabelCompany: true`, so `GHL_INSTALL_BASE_URL` must be `https://marketplace.leadconnectorhq.com`. The older form without `/v2` and the `gohighlevel.com` host gave "No integration found" for the Test app on 2026-11-22; which of the two caused it is not proven.
+
 - The install URL is copied from the app's Advanced Settings, Auth page. Docs mention `/oauth/chooselocation` and `/v2/oauth/chooselocation` and say `state` is returned unchanged. No other install URL parameter is documented.
 - Callback carries `code` and `state`. Reject a missing or mismatched `state`; use a random, short-lived, single-use value; invalidate it before exchanging the code.
 - Code expires after 5 minutes, single use. `redirect_uri` must match a registered URI exactly. PKCE is not supported.

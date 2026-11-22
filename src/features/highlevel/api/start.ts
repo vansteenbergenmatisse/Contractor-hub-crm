@@ -37,7 +37,9 @@ export async function handleOAuthStart(request: Request, deps: OAuthStartDeps): 
     }
   }
   const state = newState(deps.stateSecret, (deps.now ?? (() => new Date()))(), adminId);
-  const url = new URL("/oauth/chooselocation", deps.config.installBaseUrl);
+  // Path from HighLevel's docs/oauth/Authorization.md. A white-labeled app installs on
+  // marketplace.leadconnectorhq.com, set through GHL_INSTALL_BASE_URL.
+  const url = new URL("/v2/oauth/chooselocation", deps.config.installBaseUrl);
   const query = new URLSearchParams({
     response_type: "code",
     client_id: deps.config.clientId,

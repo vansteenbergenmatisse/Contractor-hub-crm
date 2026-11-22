@@ -30,7 +30,7 @@ describe("OAuth start", () => {
 
     expect(response.status).toBe(302);
     const location = new URL(response.headers.get("location") as string);
-    expect(location.origin + location.pathname).toBe("https://install.example.test/oauth/chooselocation");
+    expect(location.origin + location.pathname).toBe("https://install.example.test/v2/oauth/chooselocation");
     const params = Object.fromEntries(location.searchParams);
     expect(params.response_type).toBe("code");
     expect(params.client_id).toBe("client-id-1");
@@ -82,7 +82,7 @@ describe("OAuth start", () => {
     });
     const location = new URL(response.headers.get("location") as string);
     expect(location.origin).toBe("https://install.example.test");
-    expect(location.pathname).toBe("/oauth/chooselocation");
+    expect(location.pathname).toBe("/v2/oauth/chooselocation");
   });
 
   it("puts the state in the cookie and the redirect only, never in a body", async () => {
