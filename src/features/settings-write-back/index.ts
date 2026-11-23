@@ -3,6 +3,6 @@
 export { SettingsWriteBackPage } from "./components/SettingsWriteBackPage";
 export { isWriteBackEnabled } from "./api/write-back-flag";
 export { saveCustomValues } from "./api/write-back";
-export type { AuditStart, SaveDeps } from "./api/write-back";
+export type { AuditOutcome, AuditStart, SaveDeps } from "./api/write-back";
 export { handleSaveValues, saveFailure } from "./api/save-route";
-export { saveTenantValues } from "./api/save-instance";
+export { freshValuesReader, saveTenantValues } from "./api/save-instance";

@@ -12,7 +12,7 @@ const detail = { id: "v1", key: "main_color", name: "Main color", value: "#11111
 function adapter(over: Partial<Parameters<typeof createCustomValueAdapter>[0]> = {}) {
   return createCustomValueAdapter({
     readLocationId: async () => "loc-a",
-    withLocationToken: async (_tenant, call) => call("token"),
+    getLocationToken: async () => "token",
     requestList: async () => json({ customValues: [row()] }),
     requestUpdate: async () => json({ customValue: row() }),
     ...over,
@@ -91,7 +91,7 @@ describe("the adapter", () => {
   });
 
   it("maps a token failure", async () => {
-    const failing = (code: "unavailable" | "needs_reconnect") => adapter({ withLocationToken: async () => { throw new TokenServiceError(code); } });
+    const failing = (code: "unavailable" | "needs_reconnect") => adapter({ getLocationToken: async () => { throw new TokenServiceError(code); } });
     expect(await failing("unavailable").update("t", detail, "x")).toBe("retry");
     expect(await failing("needs_reconnect").update("t", detail, "x")).toBe("permission");
   });
@@ -103,6 +103,15 @@ describe("the adapter", () => {
 
   it("answers retry on an unreadable list", async () => {
     expect(await adapter({ requestList: async () => new Response("nope") }).read("t")).toEqual({ ok: false, reason: "retry" });
+  });
+
+  it("does not force a token refresh when a write answers 401", async () => {
+    const getLocationToken = vi.fn(async () => "token");
+    const requestUpdate = vi.fn(async () => json({}, 401));
+    expect(await adapter({ getLocationToken, requestUpdate }).update("t", detail, "x")).toBe("permission");
+    expect(getLocationToken).toHaveBeenCalledTimes(1);
+    expect(getLocationToken).toHaveBeenCalledWith("t");
+    expect(requestUpdate).toHaveBeenCalledTimes(1);
   });
 
   it("never logs a value", async () => {

@@ -97,9 +97,10 @@ Single source of truth for where the project stands. Read it at the start of eve
 - New feature `settings-write-back`, route `POST /api/settings/values`, table `CustomValueChange` (migration file `20261123000000_custom_value_change`), flags `SETTINGS_WRITE_BACK_ENABLED` and `SETTINGS_WRITE_BACK_TENANTS`. Spec, rules and rollback: `openspec/changes/settings-write-back/proposal.md`.
 - Plan drift: the code moved out of `settings` into its own feature, because an existing test forbids network calls and HighLevel imports in `settings`. That test was not edited.
 - Added beyond the plan: links must be https and values may not hold markup or control characters, because these values feed the client's website and messages.
-- `pnpm check` exit 0: 2969 passed, 9 skipped, build compiled. No existing test edited.
+- `pnpm check` exit 0: 3003 passed, 9 skipped, build compiled. No existing test edited.
 - Seen once, in a full run, not reproduced in 3 reruns: `tests/features/highlevel/callback.test.ts` "tampered signature". Its fixture replaces the state's last two characters with `AA`, so a state already ending in `AA` would not be tampered. Likely cause, not proven.
 - NOT DONE: no live HighLevel write, flags not set, migration not yet applied at this commit, security review pending, not pushed.
+- Security review of 3e23b42: REJECT for enabling (no write path with the flag off). All 8 findings addressed, re-review pending. Lease SQL run on a throwaway local Postgres: a held lease refuses, an expired one is taken over, one winner of 8 concurrent claims. Changes: stricter per-field input and no merge tags; read back every write and audit `unknown` when unconfirmed; a per-tenant save lease (new table `CustomValueSaveLock`, added to the still-unapplied migration); a time budget with a re-read before each batch; the main color and its text color written as a pair with restore; no forced token refresh on a write; fresh values on Settings when write-back is on.
 
 ### 2026-11-22 - Ticket A: the six defects from the JCR check
 - (1) A contact with the business email (or that email as its name) is left out of Leads and lead counts. It is compared inside the HighLevel parser only, so contact emails still never leave it. Inbox keeps the conversation. A cut-off page with no remaining row reads as unavailable, not empty.

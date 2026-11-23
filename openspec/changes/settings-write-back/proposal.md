@@ -29,7 +29,11 @@ Not verified on a real response: the PUT answer, whether stored tokens hold `loc
 - A value that changed in HighLevel after the owner loaded it is not overwritten.
 - A key listed twice in HighLevel is not written.
 - No audit row means no write.
-- A PUT is not retried, except for the token service's single refresh after a 401.
+- Stricter than the form: no quotes, backticks, backslashes, merge or template tags, or Unicode control and format characters. Email, phone, coordinates and hours have their own checks.
+- A PUT is never retried and never forces a token refresh.
+- Every write is read back. The read decides `saved`; an unconfirmed write is audited and shown as `unknown`.
+- One save per tenant at a time (90-second lease). A later batch re-reads first, and no batch starts after 25 seconds.
+- `main_color` and `text_on_main_color` are written as a pair. If the second fails, the first is restored with its own audit row.
 
 ## Disable and rollback
 
@@ -53,7 +57,7 @@ security_baseline:
         C5_output_rate: { status: opted_out, justification: "non-streaming JSON with one short status per submitted key, at most 20" }
         C6_redaction:   { status: opted_out, justification: "no LLM; logs hold step and status, never values" }
         C7_idempotency: { status: covered, mechanism: "a repeat finds HighLevel already holds the value and skips the PUT" }
-        C8_concurrency: { status: covered, mechanism: "optimistic check against a fresh read; a small window between read and PUT remains because HighLevel has no version token" }
+        C8_concurrency: { status: covered, mechanism: "per-tenant lease plus a fresh read before each batch; an edit made in HighLevel during one PUT can still be overwritten, because HighLevel has no version token" }
         C9_audit:       { status: covered, mechanism: "CustomValueChange row per key, written before the PUT: actor, target, previous, new, outcome, time" }
         C10_abuse:      { status: covered, mechanism: "rate limits, per-tenant allowlist and kill switch; no paid API" }
 ```

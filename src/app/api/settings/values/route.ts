@@ -3,6 +3,7 @@ import { handleSaveValues, isWriteBackEnabled, saveFailure, saveTenantValues } f
 import { parseEnv } from "@/shared/config";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 // Saves changed Settings values to the signed-in owner's HighLevel sub-account. Off by default.
 export async function POST(request: Request): Promise<Response> {

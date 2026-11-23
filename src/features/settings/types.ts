@@ -37,7 +37,7 @@ export type SearchFilter = {
 
 // Saving to the account. The page gets `SaveValues` from outside: this feature makes no network call.
 export type ValueChange = { key: string; expected: string; value: string };
-export type SaveStatus = "saved" | "unchanged" | "conflict" | "invalid" | "missing" | "denied" | "rejected" | "permission" | "retry";
+export type SaveStatus = "saved" | "unchanged" | "conflict" | "invalid" | "missing" | "denied" | "rejected" | "permission" | "retry" | "unknown" | "busy";
 export type SaveResult = { key: string; status: SaveStatus; current?: string };
 export type SaveAnswer = { kind: "results"; results: SaveResult[] } | { kind: "limited" } | { kind: "failed" };
 export type SaveValues = (changes: ValueChange[]) => Promise<SaveAnswer>;

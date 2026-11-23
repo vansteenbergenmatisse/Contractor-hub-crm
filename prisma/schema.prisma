@@ -281,3 +281,10 @@ model CustomValueChange {
 
   @@index([tenantId, createdAt])
 }
+
+// One Settings save per tenant at a time. A short lease: an expired row can be taken over.
+model CustomValueSaveLock {
+  tenantId  String   @id
+  holder    String
+  expiresAt DateTime
+}

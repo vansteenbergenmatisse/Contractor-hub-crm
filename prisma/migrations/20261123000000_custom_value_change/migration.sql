@@ -15,3 +15,12 @@ CREATE TABLE "CustomValueChange" (
 
 -- CreateIndex
 CREATE INDEX "CustomValueChange_tenantId_createdAt_idx" ON "CustomValueChange"("tenantId", "createdAt");
+
+-- CreateTable
+CREATE TABLE "CustomValueSaveLock" (
+    "tenantId" TEXT NOT NULL,
+    "holder" TEXT NOT NULL,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "CustomValueSaveLock_pkey" PRIMARY KEY ("tenantId")
+);

@@ -243,9 +243,10 @@ export function createTenantContactsReader(
 export function createTenantCustomValueAdapter() {
   const env = parseEnv("highlevel");
   const client = buildClient(env);
+  const tokens = buildTokenService(env, client);
   return createCustomValueAdapter({
     readLocationId: async (id) => (await readLocationState(id, env.TOKEN_ENCRYPTION_KEY))?.locationId ?? null,
-    withLocationToken: buildTokenService(env, client).withLocationToken,
+    getLocationToken: (tenantId) => tokens.getLocationToken(tenantId),
     requestList: client.requestCustomValues,
     requestUpdate: client.requestUpdateCustomValue,
   });

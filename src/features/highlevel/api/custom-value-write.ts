@@ -12,7 +12,8 @@ export type CustomValueRead = { ok: true; values: CustomValueDetail[] } | { ok: 
 
 export type CustomValueAdapterDeps = {
   readLocationId: (tenantId: string) => Promise<string | null>;
-  withLocationToken: (tenantId: string, call: (accessToken: string) => Promise<Response>) => Promise<Response>;
+  // Never a forced refresh: a 401 here can mean a missing write scope, and must not rotate a healthy token.
+  getLocationToken: (tenantId: string) => Promise<string>;
   requestList: (accessToken: string, locationId: string) => Promise<Response>;
   requestUpdate: (accessToken: string, locationId: string, id: string, body: { name: string; value: string }) => Promise<Response>;
 };
@@ -63,14 +64,14 @@ async function readListJson(response: Response): Promise<unknown> {
   return JSON.parse(body);
 }
 
-// `update` makes one attempt: only the token service's single refresh after a 401 repeats the call.
+// `update` makes one attempt and is never repeated, also not after a 401.
 export function createCustomValueAdapter(deps: CustomValueAdapterDeps) {
   return {
     async read(tenantId: string): Promise<CustomValueRead> {
       try {
         const locationId = await deps.readLocationId(tenantId);
         if (!locationId) return { ok: false, reason: "permission" };
-        const response = await deps.withLocationToken(tenantId, (token) => deps.requestList(token, locationId));
+        const response = await deps.requestList(await deps.getLocationToken(tenantId), locationId);
         if (!response.ok) {
           await response.body?.cancel().catch(() => {});
           console.error(`HighLevel custom value read failed: status=${response.status}`);
@@ -86,8 +87,7 @@ export function createCustomValueAdapter(deps: CustomValueAdapterDeps) {
       try {
         const locationId = await deps.readLocationId(tenantId);
         if (!locationId) return "permission";
-        const response = await deps.withLocationToken(tenantId, (token) =>
-          deps.requestUpdate(token, locationId, target.id, { name: target.name, value }));
+        const response = await deps.requestUpdate(await deps.getLocationToken(tenantId), locationId, target.id, { name: target.name, value });
         await response.body?.cancel().catch(() => {});
         const outcome = outcomeOfStatus(response.status);
         if (outcome !== "saved") console.error(`HighLevel custom value update failed: status=${response.status}`);

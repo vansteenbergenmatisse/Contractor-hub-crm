@@ -11,6 +11,8 @@ const SENTENCE: Partial<Record<SaveStatus, (labels: string) => string>> = {
   rejected: (labels) => `Your account refused ${labels}.`,
   permission: (labels) => `${labels} did not save. Your account connection needs attention.`,
   retry: (labels) => `${labels} did not save. Try again.`,
+  unknown: (labels) => `We could not confirm ${labels}. Reload this page to see what your account holds.`,
+  busy: (labels) => `${labels} did not save because another save is running. Try again in a moment.`,
 };
 
 export const isSaved = (status: SaveStatus) => status === "saved" || status === "unchanged";

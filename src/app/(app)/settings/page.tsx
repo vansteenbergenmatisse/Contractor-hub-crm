@@ -1,6 +1,6 @@
 import { getTenantCustomValues, getTenantCustomValuesReadOnly } from "@/features/brand";
 import { SettingsPage, loadSettingsValues, sectionFromParam } from "@/features/settings";
-import { SettingsWriteBackPage, isWriteBackEnabled } from "@/features/settings-write-back";
+import { SettingsWriteBackPage, freshValuesReader, isWriteBackEnabled } from "@/features/settings-write-back";
 import { getRequestUser } from "../../session";
 
 export const dynamic = "force-dynamic";
@@ -11,11 +11,13 @@ type Props = { searchParams?: Promise<Record<string, string | string[] | undefin
 // 5-minute cache, filtered by the settings allowlist) and the section named in `?section=`.
 export default async function Page({ searchParams }: Props = {}) {
   const user = await getRequestUser();
-  const values = await loadSettingsValues(user?.tenantId, user?.viewing ? getTenantCustomValuesReadOnly : getTenantCustomValues);
+  const canSave = !user?.viewing && user?.role === "owner" && !!user.tenantId && isWriteBackEnabled(user.tenantId);
+  const read = user?.viewing ? getTenantCustomValuesReadOnly : canSave ? freshValuesReader(getTenantCustomValues) : getTenantCustomValues;
+  const values = await loadSettingsValues(user?.tenantId, read);
   const section = sectionFromParam((await searchParams)?.section) ?? undefined;
   return user?.viewing ? (
     <SettingsPage initialValues={values} initialSection={section} readOnly />
-  ) : user?.role === "owner" && user.tenantId && isWriteBackEnabled(user.tenantId) ? (
+  ) : canSave ? (
     <SettingsWriteBackPage initialValues={values} initialSection={section} />
   ) : (
     <SettingsPage initialValues={values} initialSection={section} />
