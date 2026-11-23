@@ -55,6 +55,13 @@ export class TokenServiceError extends Error {
   }
 }
 
+// Another request holds this tenant's forced-refresh claim. Reads as "try again later".
+class ForcedRefreshDenied extends TokenServiceError {
+  constructor() {
+    super("unavailable");
+  }
+}
+
 export type TokenServiceDeps = {
   client: {
     refreshToken(refreshToken: string, userType: "Company" | "Location"): Promise<RefreshedToken>;
@@ -182,7 +189,21 @@ export function createTokenService(deps: TokenServiceDeps) {
 
   // `rejectedToken`: the token a call just got a 401 for. It is replaced even if its expiry looks fine,
   // but only if it is still the stored one (otherwise someone else already replaced it).
+  // A forced replacement needs the claim, whichever adapter asks. A 401 can mean a missing scope, which
+  // no new token fixes, so without it every page load would rotate the token and queue on its row lock.
+  // If another request already replaced the token, the stored one is returned with no claim.
   async function getLocationToken(tenantId: string, options: { rejectedToken?: string } = {}): Promise<string> {
+    if (options.rejectedToken !== undefined && deps.claimForcedRefresh) {
+      const current = await store.readLocationState(tenantId).catch(hideStoreFailure);
+      if (current?.status === "connected" && current.accessToken === options.rejectedToken) {
+        const claimed = await deps.claimForcedRefresh(tenantId).catch(() => false);
+        if (!claimed) throw new ForcedRefreshDenied();
+      }
+    }
+    return resolveLocationToken(tenantId, options);
+  }
+
+  async function resolveLocationToken(tenantId: string, options: { rejectedToken?: string } = {}): Promise<string> {
     const { rejectedToken } = options;
     const current = await store.readLocationState(tenantId).catch(hideStoreFailure);
     if (!current) throw new TokenServiceError("not_connected");
@@ -239,14 +260,15 @@ export function createTokenService(deps: TokenServiceDeps) {
     const token = await getLocationToken(tenantId);
     const first = await call(token);
     if (first.status !== 401) return first;
-    // A 401 can also mean a missing scope, which no new token fixes. Without this claim every page
-    // load would rotate the token and queue on its row lock. Losing the claim hands back the 401.
-    if (deps.claimForcedRefresh) {
-      const claimed = await deps.claimForcedRefresh(tenantId).catch(() => false);
-      if (!claimed) return first;
+    let renewed: string;
+    try {
+      renewed = await getLocationToken(tenantId, { rejectedToken: token });
+    } catch (error) {
+      if (error instanceof ForcedRefreshDenied) return first; // the caller sees the original 401
+      await first.body?.cancel().catch(() => {});
+      throw error;
     }
     await first.body?.cancel().catch(() => {});
-    const renewed = await getLocationToken(tenantId, { rejectedToken: token });
     return call(renewed);
   }
 
@@ -256,7 +278,8 @@ export function createTokenService(deps: TokenServiceDeps) {
     const current = await store.readLocationState(tenantId).catch(hideStoreFailure);
     if (!current || current.status !== "connected") return false;
     if (current.expiresAt.getTime() - deps.now().getTime() >= minLifeMs) return false;
-    const renewed = await getLocationToken(tenantId, { rejectedToken: current.accessToken });
+    // Scheduled and claimed by its trigger, so it does not use the 401 claim.
+    const renewed = await resolveLocationToken(tenantId, { rejectedToken: current.accessToken });
     return renewed !== current.accessToken;
   }
 

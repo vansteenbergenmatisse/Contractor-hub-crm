@@ -59,6 +59,31 @@ describe("a 401 from HighLevel", () => {
   });
 });
 
+describe("a 401 on a token another request already replaced", () => {
+  it("retries with the stored new token, with no claim and no rotation", async () => {
+    const claim = vi.fn(async () => false);
+    const { tokens, refreshToken } = service(claim);
+    const call = vi.fn(async (token: string) => new Response("", { status: token === "old-access" ? 200 : 401 }));
+    expect((await tokens.withLocationToken("T1", async (token) => call(token === "old-access" ? "stale" : token))).status).toBe(401);
+    expect(refreshToken).not.toHaveBeenCalled();
+    const retried = vi.fn(async (token: string) => new Response("", { status: token === "old-access" ? 200 : 401 }));
+    const first = await tokens.getLocationToken("T1", { rejectedToken: "an-older-token" });
+    expect(first).toBe("old-access");
+    expect((await retried(first)).status).toBe(200);
+    expect(claim).toHaveBeenCalledTimes(1);
+    expect(refreshToken).not.toHaveBeenCalled();
+  });
+});
+
+describe("a direct forced refresh", () => {
+  it("cannot rotate without the claim", async () => {
+    const { tokens, refreshToken, updateLocationLocked } = service(async () => false);
+    await expect(tokens.getLocationToken("T1", { rejectedToken: "old-access" })).rejects.toMatchObject({ code: "unavailable" });
+    expect(refreshToken).not.toHaveBeenCalled();
+    expect(updateLocationLocked).not.toHaveBeenCalled();
+  });
+});
+
 describe("renewDueTokens fairness", () => {
   it("starts the location list at the chosen offset, after the agencies", async () => {
     vi.spyOn(console, "info").mockImplementation(() => {});
