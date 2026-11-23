@@ -39,3 +39,19 @@ export type PageState = {
 };
 
 export type FolderGroup = { folder: string; items: Automation[] };
+
+// Real workflows (read-only). The shape the highlevel adapter hands over; declared here so this
+// feature does not depend on the adapter.
+export type WorkflowRow = { id: string; name: string | null; status: string | null };
+export type AutomationsReader = (tenantId: string) => Promise<
+  | { ok: true; workflows: WorkflowRow[]; dropped: number; complete: boolean }
+  | { ok: false; reason: "reconnect" | "unavailable" | "not-enabled" }
+>;
+
+export type LiveWorkflow = { id: string; name: string; status: "published" | "draft" | "unknown" };
+export type AutomationsResult =
+  | { state: "ready"; workflows: LiveWorkflow[]; totals: { published: number; draft: number; all: number }; complete: boolean; dropped: number; loadedAt: string }
+  | { state: "empty" }
+  | { state: "reconnect" }
+  | { state: "unavailable" }
+  | { state: "not-enabled" };
