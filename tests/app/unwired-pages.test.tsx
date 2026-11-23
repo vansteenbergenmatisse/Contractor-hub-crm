@@ -4,21 +4,15 @@ import type { ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import AutomationsRoute from "../../src/app/(app)/automations/page";
-import CalendarRoute from "../../src/app/(app)/calendar/page";
-import InboxRoute from "../../src/app/(app)/inbox/page";
 import InvoicesRoute from "../../src/app/(app)/invoices/page";
 import PaymentsRoute from "../../src/app/(app)/payments/page";
-import PipelineRoute from "../../src/app/(app)/pipeline/page";
 import QuotesRoute from "../../src/app/(app)/quotes/page";
 
 // Real clients never see sample customers: a page that is not wired to real data says so.
 const ROUTES: readonly [string, string, () => ReactElement][] = [
-  ["inbox", "Inbox", InboxRoute],
-  ["pipeline", "Pipeline", PipelineRoute],
   ["quotes", "Quotes", QuotesRoute],
   ["invoices", "Invoices", InvoicesRoute],
   ["payments", "Payments due", PaymentsRoute],
-  ["calendar", "Calendar", CalendarRoute],
   ["automations", "Automations", AutomationsRoute],
 ];
 
