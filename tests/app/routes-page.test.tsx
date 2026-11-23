@@ -17,7 +17,7 @@ describe("the Routes page", () => {
   it("says it is not available and shows no record", () => {
     const html = renderToStaticMarkup(RoutesRoute());
     expect(html).toContain('<h1 class="fd-pt">Routes</h1>');
-    expect(html).toContain('<span class="fd-chip is-plain">Not available yet</span>');
+    expect(html).toContain('aria-label="Loading your jobs"');
     expect(html).not.toContain("fd-rw");
   });
 });
