@@ -1,4 +1,4 @@
-import type { HighLevelUser } from "@/features/highlevel";
+import { createHighLevelClient, type HighLevelUser } from "@/features/highlevel";
 import { readSourceUnproven, type GhlUserInput, type ProvisionResult } from "@/features/auth";
 import { emptyUserCounts, type UserCounts } from "../types";
 
@@ -81,7 +81,9 @@ export async function syncTenantUsers(
   if (options.mayDeactivate && users.length > 0) {
     const links = await deps.activeLinks(tenantId);
     const deletedIds = new Set(users.filter((u) => u.deleted).map((u) => u.id));
-    const gone = links.filter((link) => !(listed.has(link.ghlUserId) && !deletedIds.has(link.ghlUserId)));
+    // HighLevel still lists these people; they only have no email we can use.
+    const withoutEmail = createHighLevelClient.listedWithoutEmail(users);
+    const gone = links.filter((link) => !withoutEmail.has(link.ghlUserId) && !(listed.has(link.ghlUserId) && !deletedIds.has(link.ghlUserId)));
     if (links.length >= SUSPICIOUS_MIN_LINKS && gone.length > links.length / 2) {
       counts.suspicious += gone.length;
       console.warn(`Onboarding: ${gone.length} of ${links.length} users would be blocked at once; blocked nobody (partial HighLevel answer?)`);
