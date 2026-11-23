@@ -56,6 +56,12 @@ export type InviteServiceDeps = {
   emailSender: EmailSender;
   checkEligibility: (tenant: InviteTenant, email: string) => Promise<InviteEligibility>;
   createUser: (input: InvitedUserInput) => Promise<{ userId: string }>;
+  // The HighLevel link of an accepted invite, so the sync can later revoke the account. `insert`
+  // never changes a link that already exists.
+  links?: {
+    find(tenantId: string, ghlUserId: string): Promise<{ userId: string } | null>;
+    insert(tenantId: string, ghlUserId: string, userId: string): Promise<void>;
+  };
   store: {
     findTenant(tenantId: string): Promise<InviteTenant | null>;
     emailTaken(email: string): Promise<boolean>;
@@ -145,12 +151,25 @@ export function createInviteService(deps: InviteServiceDeps) {
     if (!isOpen(invite, deps.now())) throw new InviteError("invalid_invite");
     // The tenant must still be connected and the email must still be free at accept time.
     const tenant = await deps.store.findTenant(invite.tenantId);
-    if (!tenant || tenant.status !== "connected") throw new InviteError("invalid_invite");
+    if (!tenant || tenant.status !== "connected" || !tenant.companyId) throw new InviteError("invalid_invite");
     if (await deps.store.emailTaken(invite.email)) throw new InviteError("email_taken");
+    // The person may have left HighLevel since the invite was made. Checked before the claim, so a
+    // refusal or a failed lookup leaves the invite unused.
+    let eligibility: InviteEligibility;
+    try {
+      eligibility = await deps.checkEligibility(tenant, invite.email);
+    } catch {
+      throw new InviteError("failed");
+    }
+    if (!eligibility.eligible) throw new InviteError(eligibility.reason === "lookup_failed" ? "failed" : "not_eligible");
+    const hlUserId = eligibility.hlUserId;
+    // This HighLevel id already belongs to another account: leave that account alone.
+    if (deps.links && (await deps.links.find(invite.tenantId, hlUserId))) throw new InviteError("not_eligible");
     // The claim is the single-use gate: only one concurrent caller gets true.
     if (!(await deps.store.claimInvite(invite.id, deps.now()))) throw new InviteError("invalid_invite");
+    let created: { userId: string };
     try {
-      return await deps.createUser({
+      created = await deps.createUser({
         email: invite.email,
         name,
         password: input.password,
@@ -161,6 +180,13 @@ export function createInviteService(deps: InviteServiceDeps) {
       await deps.store.releaseInvite(invite.id).catch(() => {});
       throw new InviteError("failed");
     }
+    try {
+      await deps.links?.insert(invite.tenantId, hlUserId, created.userId);
+    } catch (error) {
+      // The account exists and the invite is spent. The sync links it by email on its next pass.
+      console.error("Invite: link not stored:", error instanceof Error ? error.name : "unknown error");
+    }
+    return created;
   }
 
   return { createInvite, previewInvite, acceptInvite };

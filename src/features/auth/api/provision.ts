@@ -62,9 +62,23 @@ export function mapGhlRole(role: string | null): Extract<Role, "owner" | "office
   return role?.toLowerCase() === "admin" ? "owner" : "office";
 }
 
+// The link's deleted mark is already cleared. If unblocking fails, put the mark back so the next sync
+// retries the restore. If that fails too the person stays blocked, which is the safe side.
+async function unblockOrRemark(deps: ProvisionDeps, input: GhlUserInput, userId: string, deletedAt: Date): Promise<void> {
+  try {
+    await deps.setDisabled(userId, false);
+  } catch (error) {
+    await deps.store.setLinkDeleted(input.tenantId, input.ghlUserId, deletedAt).catch((markError: unknown) => {
+      console.error("Onboarding: deleted mark not restored:", markError instanceof Error ? markError.name : "unknown error");
+    });
+    throw error;
+  }
+}
+
 export async function provisionGhlUser(deps: ProvisionDeps, input: GhlUserInput): Promise<ProvisionResult> {
   if (input.ghlRoleType?.toLowerCase() === "agency") return { outcome: "skipped_agency", userId: null };
   const role = mapGhlRole(input.ghlRole);
+  const roleKnown = input.ghlRole !== null && input.ghlRole !== undefined;
   const email = normalizeEmail(input.email);
   // An address HighLevel let through but that is not a plausible mailbox: no user, no mail.
   if (email.length > 254 || !EMAIL_PATTERN.test(email)) return { outcome: "skipped_invalid", userId: null };
@@ -77,14 +91,16 @@ export async function provisionGhlUser(deps: ProvisionDeps, input: GhlUserInput)
     if (user) {
       const patch: { name?: string; role?: Role } = {};
       if (input.name?.trim() && user.name !== name) patch.name = name;
-      if (user.role !== "admin" && user.role !== role) patch.role = role;
+      // An unknown HighLevel role says nothing about the person: their role stays.
+      if (roleKnown && user.role !== "admin" && user.role !== role) patch.role = role;
       if (patch.name || patch.role) await deps.updateUser(user.id, patch);
     }
     if (link.deletedAt) {
       // Only a disable made by this sync (the link was marked deleted) is undone. A user an admin
       // turned off by hand keeps that state: their link was never marked deleted.
+      const blockedAt = link.deletedAt; // read before the write clears it
       await deps.store.setLinkDeleted(input.tenantId, input.ghlUserId, null);
-      await deps.setDisabled(link.userId, false);
+      await unblockOrRemark(deps, input, link.userId, blockedAt);
       return { outcome: "restored", userId: link.userId };
     }
     return { outcome: "exists", userId: link.userId };
@@ -95,7 +111,11 @@ export async function provisionGhlUser(deps: ProvisionDeps, input: GhlUserInput)
     if (!existing) return null;
     if (existing.tenantId !== input.tenantId || existing.role === "admin") {
       const moved = await tryMoveAccount(deps.moves, input.moveProof, existing, {
-        tenantId: input.tenantId, ghlUserId: input.ghlUserId, role, email, mayRestore: input.mayRestore,
+        tenantId: input.tenantId,
+        ghlUserId: input.ghlUserId,
+        role: !roleKnown && existing.role !== "admin" ? existing.role : role,
+        email,
+        mayRestore: input.mayRestore,
       });
       if (moved === "moved") return { outcome: "moved", userId: existing.id };
       return { outcome: "skipped_conflict", userId: null, reason: moved };
@@ -106,9 +126,9 @@ export async function provisionGhlUser(deps: ProvisionDeps, input: GhlUserInput)
       if (input.mayRestore === false) return { outcome: "skipped_removed", userId: null };
       // HighLevel deleted and re-added this person (new id, same email): move the link, and undo the
       // block this sync put on them while the old id was missing.
-      const wasBlockedBySync = old.deletedAt !== null;
+      const blockedAt = old.deletedAt; // read before the relink clears it
       await deps.store.relinkUser(existing.id, input.tenantId, input.ghlUserId);
-      if (wasBlockedBySync) await deps.setDisabled(existing.id, false);
+      if (blockedAt !== null) await unblockOrRemark(deps, input, existing.id, blockedAt);
       return { outcome: "restored", userId: existing.id };
     }
     await deps.store.insertLink(input.tenantId, input.ghlUserId, existing.id);
@@ -147,7 +167,12 @@ export async function provisionGhlUser(deps: ProvisionDeps, input: GhlUserInput)
 export async function deactivateGhlUser(deps: ProvisionDeps, tenantId: string, ghlUserId: string): Promise<boolean> {
   const link = await deps.store.findLink(tenantId, ghlUserId);
   if (!link || link.deletedAt) return false;
-  await deps.store.setLinkDeleted(tenantId, ghlUserId, deps.now());
+  // Already off means an admin did it (or an earlier block half-finished). The link stays unmarked, so
+  // a return to HighLevel never turns this person back on.
+  const user = await deps.store.findUserById(link.userId);
+  if (user?.disabledAt) return false;
+  // Block first: if the mark then fails, the person is still locked out.
   await deps.setDisabled(link.userId, true);
+  await deps.store.setLinkDeleted(tenantId, ghlUserId, deps.now());
   return true;
 }
