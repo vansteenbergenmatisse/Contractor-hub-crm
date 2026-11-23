@@ -78,3 +78,56 @@ export type CalendarAction =
 // What the page needs from the business: its own booking link, the website (fallback for the link) and
 // the hours. Any of them may be "" (or null for the link) when the sub-account has no value.
 export type CalendarBusiness = { bookingJobUrl?: string | null; business_website_url: string; business_hours: string };
+
+// Real appointments (read-only). The shape the highlevel adapter hands over; declared here so this
+// feature does not depend on it (the server page injects the reader).
+export type CalendarEventRow = {
+  id: string;
+  calendarId: string;
+  calendarName: string | null;
+  title: string | null;
+  address: string | null;
+  status: string | null;
+  startMs: number;
+  endMs: number;
+};
+export type CalendarWeekReader = <R extends { startMs: number; endMs: number }>(
+  tenantId: string,
+  boundsFor: (timeZone: string) => R | null,
+) => Promise<
+  | { ok: true; timeZone: string; range: R; calendarCount: number; events: CalendarEventRow[]; dropped: number; complete: boolean }
+  | { ok: false; reason: "reconnect" | "unavailable" }
+>;
+
+// One appointment on one day. `start` and `len` are grid rows (clamped); the labels are the true times.
+export type LiveStop = {
+  id: string;
+  eventId: string;
+  day: number;
+  start: number;
+  len: number;
+  lane: number;
+  lanes: number;
+  name: string;
+  service: string;
+  address: string;
+  statusLabel: string;
+  startLabel: string;
+  endLabel: string;
+  past: boolean;
+};
+export type CalendarDayInfo = { index: number; short: string; num: number; long: string; aria: string; count: number };
+export type CalendarWeekInfo = {
+  timeZone: string;
+  weekStart: string;
+  prevWeek: string;
+  nextWeek: string;
+  todayDay: number | null;
+  rangeLabel: string;
+  days: CalendarDayInfo[];
+};
+export type CalendarResult =
+  | { state: "ready"; week: CalendarWeekInfo; stops: LiveStop[]; loadedAt: string; complete: boolean; dropped: number }
+  | { state: "empty"; week: CalendarWeekInfo; reason: "no-calendars" | "no-appointments" }
+  | { state: "reconnect" }
+  | { state: "unavailable" };

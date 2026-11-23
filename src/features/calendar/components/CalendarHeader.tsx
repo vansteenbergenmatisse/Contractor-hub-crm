@@ -1,5 +1,16 @@
 // The page title and its one line of help. Phone and computer get their own sentence.
-export function CalendarHeader() {
+export function CalendarHeader({ readOnly = false }: { readOnly?: boolean }) {
+  if (readOnly) {
+    return (
+      <section className="fd-phd fd-in" style={{ "--i": 0 } as React.CSSProperties}>
+        <h1 className="fd-pt">Calendar</h1>
+        <p className="fd-pw">
+          <span className="fd-wd">Your appointments, by day. Press a stop to see the time and address.</span>
+          <span className="fd-wm">Your appointments, by day. Tap a stop to see where it is.</span>
+        </p>
+      </section>
+    );
+  }
   return (
     <section className="fd-phd fd-in" style={{ "--i": 0 } as React.CSSProperties}>
       <h1 className="fd-pt">Calendar</h1>

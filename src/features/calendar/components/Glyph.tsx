@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 // The few icons the calendar draws that the shell's icon set does not have. Same style as the
 // design: 24x24, round caps, drawn inline.
 const PATHS = {
+  alert: (<><circle cx="12" cy="12" r="9" /><path d="M12 7.5v5M12 16.2v.3" /></>),
   check: <path d="m5 12.5 4.5 4.5L19 7.5" />,
   pin: (<><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21z" /><circle cx="12" cy="9.5" r="2.5" /></>),
   clock: (<><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>),

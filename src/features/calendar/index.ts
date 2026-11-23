@@ -15,3 +15,10 @@ export { dayAtX, dropStart, slotAtY } from "./api/grid";
 export { useStopDrag } from "./hooks/use-stop-drag";
 export { addOptions, bookingLink, buildView, confirmSafeButton, daySummary, rescheduleOptions, siteOf } from "./api/view";
 export type { CalendarAction, CalendarBusiness, CalendarState, Placement, Stop, StopKind } from "./types";
+
+// The real, read-only page.
+export { CalendarLivePage } from "./components/CalendarLivePage";
+export { CalendarSkeleton } from "./components/CalendarSkeleton";
+export { loadCalendar } from "./api/load-calendar";
+export { weekRange } from "./api/live-week";
+export type { CalendarEventRow, CalendarResult, CalendarWeekInfo, CalendarWeekReader, LiveStop } from "./types";
