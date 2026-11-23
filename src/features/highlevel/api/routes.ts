@@ -201,7 +201,7 @@ export async function readTenantCustomValuesStored(tenantId: string): Promise<Cu
 // One page of the tenant's newest contacts, read-only. The tenant id comes from the server session.
 // Never throws: a failure is an answer the page can show.
 // `storedTokenOnly` (an admin's client view) never refreshes or mints a token.
-export async function readTenantContacts(tenantId: string, options: { storedTokenOnly?: boolean } = {}): Promise<ContactsRead> {
+export async function readTenantContacts(tenantId: string, options: { storedTokenOnly?: boolean; ownEmail?: string | null } = {}): Promise<ContactsRead> {
   let env: EnvValues<"highlevel">;
   try {
     env = parseEnv("highlevel");
@@ -218,6 +218,7 @@ export async function readTenantContacts(tenantId: string, options: { storedToke
     },
     tenantId,
     CONTACTS_PAGE_SIZE,
+    options.ownEmail,
   );
 }
 
@@ -225,13 +226,15 @@ export async function readTenantContacts(tenantId: string, options: { storedToke
 // hitRateLimit, already imports this feature.
 export function createTenantContactsReader(
   hit: (key: string, limit: number, windowMs: number, now: Date) => Promise<boolean>,
-  viewer?: { viewerId: string },
+  // `viewerId`: an admin's read-only client view. `ownEmail`: the business's address, left out of leads.
+  options: { viewerId?: string; ownEmail?: string | null } = {},
 ): (tenantId: string) => Promise<ContactsRead> {
-  if (viewer) {
-    const read = (tenantId: string) => readTenantContacts(tenantId, { storedTokenOnly: true });
-    return (tenantId) => readContactsThrottled({ hit, read, now: () => new Date() }, tenantId, `highlevel-contacts-view:${viewer.viewerId}`);
+  const { viewerId, ownEmail } = options;
+  if (viewerId) {
+    const read = (tenantId: string) => readTenantContacts(tenantId, { storedTokenOnly: true, ownEmail });
+    return (tenantId) => readContactsThrottled({ hit, read, now: () => new Date() }, tenantId, `highlevel-contacts-view:${viewerId}`);
   }
-  return (tenantId) => readContactsThrottled({ hit, read: (id) => readTenantContacts(id), now: () => new Date() }, tenantId);
+  return (tenantId) => readContactsThrottled({ hit, read: (id) => readTenantContacts(id, { ownEmail }), now: () => new Date() }, tenantId);
 }
 
 export async function oauthStartRoute(request: Request, guard?: AdminGuard): Promise<Response> {

@@ -20,7 +20,12 @@ export const chunkOfStage = (stage: number): number => Math.floor(stage / CHUNK_
 export const slotOfStage = (stage: number): number => stage % CHUNK_SIZE;
 
 export function chunkLabel(chunk: BoardChunk, stageCount: number): string {
-  return stageCount <= CHUNK_SIZE ? "All stages" : `Stages ${chunk.first + 1}-${chunk.last + 1}`;
+  if (stageCount <= CHUNK_SIZE) return "All stages";
+  return chunk.first === chunk.last ? `Stage ${chunk.first + 1}` : `Stages ${chunk.first + 1}-${chunk.last + 1}`;
+}
+
+export function chunkSpan(chunk: BoardChunk, names: readonly string[]): string {
+  return chunk.first === chunk.last ? names[chunk.first] : `${names[chunk.first]} to ${names[chunk.last]}`;
 }
 
 export function liveSearchRows(columns: readonly LiveColumn[], pipelineId: string): SearchRow[] {

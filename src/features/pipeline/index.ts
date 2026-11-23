@@ -9,7 +9,7 @@ export { PipelinePage } from "./components/PipelinePage";
 export { LivePipelinePage } from "./components/LivePipelinePage";
 export { LivePipelineSkeleton } from "./components/LivePipelineSkeleton";
 export { loadPipeline } from "./api/load-pipeline";
-export { boardChunks, chunkOfStage, liveSearchRows } from "./api/live-board";
+export { boardChunks, chunkLabel, chunkOfStage, chunkSpan, liveSearchRows } from "./api/live-board";
 export type { LiveCard, LiveColumn, PipelineBoardAnswer, PipelineBoardReader, PipelineChoice, PipelineResult } from "./types";
 
 // Rows the global search can find (sample cards, Phase 2).

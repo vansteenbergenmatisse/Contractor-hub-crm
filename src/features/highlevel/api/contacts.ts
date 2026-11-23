@@ -28,9 +28,12 @@ function parseRow(raw: unknown, locationId: string): HighLevelContact | null {
   if (!id || !dateAdded || Number.isNaN(Date.parse(dateAdded))) return null;
   if (row.locationId !== undefined && row.locationId !== locationId) return null;
   const joined = [text(row.firstName), text(row.lastName)].filter(Boolean).join(" ");
+  const full = text(row.contactName) ?? text(row.name);
+  // The same name in lowercase: the first and last name carry the capitals the person typed.
+  const lowered = !!full && full === full.toLowerCase() && full === joined.toLowerCase();
   return {
     id,
-    name: text(row.contactName) ?? text(row.name) ?? (joined || null),
+    name: lowered ? joined : full ?? (joined || null),
     address: text(row.address) ?? text(row.address1),
     city: text(row.city),
     state: text(row.state),
@@ -40,10 +43,19 @@ function parseRow(raw: unknown, locationId: string): HighLevelContact | null {
   };
 }
 
+// The business's own contact (its email, or its email used as the name) is not a lead. The email is
+// only compared here and never leaves the parser.
+function isOwnContact(raw: unknown, own: string): boolean {
+  if (typeof raw !== "object" || raw === null) return false;
+  const row = raw as Record<string, unknown>;
+  return [row.email, row.contactName, row.name].some((value) => text(value)?.toLowerCase() === own);
+}
+
 // Unknown fields are ignored; a malformed row is dropped and counted. Throws when the answer has no
 // contacts list. `total` (or `count`) and `hasMore` tell whether anything lies beyond this page.
 // Only the first `pageLimit` rows are read; an answer with more counts as cut off.
-export function parseContactSearch(json: unknown, locationId: string, pageLimit: number): ContactsPage {
+export function parseContactSearch(json: unknown, locationId: string, pageLimit: number, ownEmail?: string | null): ContactsPage {
+  const own = text(ownEmail)?.toLowerCase() ?? null;
   if (typeof json !== "object" || json === null || Array.isArray(json)) {
     throw new Error("HighLevel contact search returned an unexpected response.");
   }
@@ -53,6 +65,7 @@ export function parseContactSearch(json: unknown, locationId: string, pageLimit:
   const seen = new Set<string>();
   let dropped = 0;
   for (const raw of body.contacts.slice(0, pageLimit)) {
+    if (own && isOwnContact(raw, own)) continue;
     const row = parseRow(raw, locationId);
     if (!row || seen.has(row.id)) dropped += 1;
     else {
@@ -140,7 +153,7 @@ export async function readContactsThrottled(deps: ThrottleDeps, tenantId: string
 
 // One page, one attempt: a 429 is not retried during a page render. The only retry is the token
 // service's single refresh after a 401.
-export async function readContactsPage(deps: Deps, tenantId: string, pageLimit = CONTACTS_PAGE_SIZE): Promise<ContactsRead> {
+export async function readContactsPage(deps: Deps, tenantId: string, pageLimit = CONTACTS_PAGE_SIZE, ownEmail?: string | null): Promise<ContactsRead> {
   try {
     const locationId = await deps.readLocationId(tenantId);
     if (!locationId) return { ok: false, reason: "reconnect" };
@@ -149,7 +162,7 @@ export async function readContactsPage(deps: Deps, tenantId: string, pageLimit =
       await response.body?.cancel().catch(() => {});
       throw new HighLevelHttpError("HighLevel contact search failed.", response.status);
     }
-    return { ok: true, ...parseContactSearch(await readLimitedJson(response), locationId, pageLimit) };
+    return { ok: true, ...parseContactSearch(await readLimitedJson(response), locationId, pageLimit, ownEmail) };
   } catch (error) {
     return failure(error);
   }

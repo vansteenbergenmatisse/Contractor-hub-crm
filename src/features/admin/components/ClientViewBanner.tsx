@@ -38,6 +38,7 @@ export function ClientViewBanner({ name }: { name: string }) {
         justifyContent: "space-between",
         gap: 8,
         padding: "8px 16px",
+        marginBottom: 16,
         background: "#1f2933",
         color: "#ffffff",
         fontSize: 14,

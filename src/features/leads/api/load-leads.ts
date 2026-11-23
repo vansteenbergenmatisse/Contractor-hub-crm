@@ -33,7 +33,8 @@ export async function loadLeads(
   }
   if (!answer.ok) return { state: answer.reason };
   if (answer.dropped > 0) console.warn(`Leads: left out ${answer.dropped} malformed contact rows.`);
-  if (answer.contacts.length === 0) return answer.dropped > 0 ? { state: "unavailable" } : { state: "empty" };
+  // No row on a page that was cut off: real leads may lie beyond it, so it must not read as empty.
+  if (answer.contacts.length === 0) return answer.dropped > 0 || !answer.complete ? { state: "unavailable" } : { state: "empty" };
   const leads = answer.contacts
     .map(toLead)
     .sort((a, b) => Date.parse(b.receivedAt ?? "") - Date.parse(a.receivedAt ?? ""));

@@ -2,7 +2,7 @@
 
 import { useId, useMemo, useRef } from "react";
 import { PageAction, useHorizontalSwipe, useRowFocus, useSearchRows } from "@/features/app-shell";
-import { boardChunks, chunkLabel, chunkOfStage, liveSearchRows, slotOfStage } from "../api/live-board";
+import { boardChunks, chunkLabel, chunkOfStage, chunkSpan, liveSearchRows, slotOfStage } from "../api/live-board";
 import { useLiveBoard } from "../hooks/use-live-board";
 import type { PipelineResult } from "../types";
 import { Arrow } from "./Arrow";
@@ -64,7 +64,7 @@ export function LivePipelineBoard({ result }: { result: Ready }) {
                 <button type="button" className={"fd-sgb" + (j === inView ? " is-on" : "")} aria-pressed={j === inView} onClick={() => b.pick(c.first)}>
                   <span className="fd-sgn">{label}</span>
                   <span className="fd-sgc">{count(c.first, c.last)}</span>
-                  <span className="fd-sgs">{`${columns[c.first].name} to ${columns[c.last].name}`}</span>
+                  <span className="fd-sgs">{chunkSpan(c, columns.map((column) => column.name))}</span>
                 </button>
                 <div className="fd-sgt">
                   {columns.slice(c.first, c.last + 1).map((column, n) => {
