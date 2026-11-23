@@ -3,8 +3,10 @@ import { isSettingsKeyAllowed, validateValues, type CustomValues, type SaveResul
 import { isSafeToWrite } from "./value-rules";
 
 const UNITS_AT_ONCE = 3;
-// No new batch starts after this. With 10-second calls the save ends inside the route's 60 seconds.
+// With 10-second calls, no new batch after 25 seconds and no restore after 35 leave room for the last
+// write and the confirming read inside the route's 60 seconds.
 const TIME_BUDGET_MS = 25_000;
+const RESTORE_CUTOFF_MS = 35_000;
 const COLOR_PAIR = ["main_color", "text_on_main_color"] as const;
 
 export type AuditStart = { tenantId: string; actorId: string; key: string; previousValue: string; newValue: string };
@@ -24,7 +26,8 @@ export type SaveDeps = {
 
 type Input = { tenantId: string; actorId: string; changes: readonly ValueChange[] };
 type Candidate = { key: string; value: string; previous: string; target: CustomValueDetail };
-type Written = { candidate: Candidate; auditId: string; http: CustomValueWriteOutcome; restored: boolean };
+// `unresolved`: part of a color pair whose final state cannot be proven, so it is never called saved.
+type Written = { candidate: Candidate; auditId: string; http: CustomValueWriteOutcome; unresolved: boolean; restoreAuditId: string | null; restoreHttp: CustomValueWriteOutcome | null };
 type Results = Map<string, SaveResult>;
 
 const valuesOf = (rows: readonly CustomValueDetail[]): CustomValues => Object.fromEntries(rows.map((row) => [row.key, row.value.trim()]));
@@ -67,7 +70,7 @@ async function writeAudited(input: Input, candidate: Candidate, deps: SaveDeps):
   } catch {
     console.error("Settings save failed: step=update");
   }
-  return { candidate, auditId, http, restored: false };
+  return { candidate, auditId, http, unresolved: false, restoreAuditId: null, restoreHttp: null };
 }
 
 async function closeAudit(id: string, outcome: AuditOutcome, deps: SaveDeps) {
@@ -80,28 +83,27 @@ async function closeAudit(id: string, outcome: AuditOutcome, deps: SaveDeps) {
 
 async function restore(input: Input, written: Written, deps: SaveDeps): Promise<void> {
   const { candidate } = written;
-  let auditId: string;
   try {
-    auditId = await deps.begin({
+    written.restoreAuditId = await deps.begin({
       tenantId: input.tenantId, actorId: input.actorId, key: candidate.key,
       previousValue: candidate.value, newValue: candidate.previous,
     });
   } catch {
     console.error("Settings save failed: step=audit-start");
+    written.unresolved = true;
     return;
   }
-  let outcome: CustomValueWriteOutcome = "retry";
+  written.restoreHttp = "no_answer";
   try {
-    outcome = await deps.update(input.tenantId, candidate.target, candidate.previous);
+    written.restoreHttp = await deps.update(input.tenantId, candidate.target, candidate.previous);
   } catch {
     console.error("Settings save failed: step=restore");
   }
-  written.restored = outcome === "saved";
-  await closeAudit(auditId, outcome === "saved" ? "saved" : "failed", deps);
 }
 
 // The two colors must not end up half changed: a new main color with the old text can be unreadable.
-async function writePair(input: Input, first: Candidate, second: Candidate, deps: SaveDeps, out: Results): Promise<Written[]> {
+// The first is restored only when the second certainly did not apply and nobody edited the first.
+async function writePair(input: Input, first: Candidate, second: Candidate, started: number, deps: SaveDeps, out: Results): Promise<Written[]> {
   const a = await writeAudited(input, first, deps);
   if (!a) {
     out.set(first.key, { key: first.key, status: "retry" });
@@ -109,20 +111,37 @@ async function writePair(input: Input, first: Candidate, second: Candidate, deps
     return [];
   }
   if (a.http !== "saved") {
+    a.unresolved = a.http === "no_answer";
     out.set(second.key, { key: second.key, status: "retry" });
     return [a];
   }
   const b = await writeAudited(input, second, deps);
   if (b?.http === "saved") return [a, b];
   if (!b) out.set(second.key, { key: second.key, status: "retry" });
-  else {
-    // An error answer can follow a write that applied. Only a read can tell.
-    const fresh = await safeRead(input.tenantId, deps);
-    if (!fresh.ok) return [a, b];
-    if (valuesOf(fresh.values)[second.key] === second.value) return [a, b];
+  const list = b ? [a, b] : [a];
+  const fresh = await safeRead(input.tenantId, deps);
+  if (!fresh.ok) {
+    a.unresolved = true;
+    if (b) b.unresolved = b.http === "no_answer";
+    return list;
+  }
+  const now = valuesOf(fresh.values);
+  if (b && now[second.key] === second.value) return list;
+  if (b?.http === "no_answer") {
+    a.unresolved = true;
+    b.unresolved = true;
+    return list;
+  }
+  if (now[first.key] !== first.value) {
+    a.unresolved = true;
+    return list;
+  }
+  if (deps.now() - started > RESTORE_CUTOFF_MS) {
+    a.unresolved = true;
+    return list;
   }
   await restore(input, a, deps);
-  return b ? [a, b] : [a];
+  return list;
 }
 
 async function safeRead(tenantId: string, deps: SaveDeps): Promise<CustomValueRead> {
@@ -133,16 +152,21 @@ async function safeRead(tenantId: string, deps: SaveDeps): Promise<CustomValueRe
   }
 }
 
-// What HighLevel holds now decides the result, not the answer to the PUT.
-function confirmed(written: Written, now: CustomValues | null): { status: SaveStatus; audit: AuditOutcome } {
-  if (!now) return { status: "unknown", audit: "unknown" };
-  const { candidate, http, restored } = written;
+type Settled = { status: SaveStatus; audit: AuditOutcome; restoreAudit: AuditOutcome };
+
+// What HighLevel holds now decides the result, not the answer to the PUT. No answer with the old value
+// is unknown, because the write can still land.
+function confirmed(written: Written, now: CustomValues | null): Settled {
+  const unknown: Settled = { status: "unknown", audit: "unknown", restoreAudit: "unknown" };
+  if (!now) return unknown;
+  const { candidate, http, unresolved, restoreAuditId, restoreHttp } = written;
   const current = now[candidate.key];
   const previous = candidate.previous.trim();
-  if (restored) return current === previous ? { status: "retry", audit: "reverted" } : { status: "unknown", audit: "unknown" };
-  if (current === candidate.value) return { status: "saved", audit: "saved" };
-  if (current !== previous || http === "saved") return { status: "unknown", audit: "unknown" };
-  return { status: http, audit: http === "retry" ? "failed" : http };
+  if (restoreAuditId) return current === previous && restoreHttp !== "no_answer" ? { status: "retry", audit: "reverted", restoreAudit: "saved" } : unknown;
+  if (unresolved) return unknown;
+  if (current === candidate.value) return { status: "saved", audit: "saved", restoreAudit: "saved" };
+  if (current !== previous || http === "saved" || http === "no_answer") return unknown;
+  return { status: http, audit: http === "retry" ? "failed" : http, restoreAudit: "failed" };
 }
 
 function toUnits(candidates: readonly Candidate[]): Candidate[][] {
@@ -177,13 +201,13 @@ function stillClean(unit: readonly Candidate[], rows: readonly CustomValueDetail
   return null;
 }
 
-async function runSave(input: Input, deps: SaveDeps): Promise<{ results: SaveResult[] }> {
+async function runSave(input: Input, deps: SaveDeps): Promise<{ results: SaveResult[]; keepLease: boolean }> {
   const { tenantId, changes } = input;
   const started = deps.now();
   const read = await safeRead(tenantId, deps);
   if (!read.ok) {
     const status = read.reason;
-    return { results: changes.map(({ key }) => ({ key, status })) };
+    return { results: changes.map(({ key }) => ({ key, status })), keepLease: false };
   }
   const byKey = new Map(read.values.map((row) => [row.key, row]));
   const current = valuesOf(read.values);
@@ -212,6 +236,7 @@ async function runSave(input: Input, deps: SaveDeps): Promise<{ results: SaveRes
   });
   const units = toUnits(writable);
   const written: Written[] = [];
+  let keepLease = false;
   for (let i = 0; i < units.length; i += UNITS_AT_ONCE) {
     let batch: Candidate[][] = units.slice(i, i + UNITS_AT_ONCE);
     if (i > 0) {
@@ -226,7 +251,7 @@ async function runSave(input: Input, deps: SaveDeps): Promise<{ results: SaveRes
       });
     }
     const done = await Promise.all(batch.map(async (unit) => {
-      if (unit.length === 2) return writePair(input, unit[0], unit[1], deps, out);
+      if (unit.length === 2) return writePair(input, unit[0], unit[1], started, deps, out);
       const one = await writeAudited(input, unit[0], deps);
       if (!one) out.set(unit[0].key, { key: unit[0].key, status: "retry" });
       return one ? [one] : [];
@@ -237,9 +262,12 @@ async function runSave(input: Input, deps: SaveDeps): Promise<{ results: SaveRes
     const after = await safeRead(tenantId, deps);
     const now = after.ok ? valuesOf(after.values) : null;
     for (const item of written) {
-      const { status, audit } = confirmed(item, now);
+      const { status, audit, restoreAudit } = confirmed(item, now);
       out.set(item.candidate.key, { key: item.candidate.key, status });
       await closeAudit(item.auditId, audit, deps);
+      if (item.restoreAuditId) await closeAudit(item.restoreAuditId, restoreAudit, deps);
+      // A call with no answer can still land: the lease stays until it expires, so no later save races it.
+      if (status !== "saved" && (item.http === "no_answer" || item.restoreHttp === "no_answer")) keepLease = true;
     }
     try {
       deps.invalidate(tenantId);
@@ -247,7 +275,7 @@ async function runSave(input: Input, deps: SaveDeps): Promise<{ results: SaveRes
       console.error("Settings save failed: step=cache");
     }
   }
-  return { results: changes.map(({ key }) => out.get(key) as SaveResult) };
+  return { results: changes.map(({ key }) => out.get(key) as SaveResult), keepLease };
 }
 
 // Saves the owner's changes to the tenant's sub-account. Never creates or deletes a custom value and
@@ -261,9 +289,12 @@ export async function saveCustomValues(input: Input, deps: SaveDeps): Promise<{ 
     return { results: input.changes.map(({ key }) => ({ key, status: "retry" as const })) };
   }
   if (!holder) return { results: input.changes.map(({ key }) => ({ key, status: "busy" as const })) };
+  let keepLease = false;
   try {
-    return await runSave(input, deps);
+    const answer = await runSave(input, deps);
+    keepLease = answer.keepLease;
+    return { results: answer.results };
   } finally {
-    await deps.release(input.tenantId, holder).catch(() => console.error("Settings save failed: step=lease-release"));
+    if (!keepLease) await deps.release(input.tenantId, holder).catch(() => console.error("Settings save failed: step=lease-release"));
   }
 }

@@ -15,7 +15,8 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE = /^[+\d().\-\s]{3,25}$/;
 const COORDINATE = /^-?\d{1,3}(\.\d+)?$/;
 const HOURS_KEY = /^business_hours_[a-z]+_(open|close)$/;
-const HOURS = /^(closed|\d{1,2}(:\d{2})?(\s?(am|pm))?)$/i;
+// The format the brand reader can show: 24-hour HH:MM, or "closed".
+const HOURS = /^(closed|([01]\d|2[0-3]):[0-5]\d)$/i;
 
 function isSafeLink(value: string): boolean {
   if (value.includes("'") || !/^https:\/\/\S+$/i.test(value)) return false;

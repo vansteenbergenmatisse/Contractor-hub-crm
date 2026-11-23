@@ -33,7 +33,8 @@ Not verified on a real response: the PUT answer, whether stored tokens hold `loc
 - A PUT is never retried and never forces a token refresh.
 - Every write is read back. The read decides `saved`; an unconfirmed write is audited and shown as `unknown`.
 - One save per tenant at a time (90-second lease). A later batch re-reads first, and no batch starts after 25 seconds.
-- `main_color` and `text_on_main_color` are written as a pair. If the second fails, the first is restored with its own audit row.
+- `main_color` and `text_on_main_color` are written as a pair. The first is restored, with its own audit row, only when the second certainly did not apply and the first was not edited meanwhile. Otherwise the pair is reported as unconfirmed.
+- A timeout or 5xx may still land, so it is never reported as "did not save", and the tenant's lease stays until it expires.
 
 ## Disable and rollback
 

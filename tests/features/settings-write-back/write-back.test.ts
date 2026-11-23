@@ -11,7 +11,7 @@ const VALUES = [
   detail("business_hours_saturday_close", "12:00"), detail("0_webhook_url_form", "https://hook.test"),
 ];
 
-// A small fake HighLevel: `fail` answers an error without applying, `applyThenFail` applies and then errors.
+// A small fake HighLevel: `fail` answers without applying, `applyThenFail` applies and gives no answer.
 function deps(options: { fail?: Record<string, CustomValueWriteOutcome>; applyThenFail?: string[] } = {}) {
   const { fail = {}, applyThenFail = [] } = options;
   const store = new Map(VALUES.map((row) => [row.key, { ...row }]));
@@ -23,7 +23,7 @@ function deps(options: { fail?: Record<string, CustomValueWriteOutcome>; applyTh
       const [, target, value] = args;
       if (fail[target.key]) return fail[target.key];
       (store.get(target.key) as { value: string }).value = value;
-      return applyThenFail.includes(target.key) ? "retry" : "saved";
+      return applyThenFail.includes(target.key) ? "no_answer" : "saved";
     }),
     begin: vi.fn<SaveDeps["begin"]>(async () => `audit-${(audits += 1)}`),
     finish: vi.fn<SaveDeps["finish"]>(async () => {}),
@@ -101,6 +101,9 @@ describe("saveCustomValues", () => {
     ["letters in a phone", "business_phone_number", "call me"],
     ["a latitude off the globe", "business_latitude", "120"],
     ["text in hours", "business_hours_weekdays_open", "whenever"],
+    ["12-hour time the app cannot read", "business_hours_weekdays_open", "5pm"],
+    ["a bare hour", "business_hours_weekdays_open", "25"],
+    ["an impossible time", "business_hours_weekdays_open", "99:99"],
   ])("refuses %s", async (_name, key, value) => {
     const d = deps();
     expect(await status(d, key, value)).toBe("invalid");
@@ -112,7 +115,7 @@ describe("saveCustomValues", () => {
     ["business_email", "office@example.test"],
     ["business_latitude", "-48.49122"],
     ["business_hours_weekdays_open", "00:00"],
-    ["business_hours_weekdays_open", "8:30 AM"],
+    ["business_hours_weekdays_open", "17:30"],
     ["business_hours_weekdays_open", "Closed"],
     ["seasonal_offer_text", "Fall leaf cleanup, $25 off. Don't wait!"],
     ["business_website_url", "https://a.test/page?x=1"],
@@ -140,6 +143,13 @@ describe("saveCustomValues", () => {
     const d = deps({ applyThenFail: ["business_phone_number"] });
     expect((await save(d, [phone("222")])).results[0].status).toBe("saved");
     expect(d.finish).toHaveBeenCalledWith("audit-1", "saved");
+  });
+
+  it("calls a write with no answer and the old value unknown, and keeps the lease until it expires", async () => {
+    const d = deps({ fail: { business_phone_number: "no_answer" } });
+    expect((await save(d, [phone("222")])).results[0].status).toBe("unknown");
+    expect(d.finish).toHaveBeenCalledWith("audit-1", "unknown");
+    expect(d.release).not.toHaveBeenCalled();
   });
 
   it("does not claim saved when a 2xx did not change the value", async () => {
@@ -254,6 +264,50 @@ describe("saveCustomValues", () => {
       expect(d.store.get("main_color")?.value).toBe("#111111");
       expect(d.begin).toHaveBeenCalledWith(expect.objectContaining({ key: "main_color", previousValue: "#222222", newValue: "#111111" }));
       expect(d.finish).toHaveBeenCalledWith("audit-1", "reverted");
+      expect(d.finish).toHaveBeenCalledWith("audit-3", "saved");
+    });
+
+    it("reports the pair as unconfirmed when the first has no answer but applied", async () => {
+      const d = deps({ applyThenFail: ["main_color"] });
+      expect((await save(d, pair)).results.map((r) => r.status)).toEqual(["unknown", "retry"]);
+      expect(d.update).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not restore while the second has no answer", async () => {
+      const d = deps({ fail: { text_on_main_color: "no_answer" } });
+      expect((await save(d, pair)).results.map((r) => r.status)).toEqual(["unknown", "unknown"]);
+      expect(d.update).toHaveBeenCalledTimes(2);
+      expect(d.store.get("main_color")?.value).toBe("#222222");
+      expect(d.release).not.toHaveBeenCalled();
+    });
+
+    it("does not restore over a newer edit made in HighLevel", async () => {
+      const d = deps({ fail: { text_on_main_color: "rejected" } });
+      const real = d.update.getMockImplementation() as SaveDeps["update"];
+      d.update.mockImplementation(async (...args) => {
+        const answer = await real(...args);
+        if (args[1].key === "text_on_main_color") (d.store.get("main_color") as { value: string }).value = "#333333";
+        return answer;
+      });
+      expect((await save(d, pair)).results[0].status).toBe("unknown");
+      expect(d.update).toHaveBeenCalledTimes(2);
+      expect(d.store.get("main_color")?.value).toBe("#333333");
+    });
+
+    it("skips the restore when too little time is left, and says it is unconfirmed", async () => {
+      const d = deps({ fail: { text_on_main_color: "rejected" } });
+      d.now.mockReturnValueOnce(0).mockReturnValue(60_000);
+      expect((await save(d, pair)).results[0].status).toBe("unknown");
+      expect(d.update).toHaveBeenCalledTimes(2);
+    });
+
+    it("settles the restore's audit row from the final read", async () => {
+      const d = deps({ fail: { text_on_main_color: "rejected" } });
+      const real = d.update.getMockImplementation() as SaveDeps["update"];
+      d.update.mockImplementation(async (...args) => (args[2] === "#111111" ? "saved" : real(...args)));
+      expect((await save(d, pair)).results[0].status).toBe("unknown");
+      expect(d.finish).toHaveBeenCalledWith("audit-3", "unknown");
+      expect(d.finish).toHaveBeenCalledWith("audit-1", "unknown");
     });
 
     it("keeps both when the second applied despite an error answer", async () => {

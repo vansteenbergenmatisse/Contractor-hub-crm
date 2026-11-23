@@ -7,7 +7,8 @@ const MAX_LIST_BYTES = 5 * 1024 * 1024;
 const FIELD_KEY = /^\{\{\s*custom_values\.([A-Za-z0-9_]+)\s*\}\}$/;
 
 export type CustomValueDetail = { id: string; key: string; name: string; value: string };
-export type CustomValueWriteOutcome = "saved" | "rejected" | "permission" | "retry";
+// `retry`: HighLevel answered that it did not apply. `no_answer`: a timeout or 5xx, so it may have.
+export type CustomValueWriteOutcome = "saved" | "rejected" | "permission" | "retry" | "no_answer";
 export type CustomValueRead = { ok: true; values: CustomValueDetail[] } | { ok: false; reason: "permission" | "retry" };
 
 export type CustomValueAdapterDeps = {
@@ -45,7 +46,7 @@ function outcomeOfStatus(status: number): CustomValueWriteOutcome {
   if (status >= 200 && status < 300) return "saved";
   if (status === 400 || status === 422) return "rejected";
   if (status === 401 || status === 403) return "permission";
-  return "retry";
+  return status >= 500 ? "no_answer" : "retry";
 }
 
 function outcomeOfError(step: string, error: unknown): "permission" | "retry" {
@@ -93,7 +94,9 @@ export function createCustomValueAdapter(deps: CustomValueAdapterDeps) {
         if (outcome !== "saved") console.error(`HighLevel custom value update failed: status=${response.status}`);
         return outcome;
       } catch (error) {
-        return outcomeOfError("update", error);
+        // A token failure happens before the call is sent. Anything else may follow a sent request.
+        const outcome = outcomeOfError("update", error);
+        return error instanceof TokenServiceError ? outcome : "no_answer";
       }
     },
   };

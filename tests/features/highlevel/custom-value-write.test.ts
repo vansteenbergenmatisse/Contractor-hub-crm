@@ -79,9 +79,14 @@ describe("the adapter", () => {
   });
 
   it.each([
-    [400, "rejected"], [422, "rejected"], [401, "permission"], [403, "permission"], [404, "retry"], [429, "retry"], [500, "retry"], [503, "retry"],
+    [400, "rejected"], [422, "rejected"], [401, "permission"], [403, "permission"], [404, "retry"], [429, "retry"], [500, "no_answer"], [503, "no_answer"],
   ] as const)("maps status %i to %s", async (status, outcome) => {
     expect(await adapter({ requestUpdate: async () => json({}, status) }).update("t", detail, "x")).toBe(outcome);
+  });
+
+  it("treats a call with no answer as possibly applied", async () => {
+    const requestUpdate = async () => { throw new HighLevelHttpError("timeout", null); };
+    expect(await adapter({ requestUpdate }).update("t", detail, "x")).toBe("no_answer");
   });
 
   it("calls the update once on a failure", async () => {
