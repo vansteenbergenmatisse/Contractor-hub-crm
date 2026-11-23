@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState, type DragEvent } from "react";
-import { IMAGE_SAVED, imageMessage } from "../api/image-messages";
+import { imageFailureMessage, imageSavedMessage } from "../api/image-messages";
 import type { ImageAnswer, ImageKind, ImageUploader, PrepareImage } from "../types";
 
-type Ready = { blob: Blob; previewUrl: string; summary: string };
+// `file`: the owner's original, kept so it can be encoded again to the current file's format.
+type Ready = { file: File; blob: Blob; previewUrl: string; summary: string };
 type Props = {
   fieldKey: string;
   label: string;
@@ -29,7 +30,7 @@ export function ImageChange({ fieldKey, label, kind, current, dirty, upload, pre
   const [ready, setReady] = useState<Ready | null>(null);
   const [busy, setBusy] = useState<"preparing" | "saving" | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
+  const [doneText, setDoneText] = useState<string | null>(null);
   const shown = useRef<string | null>(null);
   useEffect(() => () => {
     if (shown.current) URL.revokeObjectURL(shown.current);
@@ -53,11 +54,11 @@ export function ImageChange({ fieldKey, label, kind, current, dirty, upload, pre
   async function take(file: File | undefined) {
     if (!file || busy) return;
     setError(null);
-    setDone(false);
+    setDoneText(null);
     setBusy("preparing");
     try {
       const result = await prepare(file, kind);
-      if (result.ok) showReady({ blob: result.blob, previewUrl: result.previewUrl, summary: result.summary });
+      if (result.ok) showReady({ file, blob: result.blob, previewUrl: result.previewUrl, summary: result.summary });
       else setError(result.message);
     } catch {
       setError("This file could not be read. Try another one.");
@@ -74,6 +75,14 @@ export function ImageChange({ fieldKey, label, kind, current, dirty, upload, pre
     let answer: ImageAnswer;
     try {
       answer = await upload({ key: fieldKey, expected: current, blob: ready.blob });
+      // The server read the current file's real format before any write: encode to it, once.
+      if (answer.status === "format_mismatch" && kind === "photo" && answer.format && answer.format !== "svg") {
+        const again = await prepare(ready.file, kind, answer.format);
+        if (again.ok) {
+          showReady({ file: ready.file, blob: again.blob, previewUrl: again.previewUrl, summary: again.summary });
+          answer = await upload({ key: fieldKey, expected: current, blob: again.blob });
+        }
+      }
     } catch {
       answer = { status: "failed" };
     }
@@ -81,11 +90,11 @@ export function ImageChange({ fieldKey, label, kind, current, dirty, upload, pre
     if (answer.status === "saved" && answer.url) {
       onValue(fieldKey, answer.url, true);
       showReady(null);
-      setDone(true);
+      setDoneText(imageSavedMessage(answer));
       return;
     }
     if (answer.status === "conflict" && answer.current !== undefined) onValue(fieldKey, answer.current, false);
-    setError(imageMessage(answer.status === "saved" ? "unknown" : answer.status));
+    setError(imageFailureMessage(answer));
   }
 
   function drop(event: DragEvent) {
@@ -118,7 +127,7 @@ export function ImageChange({ fieldKey, label, kind, current, dirty, upload, pre
         </>
       )}
       {busy ? <p className="fd-hint fd-cvh" role="status">{busy === "preparing" ? "Preparing image…" : "Uploading and saving…"}</p> : null}
-      {done ? <p className="fd-okl" role="status"><span>{IMAGE_SAVED}</span></p> : null}
+      {doneText ? <p className="fd-okl" role="status"><span>{doneText}</span></p> : null}
       {error ? <p className="fd-lerr" role="alert">{error}</p> : null}
     </div>
   );

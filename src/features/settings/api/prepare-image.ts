@@ -1,4 +1,4 @@
-import type { ImageKind, PreparedImage } from "../types";
+import type { ImageFormat, ImageKind, PreparedImage } from "../types";
 
 // Runs in the browser, before anything is sent. The server checks everything again.
 export const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
@@ -24,10 +24,19 @@ async function prepareSvg(file: File): Promise<PreparedImage> {
   return { ok: true, blob, previewUrl: URL.createObjectURL(blob), summary: `SVG, ${kb(blob.size)}` };
 }
 
-const encode = (canvas: HTMLCanvasElement, quality: number) =>
-  new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", quality));
+type PhotoFormat = Exclude<ImageFormat, "svg">;
+const ENCODERS: Record<PhotoFormat, { type: string; label: string; qualities: readonly number[] }> = {
+  webp: { type: "image/webp", label: "WebP", qualities: QUALITIES },
+  jpeg: { type: "image/jpeg", label: "JPG", qualities: QUALITIES },
+  // PNG has no quality setting: only a smaller size makes it smaller.
+  png: { type: "image/png", label: "PNG", qualities: [1] },
+};
 
-async function preparePhoto(file: File): Promise<PreparedImage> {
+const encode = (canvas: HTMLCanvasElement, type: string, quality: number) =>
+  new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, quality));
+
+async function preparePhoto(file: File, format: PhotoFormat): Promise<PreparedImage> {
+  const encoder = ENCODERS[format];
   if (file.type !== "" && !file.type.startsWith("image/")) return { ok: false, message: "Choose a photo, such as a JPG or PNG." };
   if (file.size > MAX_SOURCE_BYTES) return { ok: false, message: "This photo is over 40 MB. Choose a smaller one." };
   let bitmap: ImageBitmap;
@@ -46,12 +55,12 @@ async function preparePhoto(file: File): Promise<PreparedImage> {
       const context = canvas.getContext("2d");
       if (!context) break;
       context.drawImage(bitmap, 0, 0, size.width, size.height);
-      for (const quality of QUALITIES) {
-        const blob = await encode(canvas, quality);
-        // A browser without a WebP encoder quietly returns a PNG, which the server would refuse.
-        if (!blob || blob.type !== "image/webp") return { ok: false, message: "This browser cannot prepare the photo. Try Chrome, Edge or Firefox." };
+      for (const quality of encoder.qualities) {
+        const blob = await encode(canvas, encoder.type, quality);
+        // A browser without this encoder quietly returns a PNG, which would not match the file's name.
+        if (!blob || blob.type !== encoder.type) return { ok: false, message: "This browser cannot prepare the photo. Try Chrome, Edge or Firefox." };
         if (blob.size <= MAX_PHOTO_BYTES) {
-          return { ok: true, blob, previewUrl: URL.createObjectURL(blob), summary: `WebP, ${size.width} by ${size.height}, ${kb(blob.size)}` };
+          return { ok: true, blob, previewUrl: URL.createObjectURL(blob), summary: `${encoder.label}, ${size.width} by ${size.height}, ${kb(blob.size)}` };
         }
       }
     }
@@ -61,6 +70,7 @@ async function preparePhoto(file: File): Promise<PreparedImage> {
   }
 }
 
-export function prepareImageFile(file: File, kind: ImageKind): Promise<PreparedImage> {
-  return kind === "svg" ? prepareSvg(file) : preparePhoto(file);
+// A photo starts as WebP. The server names the current file's format when it differs.
+export function prepareImageFile(file: File, kind: ImageKind, format: PhotoFormat = "webp"): Promise<PreparedImage> {
+  return kind === "svg" ? prepareSvg(file) : preparePhoto(file, format);
 }

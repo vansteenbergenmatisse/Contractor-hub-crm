@@ -11,24 +11,111 @@ function adapter(over: Partial<MediaAdapterDeps> = {}) {
     getLocationToken: vi.fn(async () => "token-1"),
     requestFiles: vi.fn(async () => json({ files: [] })),
     requestUpload: vi.fn(async () => json({ fileId: "f1", url: `https://${HOST}/a/b` })),
+    requestTrash: vi.fn(async () => json([{ deleted: true, id: "f1" }])),
     ...over,
   };
   return { media: createMediaAdapter(deps), deps };
 }
 
 describe("media adapter: find", () => {
-  it("returns only exact names of this location", async () => {
-    const { media, deps } = adapter({
-      requestFiles: vi.fn(async () => json({ files: [
-        { name: "business_logo-abc", url: `https://${HOST}/1`, altId: "loc-1", altType: "location" },
-        { name: "business_logo-abc", url: `https://${HOST}/other`, altId: "loc-2", altType: "location" },
-        { name: "business_logo-abcd", url: `https://${HOST}/2`, altId: "loc-1" },
-        { name: "business_logo-abc" },
-        "junk",
-      ] })),
+  const URL_A = `https://${HOST}/a`;
+  const own = (over: Record<string, unknown>) => ({ altId: "loc-1", altType: "location", ...over });
+  // A library by folder and type, with real paging.
+  const library = (tree: Record<string, { file?: unknown[]; folder?: unknown[] }>) =>
+    vi.fn<MediaAdapterDeps["requestFiles"]>(async (_token, _location, page) => {
+      const rows = tree[page.parentId ?? "root"]?.[page.type] ?? [];
+      return json({ files: rows.slice(page.offset, page.offset + page.limit) });
     });
-    expect(await media.find("t1", "business_logo-abc")).toEqual({ ok: true, files: [{ name: "business_logo-abc", url: `https://${HOST}/1` }] });
-    expect(deps.requestFiles).toHaveBeenCalledWith("token-1", "loc-1", "business_logo-abc");
+
+  it("finds the exact URL in a nested folder with its id, name and parent", async () => {
+    const requestFiles = library({
+      root: { folder: [own({ _id: "d1", type: "folder", name: "Logos" })] },
+      d1: { file: [own({ _id: "f9", name: "Logo.PNG", url: URL_A, parentId: "d1" }), own({ _id: "f8", name: "Logo.PNG", url: `${URL_A}2`, parentId: "d1" })] },
+    });
+    const { media } = adapter({ requestFiles });
+    expect(await media.find("t1", URL_A)).toEqual({
+      ok: true,
+      files: [{ id: "f9", name: "Logo.PNG", url: URL_A, parentId: "d1" }],
+      siblings: [{ id: "f8", name: "Logo.PNG", url: `${URL_A}2`, parentId: "d1" }],
+    });
+  });
+
+  it("matches the URL exactly, never by a prefix, other case or query", async () => {
+    const requestFiles = library({ root: { file: [own({ _id: "f1", name: "a", url: `${URL_A}?v=1` }), own({ _id: "f2", name: "a", url: URL_A.toUpperCase() }), own({ _id: "f3", name: "a", url: `${URL_A}/b` })] } });
+    expect(await adapter({ requestFiles }).media.find("t1", URL_A)).toEqual({ ok: true, files: [], siblings: [] });
+  });
+
+  it("reports every file holding the URL, so duplicates are never guessed", async () => {
+    const requestFiles = library({ root: { file: [own({ _id: "f1", name: "a", url: URL_A }), own({ _id: "f2", name: "b", url: URL_A })] } });
+    const result = await adapter({ requestFiles }).media.find("t1", URL_A);
+    expect(result.ok && result.files.map((row) => row.id)).toEqual(["f1", "f2"]);
+  });
+
+  it("ignores rows of another location, trashed rows, folders and rows without an id", async () => {
+    const requestFiles = library({ root: { file: [
+      { _id: "x", name: "a", url: URL_A, altId: "loc-2", altType: "location" },
+      { _id: "y", name: "a", url: URL_A },
+      own({ _id: "t", name: "a", url: URL_A, status: "trashed" }),
+      own({ _id: "d", name: "a", url: URL_A, deleted: true }),
+      own({ _id: "fo", name: "a", url: URL_A, type: "folder" }),
+      own({ name: "a", url: URL_A }),
+      "junk",
+    ] } });
+    expect(await adapter({ requestFiles }).media.find("t1", URL_A)).toEqual({ ok: true, files: [], siblings: [] });
+  });
+
+  it("reads every page of a folder", async () => {
+    const rows = Array.from({ length: 150 }, (_, i) => own({ _id: `f${i}`, name: `n${i}`, url: i === 149 ? URL_A : `${URL_A}-${i}` }));
+    const result = await adapter({ requestFiles: library({ root: { file: rows } }) }).media.find("t1", URL_A);
+    expect(result.ok && result.files[0]?.id).toBe("f149");
+  });
+
+  it("stops as incomplete when paging repeats the same page", async () => {
+    const rows = Array.from({ length: 100 }, (_, i) => own({ _id: `f${i}`, name: "n", url: `${URL_A}-${i}` }));
+    const requestFiles = vi.fn<MediaAdapterDeps["requestFiles"]>(async () => json({ files: rows }));
+    expect(await adapter({ requestFiles }).media.find("t1", URL_A)).toEqual({ ok: false, reason: "incomplete" });
+  });
+
+  it("stops as incomplete past the call cap instead of answering from part of the library", async () => {
+    const folders = Array.from({ length: 80 }, (_, i) => own({ _id: `d${i}`, type: "folder", name: `d${i}` }));
+    const requestFiles = library({ root: { folder: folders } });
+    expect(await adapter({ requestFiles }).media.find("t1", URL_A)).toEqual({ ok: false, reason: "incomplete" });
+    expect(requestFiles.mock.calls.length).toBeLessThanOrEqual(60);
+  });
+
+  it("does not loop on a folder that lists itself", async () => {
+    const requestFiles = library({ root: { folder: [own({ _id: "d1", type: "folder", name: "d" })] }, d1: { folder: [own({ _id: "d1", type: "folder", name: "d" })] } });
+    expect(await adapter({ requestFiles }).media.find("t1", URL_A)).toEqual({ ok: true, files: [], siblings: [] });
+  });
+
+  it("verifies only the same id, URL, name and folder", async () => {
+    const entry = { id: "f1", name: "a.png", url: URL_A, parentId: "d1" };
+    const listed = (over: Record<string, unknown>) => adapter({ requestFiles: library({ d1: { file: [own({ _id: "f1", name: "a.png", url: URL_A, parentId: "d1", ...over })] } }) }).media.verify("t1", entry);
+    expect(await listed({})).toBe(true);
+    expect(await listed({ url: `${URL_A}x` })).toBe(false);
+    expect(await listed({ name: "b.png" })).toBe(false);
+    expect(await listed({ parentId: "d2" })).toBe(false);
+    expect(await listed({ type: "folder" })).toBe(false);
+    expect(await listed({ status: "trashed" })).toBe(false);
+  });
+
+  it("trashes one id with the recoverable status", async () => {
+    const { media, deps } = adapter();
+    expect(await media.trash("t1", "f1")).toBe("trashed");
+    expect(deps.requestTrash).toHaveBeenCalledExactlyOnceWith("token-1", "loc-1", "f1");
+  });
+
+  it.each([
+    [401, "permission"], [403, "permission"], [404, "failed"], [422, "failed"], [500, "unconfirmed"], [408, "unconfirmed"],
+  ] as const)("maps a trash status %s to %s, in one attempt", async (status, outcome) => {
+    const { media, deps } = adapter({ requestTrash: vi.fn(async () => json({}, status)) });
+    expect(await media.trash("t1", "f1")).toBe(outcome);
+    expect(deps.requestTrash).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not call a 2xx that names another id trashed", async () => {
+    const { media } = adapter({ requestTrash: vi.fn(async () => json([{ deleted: true, id: "other" }])) });
+    expect(await media.trash("t1", "f1")).toBe("unconfirmed");
   });
 
   it.each([[401], [403]])("reports a %s as a missing grant", async (status) => {
@@ -97,9 +184,9 @@ describe("media adapter: upload", () => {
     expect(deps.requestUpload).not.toHaveBeenCalled();
   });
 
-  it("offers no delete or rename", () => {
+  it("offers no permanent delete or rename", () => {
     const { media } = adapter();
-    expect(Object.keys(media).sort()).toEqual(["find", "upload"]);
+    expect(Object.keys(media).sort()).toEqual(["find", "trash", "upload", "verify"]);
   });
 });
 

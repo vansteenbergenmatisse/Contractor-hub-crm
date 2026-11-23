@@ -144,6 +144,19 @@ describe("POST /api/settings/media: what it accepts", () => {
     expect(called).toBe(false);
   });
 
+  it("names the SVG problem in a header, as a fixed code", async () => {
+    const bad = new Blob(['<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'], { type: "image/svg+xml" });
+    const { response } = await replaceCalled(form({ key: "business_logo", expected: "", file: bad }));
+    expect(response.headers.get("x-svg-problem")).toBe("script");
+  });
+
+  it("refuses a broken PNG on a photo field by its bytes", async () => {
+    const bad = new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3])], { type: "image/png" });
+    const { response, called } = await replaceCalled(form({ key: "1_our_work_after", expected: "", file: bad }));
+    expect(await response.json()).toEqual({ error: "invalid", reason: "wrong_type" });
+    expect(called).toBe(false);
+  });
+
   it("refuses an SVG for a photo field", async () => {
     const svg = new Blob([SVG], { type: "image/svg+xml" });
     const { response, called } = await replaceCalled(form({ key: "business_main_background_video_or_image", expected: "", file: svg }));

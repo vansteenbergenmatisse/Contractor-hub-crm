@@ -489,10 +489,25 @@ export function createHighLevelClient(config: HighLevelClientConfig) {
     }
   }
 
-  // GET /medias/files for one exact file name (OpenAPI file, not yet seen on a real response). Only
-  // media-write.ts calls it.
-  async function requestMediaFiles(accessToken: string, locationId: string, name: string): Promise<Response> {
-    const query = new URLSearchParams({ sortBy: "createdAt", sortOrder: "desc", type: "file", query: name, altType: "location", altId: locationId, limit: "20" });
+  // PUT /medias/delete-files with status `trashed`, for one file id. One attempt; only media-write.ts calls it.
+  async function requestMediaTrash(accessToken: string, locationId: string, fileId: string): Promise<Response> {
+    try {
+      return await doFetch(`${base}/medias/delete-files`, {
+        method: "PUT",
+        headers: { authorization: `Bearer ${accessToken}`, version: API_VERSION, accept: "application/json", "content-type": "application/json" },
+        body: JSON.stringify({ filesToBeDeleted: [{ _id: fileId }], altType: "location", altId: locationId, status: "trashed" }),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+    } catch {
+      throw new HighLevelHttpError("HighLevel media trash could not reach HighLevel.", null);
+    }
+  }
+
+  // GET /medias/files for one page of one folder (OpenAPI file, not yet seen on a real response). No
+  // `parentId` means the top of the library. Only media-write.ts calls it.
+  async function requestMediaFiles(accessToken: string, locationId: string, page: { type: "file" | "folder"; parentId: string | null; offset: number; limit: number }): Promise<Response> {
+    const query = new URLSearchParams({ sortBy: "createdAt", sortOrder: "desc", type: page.type, altType: "location", altId: locationId, offset: String(page.offset), limit: String(page.limit) });
+    if (page.parentId) query.set("parentId", page.parentId);
     try {
       return await doFetch(`${base}/medias/files?${query}`, {
         method: "GET",
@@ -505,10 +520,11 @@ export function createHighLevelClient(config: HighLevelClientConfig) {
   }
 
   // POST /medias/upload-file. The location comes from the token. One attempt; only media-write.ts calls it.
-  async function requestMediaUpload(accessToken: string, file: { bytes: Uint8Array; name: string; fileName: string; contentType: string }): Promise<Response> {
+  async function requestMediaUpload(accessToken: string, file: { bytes: Uint8Array; name: string; fileName: string; contentType: string; parentId?: string | null }): Promise<Response> {
     const body = new FormData();
     body.append("file", new Blob([file.bytes as BlobPart], { type: file.contentType }), file.fileName);
     body.append("name", file.name);
+    if (file.parentId) body.append("parentId", file.parentId);
     try {
       return await doFetch(`${base}/medias/upload-file`, {
         method: "POST",
@@ -521,7 +537,7 @@ export function createHighLevelClient(config: HighLevelClientConfig) {
     }
   }
 
-  return { exchangeAgencyCode, exchangeCode, listAgencyLocations, listCustomValues, listLocationUsers, listInstalledLocations, mintLocationToken, refreshToken, requestContactSearch, requestCustomValues, requestMediaFiles, requestMediaUpload, requestUpdateCustomValue, searchUsers };
+  return { exchangeAgencyCode, exchangeCode, listAgencyLocations, listCustomValues, listLocationUsers, listInstalledLocations, mintLocationToken, refreshToken, requestContactSearch, requestCustomValues, requestMediaFiles, requestMediaTrash, requestMediaUpload, requestUpdateCustomValue, searchUsers };
 }
 
 // Ids of people a parsed user list named but dropped for having no email. They are still in

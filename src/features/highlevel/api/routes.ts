@@ -253,8 +253,8 @@ export function createTenantCustomValueAdapter() {
   });
 }
 
-// Finds and uploads media library files for Settings' Change image. The tenant id always comes from
-// the caller's server session. It offers no delete or rename.
+// Finds, uploads and trashes media library files for Settings' Change image. The tenant id always
+// comes from the caller's server session. It offers no permanent delete or rename.
 export function createTenantMediaAdapter() {
   const env = parseEnv("highlevel");
   const client = buildClient(env);
@@ -264,6 +264,7 @@ export function createTenantMediaAdapter() {
     getLocationToken: (tenantId) => tokens.getLocationToken(tenantId),
     requestFiles: client.requestMediaFiles,
     requestUpload: client.requestMediaUpload,
+    requestTrash: client.requestMediaTrash,
   });
 }
 

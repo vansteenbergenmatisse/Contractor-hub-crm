@@ -1,6 +1,6 @@
 import { Node } from "@xmldom/xmldom";
 import { describe, expect, it, vi } from "vitest";
-import { checkSvg, MAX_SVG_BYTES } from "../../../src/features/settings-write-back/api/svg-check";
+import { checkSvg, inspectSvg, MAX_SVG_BYTES } from "../../../src/features/settings-write-back/api/svg-check";
 
 const NS = 'xmlns="http://www.w3.org/2000/svg"';
 const bytes = (text: string) => new TextEncoder().encode(text);
@@ -107,6 +107,142 @@ describe("checkSvg caps every child node", () => {
     output(wrap('<!-- a --><g><!-- b --><rect width="1" height="1"/></g><!-- c -->'));
     expect(removeChild).not.toHaveBeenCalled();
     removeChild.mockRestore();
+  });
+});
+
+const XL = 'xmlns:xlink="http://www.w3.org/1999/xlink"';
+const withXlink = (inner: string) => `<svg ${NS} ${XL} viewBox="0 0 10 10">${inner}</svg>`;
+const GRADIENT = '<linearGradient id="g"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#000"/></linearGradient>';
+
+describe("checkSvg allows what real logos use", () => {
+  it.each([
+    ["gradient fill", wrap(`<defs>${GRADIENT}</defs><rect width="1" height="1" fill="url(#g)"/>`)],
+    ["radial gradient", wrap('<defs><radialGradient id="r" cx="5" cy="5" r="5" fx="4" fy="4" gradientUnits="userSpaceOnUse" gradientTransform="rotate(45)"><stop offset="0" style="stop-color:#fff;stop-opacity:0.5"/></radialGradient></defs><circle r="1" stroke="url(#r)"/>')],
+    ["gradient inheriting by xlink", withXlink(`<defs>${GRADIENT}<linearGradient id="h" xlink:href="#g"/></defs><rect fill="url(#h)"/>`)],
+    ["clip path", wrap('<defs><clipPath id="c" clipPathUnits="userSpaceOnUse"><rect width="5" height="5"/></clipPath></defs><g clip-path="url(#c)"><rect/></g>')],
+    ["mask", wrap('<mask id="m" maskUnits="userSpaceOnUse"><rect fill="#fff"/></mask><rect mask="url(#m)"/>')],
+    ["pattern", wrap('<defs><pattern id="p" patternUnits="userSpaceOnUse" width="2" height="2"><rect width="1" height="1"/></pattern></defs><rect fill="url(#p)"/>')],
+    ["use with href", wrap('<defs><path id="a" d="M0 0h1"/></defs><use href="#a" x="1"/><use href="#a" x="2"/>')],
+    ["use with xlink:href", withXlink('<defs><path id="a" d="M0 0h1"/></defs><use xlink:href="#a"/>')],
+    ["paint in a style attribute", wrap(`<defs>${GRADIENT}</defs><rect style="fill:url(#g);stroke:#000"/>`)],
+    ["Illustrator style sheet", wrap(`<defs><style>.cls-1{fill:url(#g);}.cls-2,.cls-3{fill:#fff;isolation:isolate}</style>${GRADIENT}</defs><g id="Layer_1" data-name="Layer 1"><path class="cls-1" d="M0 0"/><path class="cls-2" d="M1 1"/></g>`)],
+    ["style sheet in CDATA", wrap('<style type="text/css"><![CDATA[.a{fill:#123456}]]></style><rect class="a"/>')],
+    ["title and desc", wrap('<title>Logo</title><desc>Our logo</desc><rect/>')],
+  ])("accepts %s", (_name, text) => {
+    expect(checkSvg(bytes(text)).ok).toBe(true);
+  });
+
+  it("removes metadata, whatever it holds", () => {
+    const out = output(wrap('<metadata><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><script>alert(1)</script></rdf:RDF></metadata><rect/>'));
+    expect(out).not.toContain("metadata");
+    expect(out).not.toContain("alert");
+  });
+
+  it("strips Inkscape and Sodipodi data", () => {
+    const out = output(`<svg ${NS} xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd" inkscape:version="1.3" sodipodi:docname="logo.svg"><sodipodi:namedview id="base"/><g inkscape:label="Layer" inkscape:groupmode="layer"><rect/></g></svg>`);
+    expect(out).not.toMatch(/inkscape|sodipodi/);
+    expect(out).toContain("<rect");
+  });
+
+  it("strips Illustrator and Sketch data", () => {
+    const out = output(`<svg ${NS} xmlns:i="http://ns.adobe.com/AdobeIllustrator/10.0/" xmlns:sketch="http://www.bohemiancoding.com/sketch/ns"><g i:extraneous="self" sketch:type="MSPage"><rect/></g></svg>`);
+    expect(out).not.toMatch(/adobe|sketch|extraneous/);
+  });
+
+  it("removes a script hidden inside an editor element", () => {
+    const out = output(`<svg ${NS} xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"><sodipodi:namedview><script xmlns="${"http://www.w3.org/2000/svg"}">alert(1)</script></sodipodi:namedview><rect/></svg>`);
+    expect(out).not.toContain("alert");
+  });
+});
+
+describe("checkSvg refuses a bypass of each allowance", () => {
+  const unsafe: [string, string][] = [
+    ["use to an outside file", wrap('<use href="https://evil.test/a.svg#x"/>')],
+    ["use to a protocol-relative file", wrap('<use href="//evil.test/a.svg#x"/>')],
+    ["use with a data URI", wrap('<use href="data:image/svg+xml,x#a"/>')],
+    ["use with a file and a fragment", wrap('<path id="a"/><use href="a.svg#a"/>')],
+    ["xlink use outside", withXlink('<use xlink:href="https://evil.test/a.svg#x"/>')],
+    ["href with spaces before the hash", wrap('<path id="a"/><use href=" #a"/>')],
+    ["href with javascript", wrap('<use href="javascript:alert(1)"/>')],
+    ["xlink prefix bound elsewhere", `<svg ${NS} xmlns:xlink="http://evil.test/ns"><path id="a"/><use xlink:href="#a"/></svg>`],
+    ["another prefix for xlink", `<svg ${NS} xmlns:q="http://www.w3.org/1999/xlink"><path id="a"/><use q:href="#a"/></svg>`],
+    ["href on a shape", wrap('<path id="a"/><rect href="#a"/>')],
+    ["href on stop", wrap(`${GRADIENT}<stop href="#g"/>`)],
+    ["reference to a missing id", wrap('<use href="#nope"/>')],
+    ["paint to a missing id", wrap('<rect fill="url(#nope)"/>')],
+    ["paint to an outside file", wrap(`${GRADIENT}<rect fill="url(https://evil.test/a.svg#g)"/>`)],
+    ["paint to a file with a fragment", wrap(`${GRADIENT}<rect fill="url(a.svg#g)"/>`)],
+    ["quoted outside paint", wrap(`${GRADIENT}<rect fill="url('https://evil.test/#g')"/>`)],
+    ["local paint followed by outside paint", wrap(`${GRADIENT}<rect fill="url(#g) url(https://evil.test/x)"/>`)],
+    ["url on a property that takes none", wrap(`${GRADIENT}<rect opacity="url(#g)"/>`)],
+    ["url in upper case", wrap(`${GRADIENT}<rect fill="URL(https://evil.test/x)"/>`)],
+    ["image-set in a style attribute", wrap('<rect style="fill:image-set(evil)"/>')],
+    ["element() in a fill", wrap('<rect fill="element(x)"/>')],
+    ["use pointing at itself", wrap('<use id="a" href="#a"/>')],
+    ["use loop", wrap('<g id="a"><use href="#b"/></g><g id="b"><use href="#a"/></g>')],
+    ["use of the root", `<svg ${NS} id="r"><use href="#r"/></svg>`],
+    ["pattern loop by fill", wrap('<pattern id="a"><rect fill="url(#b)"/></pattern><pattern id="b"><rect fill="url(#a)"/></pattern>')],
+    ["gradient href loop", wrap('<linearGradient id="a" href="#b"/><linearGradient id="b" href="#a"/>')],
+    ["loop through a style sheet class", wrap('<style>.x{fill:url(#p)}</style><pattern id="p"><rect class="x"/></pattern><rect class="x"/>')],
+    ["reference to a repeated id", wrap('<path id="a"/><path id="a"/><use href="#a"/>')],
+    ["use billion laughs", wrap(`<g id="a0"><path/></g>${Array.from({ length: 15 }, (_, i) => `<g id="a${i + 1}">${`<use href="#a${i}"/>`.repeat(10)}</g>`).join("")}`)],
+    ["a long chain of references", wrap(`<g id="a0"/>${Array.from({ length: 40 }, (_, i) => `<g id="a${i + 1}"><use href="#a${i}"/></g>`).join("")}`)],
+    ["@import", wrap("<style>@import url(https://evil.test/x.css);</style>")],
+    ["@import without url", wrap("<style>@import 'x.css';</style>")],
+    ["@font-face", wrap("<style>@font-face{font-family:x;src:url(https://evil.test/f)}</style>")],
+    ["@media", wrap("<style>@media screen{.a{fill:red}}</style>")],
+    ["external url in a rule", wrap("<style>.a{fill:url(https://evil.test/x)}</style>")],
+    ["background image rule", wrap("<style>.a{background:url(x.png)}</style>")],
+    ["CSS expression", wrap("<style>.a{fill:expression(alert(1))}</style>")],
+    ["behavior", wrap("<style>.a{behavior:url(x.htc)}</style>")],
+    ["moz-binding", wrap("<style>.a{-moz-binding:url(x.xml)}</style>")],
+    ["CSS escape", wrap("<style>.a{fill:\\75rl(x)}</style>")],
+    ["CSS comment", wrap("<style>.a{fill:u/**/rl(x)}</style>")],
+    ["XML comment splitting a style sheet", wrap("<style>.a{fill:u<!-- -->rl(https://evil.test/x)}</style>")],
+    ["entity-encoded url in a rule", wrap("<style>.a{fill:&#117;rl(https://evil.test/x)}</style>")],
+    ["CDATA hiding an import", wrap("<style><![CDATA[@import 'https://evil.test/x.css';]]></style>")],
+    ["attribute selector", wrap("<style>[href]{fill:red}</style>")],
+    ["pseudo selector", wrap("<style>.a:hover{fill:red}</style>")],
+    ["unclosed rule", wrap("<style>.a{fill:red</style>")],
+    ["text outside a rule", wrap("<style>.a{fill:red} junk</style>")],
+    ["nested rule", wrap("<style>.a{.b{fill:red}}</style>")],
+    ["element inside style", wrap("<style><rect/></style>")],
+    ["an open quote hiding the next rule", wrap(`<style>.a{font-family:"x}.b{fill:red}</style>`)],
+    ["many rules times many elements", wrap(`${GRADIENT.replace('id="g"', 'id="g0"')}${Array.from({ length: 400 }, (_, i) => `<path id="p${i}"/>`).join("")}<style>${Array.from({ length: 400 }, (_, i) => `path{fill:url(#p${i})}`).join("")}</style>`)],
+    ["style with another type", wrap('<style type="text/xsl">.a{fill:red}</style>')],
+    ["unknown namespace element", `<svg ${NS} xmlns:x="http://evil.test/ns"><x:thing/></svg>`],
+    ["script in the SVG namespace by prefix", `<svg ${NS} xmlns:svg="http://www.w3.org/2000/svg"><svg:script>alert(1)</svg:script></svg>`],
+    ["on* on a gradient stop", wrap('<linearGradient id="g"><stop onload="alert(1)"/></linearGradient>')],
+    ["on* on use", wrap('<path id="a"/><use href="#a" onclick="alert(1)"/>')],
+    ["script inside defs", wrap("<defs><script>alert(1)</script></defs>")],
+    ["foreignObject inside a mask", wrap('<mask id="m"><foreignObject/></mask>')],
+    ["image inside a pattern", wrap('<pattern id="p"><image href="https://evil.test/a.png"/></pattern>')],
+    ["animate inside a gradient", wrap('<linearGradient id="g"><animate attributeName="x1" to="1"/></linearGradient>')],
+  ];
+
+  it.each(unsafe)("refuses %s", (_name, text) => {
+    expect(checkSvg(bytes(text))).toEqual({ ok: false, reason: "svg_unsafe" });
+  });
+});
+
+describe("inspectSvg names the problem", () => {
+  it.each([
+    ["script", wrap("<script>alert(1)</script>")],
+    ["script", wrap('<rect onclick="alert(1)"/>')],
+    ["outside_link", wrap('<use href="https://evil.test/a.svg#x"/>')],
+    ["outside_link", wrap('<image href="https://evil.test/a.png"/>')],
+    ["outside_link", wrap('<rect fill="url(https://evil.test/x)"/>')],
+    ["outside_link", wrap("<style>@import 'x.css';</style>")],
+    ["embedded", wrap("<foreignObject/>")],
+    ["animation", wrap('<rect><animate attributeName="x" to="1"/></rect>')],
+    ["doctype", `<!DOCTYPE svg>${wrap("")}`],
+    ["style", wrap("<style>.a:hover{fill:red}</style>")],
+    ["reference", wrap('<use href="#nope"/>')],
+    ["too_complex", wrap("<g/>".repeat(20_001))],
+    ["unsupported", wrap("<filter/>")],
+    ["broken", wrap("<title>&nope;</title>")],
+  ] as const)("%s", (problem, text) => {
+    expect(inspectSvg(bytes(text))).toEqual({ ok: false, reason: "svg_unsafe", problem });
   });
 });
 

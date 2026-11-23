@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { imageKindOf, isSettingsKeyAllowed, MAX_VALUE_LENGTH, type ImageAnswer } from "@/features/settings";
 import type { CheckedImage } from "./media-replace";
-import { checkSvg } from "./svg-check";
+import { checkJpeg, checkPng, isJpeg, isPng } from "./raster-check";
+import { inspectSvg, type SvgProblem } from "./svg-check";
 import { checkWebp, MAX_IMAGE_BYTES } from "./webp-check";
 
 // Room for the multipart wrapping around the largest allowed image.
@@ -75,7 +76,7 @@ async function parseFields(bytes: Uint8Array<ArrayBuffer>, contentType: string):
   return { key, expected, file };
 }
 
-type Checked = { ok: true; file: CheckedImage } | { ok: false; reason: string };
+type Checked = { ok: true; file: CheckedImage } | { ok: false; reason: string; problem?: SvgProblem };
 
 // The file's real bytes decide. The browser's name and type are never read.
 function checkFile(key: string, bytes: Uint8Array): Checked {
@@ -83,17 +84,18 @@ function checkFile(key: string, bytes: Uint8Array): Checked {
   let contentType: string;
   let extension: string;
   if (imageKindOf(key) === "svg") {
-    const svg = checkSvg(bytes);
-    if (!svg.ok) return { ok: false, reason: svg.reason };
+    const svg = inspectSvg(bytes);
+    if (!svg.ok) return { ok: false, reason: svg.reason, problem: svg.problem };
     out = svg.bytes;
     contentType = "image/svg+xml";
     extension = "svg";
   } else {
-    const webp = checkWebp(bytes);
-    if (!webp.ok) return { ok: false, reason: webp.reason };
+    const [check, type, ext] = isPng(bytes) ? [checkPng, "image/png", "png"] : isJpeg(bytes) ? [checkJpeg, "image/jpeg", "jpg"] : [checkWebp, "image/webp", "webp"];
+    const raster = check(bytes);
+    if (!raster.ok) return { ok: false, reason: raster.reason };
     out = bytes;
-    contentType = "image/webp";
-    extension = "webp";
+    contentType = type;
+    extension = ext;
   }
   return { ok: true, file: { bytes: out, contentType, extension, hash: createHash("sha256").update(out).digest("hex") } };
 }
@@ -123,7 +125,12 @@ export async function handleMediaReplace(request: Request, deps: MediaRouteDeps)
   const fields = await parseFields(body, contentType);
   if (!fields) return reply(400, { error: "invalid" });
   const checked = checkFile(fields.key, new Uint8Array(await fields.file.arrayBuffer()));
-  if (!checked.ok) return reply(400, { error: "invalid", reason: checked.reason });
+  if (!checked.ok) {
+    const response = reply(400, { error: "invalid", reason: checked.reason });
+    // One fixed code from the checker, never text from the file.
+    if (checked.problem) response.headers.set("x-svg-problem", checked.problem);
+    return response;
+  }
   try {
     return reply(200, await deps.replace({ tenantId, actorId: user.id, key: fields.key, expected: fields.expected, file: checked.file }));
   } catch {
