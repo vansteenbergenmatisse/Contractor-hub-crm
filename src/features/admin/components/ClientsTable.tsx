@@ -41,6 +41,10 @@ export function ClientsTable({ clients }: { clients: ClientRow[] }) {
       setRows((current) =>
         current.map((row) => (row.tenantId === tenantId && row.login !== "no users" ? { ...row, login: disabled ? "off" : "on" } : row)),
       );
+      const body = (await response.json().catch(() => null)) as { removedCheck?: string } | null;
+      if (!disabled && body?.removedCheck === "failed") {
+        setMessage({ tenantId, text: "Login is on, but we could not check for people removed from HighLevel. Someone removed may still have access." });
+      }
     });
   }
 
