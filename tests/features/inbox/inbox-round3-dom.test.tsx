@@ -147,7 +147,7 @@ describe("Inbox: picking the same search result again", () => {
     const user = userEvent.setup();
     render(<InboxPage row="inbox-c3" />);
     expect(ix()).toHaveClass("is-open");
-    await user.click(screen.getByRole("button", { name: "Inbox" }));
+    await user.click(screen.getByRole("button", { name: "Communications" }));
     expect(ix()).not.toHaveClass("is-open");
     await user.click(screen.getByRole("radio", { name: /Under 1 Hr/ }));
     expect(row("Nina Castillo")).toHaveClass("is-off");
@@ -163,7 +163,7 @@ describe("Inbox: picking the same search result again", () => {
     setWidth(390);
     const user = userEvent.setup();
     render(<InboxPage row="inbox-c3" />);
-    await user.click(screen.getByRole("button", { name: "Inbox" }));
+    await user.click(screen.getByRole("button", { name: "Communications" }));
     act(() => {
       window.dispatchEvent(new CustomEvent(ROW_PICK_EVENT, { detail: "inbox-c1" }));
     });

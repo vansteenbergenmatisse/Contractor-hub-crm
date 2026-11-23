@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import userEvent from "@testing-library/user-event";
 
@@ -21,7 +21,6 @@ vi.mock("@/features/app-shell", async (importOriginal) => {
 import { allowedLogoHosts, isAllowedLogoUrl } from "@/features/brand";
 import { PageStateProvider } from "@/features/app-shell";
 import { COLOR_KEYS, ESSENTIAL_KEYS, SettingsPage, isSettingsKeyAllowed, loadSettingsValues, type SaveValues } from "@/features/settings";
-import { otherKeyNames } from "../../../src/features/settings/api/allowlist";
 import { FIELD_GROUPS, groupFields } from "../../../src/features/settings/api/field-groups";
 import { DEFAULT_IMAGE_HOSTS, imageHostsFrom, pickerHex, previewSrc } from "../../../src/features/settings/api/image-preview";
 
@@ -29,7 +28,7 @@ afterEach(cleanup);
 
 // Made-up values only.
 const HOST = "assets.cdn.filesafe.space";
-const account = { otherNames: [] as string[], imageHosts: [HOST] };
+const account = { imageHosts: [HOST] };
 const page = (values: Record<string, string>, extra: Partial<React.ComponentProps<typeof SettingsPage>> = {}) =>
   render(<PageStateProvider><SettingsPage initialValues={values} initialSection="biz" account={account} {...extra} /></PageStateProvider>);
 const legends = () => [...document.querySelectorAll("legend")].map((l) => l.textContent);
@@ -111,24 +110,13 @@ describe("keys that come and go", () => {
     expect(document.getElementById("cv-business_email")).not.toBeNull();
   });
 
-  it("shows a new key by name only, with where to edit it", () => {
-    const { container } = page({ business_name: "Test Co" }, { account: { ...account, otherNames: ["new_client_field"] } });
-    const group = screen.getByRole("group", { name: "Other values" });
-    expect(within(group).getByText("new_client_field")).toBeInTheDocument();
-    expect(within(group).getByText("Edit this in HighLevel")).toBeInTheDocument();
-    expect(within(group).queryByRole("textbox")).toBeNull();
-    expect(container.querySelector("#cv-new_client_field")).toBeNull();
+  it("shows no list of keys that have no field", () => {
+    page({ business_name: "Test Co" });
+    expect(screen.queryByRole("group", { name: "Other values" })).toBeNull();
+    expect(screen.queryByText(/^Show \d+ names?$/)).toBeNull();
   });
 
-  it("finds a new key with the search", async () => {
-    page({ business_name: "Test Co" }, { account: { ...account, otherNames: ["new_client_field", "other_key"] } });
-    await userEvent.setup().type(screen.getByLabelText("Search settings"), "new_client");
-    expect(screen.getByText("new_client_field")).toBeInTheDocument();
-    expect(screen.queryByText("other_key")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Apply for this visit" })).toBeNull();
-  });
-
-  it("the server sends the name of an unknown key, never its value, and no secret-looking name", async () => {
+  it("the server sends neither the name nor the value of an unknown key", async () => {
     const rows = [
       { key: "business_name", value: "Test Co" },
       { key: "new_client_field", value: "PRIVATE-VALUE" },
@@ -140,14 +128,9 @@ describe("keys that come and go", () => {
     let layout: unknown;
     const values = await loadSettingsValues("tenant_1", async () => rows, (l) => { layout = l; });
     expect(values).toEqual({ business_name: "Test Co" });
-    expect((layout as { otherNames: string[] }).otherNames).toEqual(["new_client_field"]);
+    expect(layout).toEqual({ imageHosts: expect.any(Array) });
     const sent = JSON.stringify({ values, layout });
-    for (const bad of ["PRIVATE-VALUE", "webhook", "hooks.example", "stripe_secret", "sec-456", "embed", "iframe"]) expect(sent).not.toContain(bad);
-  });
-
-  it("lists an allowlisted key too long to send by name, so it is not silently lost", () => {
-    const rows = [{ key: "business_hours", value: "x".repeat(2001) }];
-    expect(otherKeyNames(rows, {})).toEqual(["business_hours"]);
+    for (const bad of ["new_client_field", "PRIVATE-VALUE", "webhook", "hooks.example", "stripe_secret", "sec-456", "embed", "iframe"]) expect(sent).not.toContain(bad);
   });
 
   it("gives no layout when the read fails", async () => {

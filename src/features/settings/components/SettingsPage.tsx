@@ -12,7 +12,6 @@ import { useSignOut } from "../hooks/use-sign-out";
 import type { ConnectionStatus, Field, SaveValues, SectionKey } from "../types";
 import { BusinessGroups } from "./BusinessGroups";
 import { ConnectionRow } from "./ConnectionRow";
-import { OtherValues } from "./OtherValues";
 import { svgProps } from "./svg-props";
 import { ValueField } from "./ValueField";
 
@@ -66,7 +65,6 @@ export function SettingsPage({ initial, initialValues, initialSection, connectio
   const fieldProps = (f: Field) => ({ field: f, value: draft[f.key] ?? "", saved: values[f.key] ?? "", invalid: err?.key === f.key, error: errFieldSeen && err?.key === f.key ? err.message : undefined, readOnly, onChange: edit });
 
   const bizGroups = groupFields([...ESSENTIAL_KEYS, ...extras].filter((key) => show(`cv-${key}`)));
-  const otherNames = (account?.otherNames ?? []).filter((name) => show(`other-${name}`));
 
   return (
     <div
@@ -142,7 +140,6 @@ export function SettingsPage({ initial, initialValues, initialSection, connectio
             <h2 className="fd-pnh" id="fd-st-1">Business details</h2>
             <p className="fd-pns">{readOnly ? "Your business name, contact details and links." : live ? "Your business name, contact details and links. Saved changes update your account, and can change your website and texts." : "Your business name, contact details and links. Changes here do not reach your website or texts yet."}</p>
             <BusinessGroups groups={bizGroups} imageHosts={account?.imageHosts} fieldProps={fieldProps} />
-            <OtherValues names={otherNames} searching={filter.active} />
           </section>
         ) : null}
 

@@ -61,10 +61,3 @@ export function settingsValuesFrom(rows: readonly Row[]): Record<string, string>
   }
   return out;
 }
-
-// The NAMES of the account's keys that get no field, for the "Other values" group. Never a value. A
-// name that fails a backstop (the form webhook, anything secret-looking) is not listed at all.
-export function otherKeyNames(rows: readonly Row[], sent: Readonly<Record<string, string>>): string[] {
-  const names = rows.map((row) => row.key).filter((key) => typeof key === "string" && clearsBackstops(key) && !Object.hasOwn(sent, key));
-  return [...new Set(names)].sort();
-}

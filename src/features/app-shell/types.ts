@@ -1,6 +1,6 @@
 // Types shared inside the app-shell feature.
 export type PageKey =
-  | "today" | "inbox" | "calendar" | "pipeline" | "leads"
+  | "today" | "inbox" | "calendar" | "routes" | "pipeline" | "leads"
   | "quotes" | "invoices" | "payments" | "automations" | "settings";
 
 // Who the app is for, from the sub-account's custom values. Text fields are "" when HighLevel has no

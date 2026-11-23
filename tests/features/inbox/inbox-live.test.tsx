@@ -38,7 +38,7 @@ describe("states", () => {
     ["unavailable", "Your conversations can&#x27;t load right now."],
   ] as const)("%s says what is true", (state, text) => {
     const out = html({ state });
-    expect(out).toContain('<h1 class="fd-pt">Inbox</h1>');
+    expect(out).toContain('<h1 class="fd-pt">Communications</h1>');
     expect(out).toContain(text);
     expect(out).not.toContain("fd-cr ");
   });

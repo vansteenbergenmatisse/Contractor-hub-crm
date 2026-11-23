@@ -1,11 +1,10 @@
-import { otherKeyNames, settingsValuesFrom } from "./allowlist";
+import { settingsValuesFrom } from "./allowlist";
 import { imageHostsFrom } from "./image-preview";
 
 type Row = { key: string; value: string | null | undefined };
 
-// What the page needs to arrange a loaded account: the names of keys without a field (never their
-// values) and the hosts an image preview may load from.
-export type AccountLayout = { otherNames: string[]; imageHosts: string[] };
+// What the page needs to arrange a loaded account: the hosts an image preview may load from.
+export type AccountLayout = { imageHosts: string[] };
 
 // The Settings page's values for one tenant: the tenant's custom values, read by `read` (the server
 // passes its reader), filtered by the settings allowlist so secrets stay on the server. When they
@@ -20,7 +19,7 @@ export async function loadSettingsValues(
   try {
     const rows = await read(tenantId);
     const values = settingsValuesFrom(rows);
-    onLayout?.({ otherNames: otherKeyNames(rows, values), imageHosts: imageHostsFrom(process.env.LOGO_HOST_ALLOWLIST) });
+    onLayout?.({ imageHosts: imageHostsFrom(process.env.LOGO_HOST_ALLOWLIST) });
     return values;
   } catch {
     return {};

@@ -20,7 +20,7 @@ describe("AppShell markup", () => {
   });
 
   it("links every page in the side menu and marks the current one", () => {
-    for (const title of ["Today", "Inbox", "Calendar", "Pipeline", "Leads", "Quotes", "Invoices", "Payments due", "Automations", "Settings"]) {
+    for (const title of ["Today", "Communications", "Calendar", "Pipeline", "Leads", "Quotes", "Invoices", "Payments due", "Automations", "Settings"]) {
       expect(html).toContain(`>${title}</span>`);
     }
     expect(html).toMatch(/class="fd-nav is-on"[^>]*aria-current="page"/);

@@ -47,7 +47,7 @@ export function InboxLiveReady({ result }: { result: Extract<InboxResult, { stat
             <>
               <header className="fd-thh">
                 <button type="button" className="fd-link fd-tback" onClick={() => go("/inbox")}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="m9 6 6 6-6 6" /></svg>Inbox
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="m9 6 6 6-6 6" /></svg>Communications
                 </button>
                 <span className="fd-av" aria-hidden="true"><span className="fd-h">{initialsOf(current.name)}</span></span>
                 <div className="fd-thx">

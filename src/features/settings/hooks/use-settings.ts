@@ -58,7 +58,6 @@ export function useSettings(
     for (const key of out) if ((state.draft[key] ?? "").trim() !== (state.values[key] ?? "").trim()) out.delete(key);
     return out;
   }, [state.values, state.draft, account, initialValues, extras]);
-  const otherNames = account?.otherNames;
   const phone = (state.values.business_phone_number ?? "").trim();
   // With a tenant's real values the choices have no source yet, so they read "Not available yet".
   const choicesAvailable = initialValues === undefined;
@@ -79,7 +78,7 @@ export function useSettings(
     });
     return out;
   }, [connections, phone, state.how, state.asked, state.sw, choicesAvailable]);
-  const filter = useMemo(() => filterSettings(state.q, extras, rowText, hidden, otherNames), [state.q, extras, rowText, hidden, otherNames]);
+  const filter = useMemo(() => filterSettings(state.q, extras, rowText, hidden), [state.q, extras, rowText, hidden]);
   const shell = useShell() as ShellWithUpdate;
   // Held in a ref so a new function identity from the shell never re-runs the Save effect (no loop).
   const updateRef = useRef(shell.updateBusiness);

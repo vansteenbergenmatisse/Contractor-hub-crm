@@ -148,7 +148,7 @@ export function InboxPage({ row = null }: { row?: string | null } = {}) {
   return (
     <div className={`fd-ix${state.open ? " is-open" : ""}`}>
       <section className="fd-phd fd-in" style={{ "--i": 0 } as React.CSSProperties}>
-        <h1 className="fd-pt">Inbox</h1>
+        <h1 className="fd-pt">Communications</h1>
         <p className="fd-pw"><span className="fd-wd">Every text, call, email, Facebook and Instagram message in one place. The ones that wait on you sit on top.</span><span className="fd-wm">Every message in one place. The ones that wait on you sit on top.</span></p>
       </section>
 
@@ -182,7 +182,7 @@ export function InboxPage({ row = null }: { row?: string | null } = {}) {
         <section className="fd-th" aria-label="The open conversation">
           <header className="fd-thh">
             <button type="button" className="fd-link fd-tback" onClick={() => dispatch({ type: "toList" })}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="m9 6 6 6-6 6" /></svg>Inbox
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="m9 6 6 6-6 6" /></svg>Communications
             </button>
             <span className="fd-av" aria-hidden="true"><span className="fd-h">{current.initials}</span></span>
             <div className="fd-thx">
