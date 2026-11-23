@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { handleOAuthStart } from "@/features/highlevel";
 
-// The 37 scopes of docs/greenlane/build-prompt.md section 14 plus the two media scopes, written out here on purpose.
+// The 37 scopes of docs/greenlane/build-prompt.md section 14, written out here on purpose.
 const SPEC_SCOPES = [
   "oauth.readonly", "oauth.write", "locations.readonly", "locations/customValues.readonly",
   "locations/customValues.write", "locations/tags.readonly", "locations/customFields.readonly",
@@ -14,7 +14,6 @@ const SPEC_SCOPES = [
   "invoices/estimate.readonly", "invoices/estimate.write", "payments/transactions.readonly",
   "workflows.readonly", "workflows.write", "workflows.delete", "workflows.publish",
   "workflows.logs", "phonenumbers.read", "socialplanner/account.readonly",
-  "medias.readonly", "medias.write",
 ];
 
 const config = {
