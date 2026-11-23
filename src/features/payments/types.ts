@@ -1,5 +1,5 @@
 // Types shared inside the payments feature.
-import type { DueTotal, LiveInvoiceView } from "@/features/invoices";
+import type { BlockedBy, DueTotal, LiveInvoiceView } from "@/features/invoices";
 
 // One open invoice. `daysLate` is 0 or less when the invoice is not due yet.
 export type PaymentRow = {
@@ -69,6 +69,7 @@ export type PaymentsResult =
       due: LiveInvoiceView[];
       total: DueTotal | null;
       blocked: boolean;
+      blockedBy?: BlockedBy;
       complete: boolean;
       transactions: { rows: LiveTransactionView[]; complete: boolean } | null;
     };

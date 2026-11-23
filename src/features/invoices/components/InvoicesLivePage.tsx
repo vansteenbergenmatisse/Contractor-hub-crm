@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
-import { formatLiveAmount } from "../api/load-invoices";
+import { blockedNote, formatLiveAmount } from "../api/load-invoices";
 import type { InvoicesResult, LiveInvoiceView } from "../types";
 import { InvoicesStatus } from "./InvoicesStatus";
 import { LiveInvoiceRowItem } from "./LiveInvoiceRow";
@@ -35,7 +35,7 @@ export function InvoicesLivePage({ result }: { result: InvoicesResult }) {
       )}
       {result.blocked && (
         <p className="fd-ppb is-warn" role="status">
-          <span>{result.complete ? "Some invoices could not be read in full, so no total is shown." : "Not every invoice could be read, so no total is shown."}</span>
+          <span>{blockedNote(result.complete, result.blockedBy)}</span>
         </p>
       )}
       <div className="fd-fl" role="group" aria-label="Which rows show">

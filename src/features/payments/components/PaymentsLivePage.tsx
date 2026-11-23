@@ -1,7 +1,7 @@
 "use client";
 
 import { useId } from "react";
-import { LiveInvoiceRowItem, formatLiveAmount } from "@/features/invoices";
+import { LiveInvoiceRowItem, blockedNote, formatLiveAmount } from "@/features/invoices";
 import type { PaymentsResult } from "../types";
 import { LiveTransactionRowItem } from "./LiveTransactionRow";
 import { PaymentsStatus } from "./PaymentsStatus";
@@ -12,7 +12,7 @@ const ROW_ACTIONS = ["Remind now", "Mark paid"] as const;
 export function PaymentsLivePage({ result }: { result: PaymentsResult }) {
   const noteId = useId();
   if (result.state !== "ready") return <PaymentsStatus state={result.state} />;
-  const { due, total, blocked, complete, transactions } = result;
+  const { due, total, blocked, blockedBy, complete, transactions } = result;
   return (
     <>
       <section className="fd-phd fd-in">
@@ -27,7 +27,7 @@ export function PaymentsLivePage({ result }: { result: PaymentsResult }) {
       )}
       {blocked && (
         <p className="fd-ppb is-warn" role="status">
-          <span>{complete ? "Some invoices could not be read in full, so no total is shown." : "Not every invoice could be read, so no total is shown."}</span>
+          <span>{blockedNote(complete, blockedBy)}</span>
         </p>
       )}
       <div className="fd-lst fd-in">

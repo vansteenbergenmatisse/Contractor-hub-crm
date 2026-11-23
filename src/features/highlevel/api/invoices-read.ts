@@ -87,9 +87,14 @@ const currency = (value: unknown): string | null => {
   const code = text(value);
   return code && /^[A-Z]{3}$/.test(code) ? code : null;
 };
+// A plain day, or a timestamp with a zone (the form Quotes reads). The day kept is the one written in
+// the source, never one recomputed through a timezone. A timestamp without a zone counts as missing.
 function day(value: unknown): string | null {
-  const raw = text(value);
-  if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+  const source = text(value);
+  const match = source ? /^(\d{4}-\d{2}-\d{2})(T.*)?$/.exec(source) : null;
+  if (!source || !match) return null;
+  if (match[2] && (!/(Z|[+-]\d{2}:?\d{2})$/i.test(source) || Number.isNaN(Date.parse(source)))) return null;
+  const raw = match[1];
   const ms = Date.parse(`${raw}T00:00:00.000Z`);
   return !Number.isNaN(ms) && new Date(ms).toISOString().slice(0, 10) === raw ? raw : null;
 }

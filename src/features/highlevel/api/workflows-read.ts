@@ -107,7 +107,8 @@ export function parseWorkflowSearch(json: unknown, locationId: string) {
   const searchAfter = parseCursor(body?.searchAfter);
   const isForeign = (raw: unknown) => {
     const row = record(raw);
-    return row !== null && row.locationId !== undefined && row.locationId !== locationId;
+    // A null names no location, so it is treated like the documented row that has none.
+    return row !== null && row.locationId !== undefined && row.locationId !== null && row.locationId !== locationId;
   };
   const workflows: HighLevelWorkflow[] = [];
   const seen = new Set<string>();
