@@ -114,3 +114,13 @@ Sources: OpenAPI repo `GoHighLevel/highlevel-api-docs` at commit `0af86a4` (2026
 **Live shape check: not done.** The Neon `develop` database holds one tenant, it is not the test sub-account, and it has no stored HighLevel connection, so no contact search was sent. Which `Version` works, the real response keys, the type of `address`, the paging fields and the sort behaviour are all **unconfirmed**. The parser therefore requires only `id` and a readable `dateAdded`, and reads a wrongly typed optional field as missing.
 
 **Sources disagree on (confirm on a real response):** `Version` (`v3` on the live docs, `2021-07-28` or `2021-04-15` in the older OpenAPI files); opportunity search parameter names (`locationId` vs `location_id`, `query` vs `q`); messages nesting (`messages.messages[]` vs top-level `messages[]`); error statuses; some types versus examples (`invoiceNumber`, `startTime`, transaction `status`).
+
+**Pipeline read as built (2026-11-22). Response shape UNVERIFIED.** No live call was made: no credentials exist locally. Fixtures are built from the public OpenAPI file `apps/opportunities.json` at commit `0af86a4`. GET only.
+
+- `GET /opportunities/pipelines?locationId=`, `Version: 2021-07-28`, scope `opportunities.readonly`. Reads `pipelines[].id`, `name`, `locationId`, `stages[]`.
+- `GET /opportunities/search?location_id=&pipeline_id=&status=open&page=&limit=100`, `Version: 2021-07-28`, scope `opportunities.readonly`. Reads `opportunities[]` (`id`, `name`, `locationId`, `pipelineId`, `pipelineStageId`, `status`, `monetaryValue`, `lastStageChangeAt`, `contact.name`) and `meta.total`, `meta.nextPage`. Contact phone and email are in the answer and are dropped by the parser.
+- **Unverified on a real answer:** the stage item shape (the OpenAPI types `stages` as an array of arrays; the code expects objects with `id`, `name` and optional `position`), whether the live API wants `location_id` or `locationId`, whether `v3` is also accepted, the `meta` paging behaviour, and the unit and currency of `monetaryValue` (shown as a plain number, zero hidden).
+- **Scopes:** `opportunities.readonly` is in `scopes.ts`. Whether it is enabled on the Marketplace app was not checked. `pipelines.readonly` is also in `scopes.ts`, but the OpenAPI file does not ask for it on these paths.
+- **Limits (proposals, not measured):** 3 pages of 100 per load, then the page says the list is cut off; 60 loads per minute per tenant; 5 MiB per response. Only `open` deals are read, so a deal marked won or lost in HighLevel does not appear in any stage.
+- **Admin client view:** uses `withStoredLocationToken` (no refresh) and the limiter key `highlevel-pipeline-view:<viewerId>`.
+- **Off switch:** `PIPELINE_READ_DISABLED=true`.

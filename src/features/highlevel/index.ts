@@ -74,3 +74,16 @@ export {
   readContactsPage,
   readContactsThrottled,
 } from "./api/contacts";
+export {
+  MAX_PIPELINE_RESPONSE_BYTES,
+  PIPELINE_MAX_PAGES,
+  PIPELINE_PAGE_SIZE,
+  PIPELINE_READS_PER_MINUTE,
+  createPipelineReaderFrom,
+  createPipelineRequests,
+  parseOpportunityPage,
+  parsePipelines,
+  readPipelineBoard,
+} from "./api/pipeline-read";
+export type { HighLevelOpportunity, HighLevelPipeline, HighLevelPipelineStage, PipelineBoardRead, PipelineServices } from "./api/pipeline-read";
+export { createTenantPipelineReader } from "./api/pipeline-tenant";
