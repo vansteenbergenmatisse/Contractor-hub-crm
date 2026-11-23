@@ -104,9 +104,10 @@ type Walk = {
   // Attributes of editors, removed once the whole file passed.
   strip: [XmlNode, XmlAttribute][];
   sheet: { selector: string; ids: string[] }[];
+  sheetWork: number;
   elements: XmlNode[];
 };
-const newWalk = (): Walk => ({ n: 0, problem: null, ids: new Map(), repeatedIds: new Set(), references: new Map(), strip: [], sheet: [], elements: [] });
+const newWalk = (): Walk => ({ n: 0, problem: null, ids: new Map(), repeatedIds: new Set(), references: new Map(), strip: [], sheet: [], sheetWork: 0, elements: [] });
 
 function fail(walk: Walk, problem: SvgProblem): false {
   walk.problem ??= problem;
@@ -115,9 +116,20 @@ function fail(walk: Walk, problem: SvgProblem): false {
 
 const problemOfValue = (value: string): SvgProblem => (/url\s*\(|@import/i.test(value) ? "outside_link" : /javascript:|expression\s*\(/i.test(value) ? "script" : "unsupported");
 
+const isNameCode = (code: number) => code === 45 || (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+const isSpaceCode = (code: number) => code === 32 || (code >= 9 && code <= 13);
+
+// Reads the name before each bracket by walking back. The stretches walked never overlap, so this
+// stays linear on a hostile value, where a regex search would be quadratic.
 function usesOnlySafeFunctions(value: string): boolean {
-  for (const match of value.matchAll(/([A-Za-z-]+)\s*\(/g)) {
-    if (!CSS_FUNCTIONS.has(match[1].toLowerCase())) return false;
+  let floor = 0;
+  for (let open = value.indexOf("("); open >= 0; open = value.indexOf("(", open + 1)) {
+    let end = open;
+    while (end > floor && isSpaceCode(value.charCodeAt(end - 1))) end -= 1;
+    let start = end;
+    while (start > floor && isNameCode(value.charCodeAt(start - 1))) start -= 1;
+    if (start < end && !CSS_FUNCTIONS.has(value.slice(start, end).toLowerCase())) return false;
+    floor = open + 1;
   }
   return true;
 }
@@ -162,6 +174,9 @@ function isSafeSheet(css: string, walk: Walk): boolean {
     // A reference is only followed through a selector whose targets can be named exactly.
     if (ids.length > 0) {
       if (selectors.some((part) => !SIMPLE_SELECTOR.test(part))) return fail(walk, "style");
+      // Selectors times references is the work done later, so it is counted before any of it.
+      walk.sheetWork += selectors.length * ids.length;
+      if (walk.sheetWork > MAX_EXPANDED) return fail(walk, "too_complex");
       for (const selector of selectors) walk.sheet.push({ selector, ids });
     }
     at = close + 1;

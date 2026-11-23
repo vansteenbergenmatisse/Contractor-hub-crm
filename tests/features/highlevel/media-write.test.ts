@@ -51,23 +51,46 @@ describe("media adapter: find", () => {
     expect(result.ok && result.files.map((row) => row.id)).toEqual(["f1", "f2"]);
   });
 
-  it("ignores rows of another location, trashed rows, folders and rows without an id", async () => {
+  it("leaves out trashed rows and does not treat a folder as a file", async () => {
     const requestFiles = library({ root: { file: [
-      { _id: "x", name: "a", url: URL_A, altId: "loc-2", altType: "location" },
-      { _id: "y", name: "a", url: URL_A },
       own({ _id: "t", name: "a", url: URL_A, status: "trashed" }),
       own({ _id: "d", name: "a", url: URL_A, deleted: true }),
       own({ _id: "fo", name: "a", url: URL_A, type: "folder" }),
-      own({ name: "a", url: URL_A }),
-      "junk",
     ] } });
     expect(await adapter({ requestFiles }).media.find("t1", URL_A)).toEqual({ ok: true, files: [], siblings: [] });
+  });
+
+  it.each([
+    ["another location", { _id: "x", name: "a", url: URL_A, altId: "loc-2", altType: "location" }],
+    ["no location", { _id: "y", name: "a", url: URL_A }],
+    ["a folder without a location", { _id: "z", type: "folder", name: "hidden" }],
+    ["no id", own({ name: "a", url: URL_A })],
+    ["a file without a url", own({ _id: "n", name: "a" })],
+    ["a row that is not an object", "junk"],
+  ])("calls the library incomplete on a row with %s", async (_name, bad) => {
+    const requestFiles = library({ root: { file: [own({ _id: "f1", name: "a", url: URL_A }), bad] } });
+    expect(await adapter({ requestFiles }).media.find("t1", URL_A)).toEqual({ ok: false, reason: "incomplete" });
   });
 
   it("reads every page of a folder", async () => {
     const rows = Array.from({ length: 150 }, (_, i) => own({ _id: `f${i}`, name: `n${i}`, url: i === 149 ? URL_A : `${URL_A}-${i}` }));
     const result = await adapter({ requestFiles: library({ root: { file: rows } }) }).media.find("t1", URL_A);
     expect(result.ok && result.files[0]?.id).toBe("f149");
+  });
+
+  it("keeps reading when the server caps a page below the asked limit", async () => {
+    const rows = Array.from({ length: 130 }, (_, i) => own({ _id: `f${i}`, name: `n${i}`, url: i === 129 ? URL_A : `${URL_A}-${i}` }));
+    const requestFiles = vi.fn<MediaAdapterDeps["requestFiles"]>(async (_t, _l, page) => json({ files: page.type === "file" ? rows.slice(page.offset, page.offset + 50) : [] }));
+    const result = await adapter({ requestFiles }).media.find("t1", URL_A);
+    expect(result.ok && result.files[0]?.id).toBe("f129");
+    expect(requestFiles.mock.calls.filter(([, , page]) => page.type === "file").map(([, , page]) => page.offset)).toEqual([0, 50, 100, 130]);
+  });
+
+  it("does not call a page of only trashed rows a repeat", async () => {
+    const rows = [...Array.from({ length: 3 }, (_, i) => own({ _id: `t${i}`, name: "x", url: `${URL_A}-${i}`, status: "trashed" })), own({ _id: "f1", name: "a", url: URL_A })];
+    const requestFiles = vi.fn<MediaAdapterDeps["requestFiles"]>(async (_t, _l, page) => json({ files: page.type === "file" ? rows.slice(page.offset, page.offset + 3) : [] }));
+    const result = await adapter({ requestFiles }).media.find("t1", URL_A);
+    expect(result.ok && result.files[0]?.id).toBe("f1");
   });
 
   it("stops as incomplete when paging repeats the same page", async () => {
@@ -80,7 +103,7 @@ describe("media adapter: find", () => {
     const folders = Array.from({ length: 80 }, (_, i) => own({ _id: `d${i}`, type: "folder", name: `d${i}` }));
     const requestFiles = library({ root: { folder: folders } });
     expect(await adapter({ requestFiles }).media.find("t1", URL_A)).toEqual({ ok: false, reason: "incomplete" });
-    expect(requestFiles.mock.calls.length).toBeLessThanOrEqual(60);
+    expect(requestFiles.mock.calls.length).toBeLessThanOrEqual(120);
   });
 
   it("does not loop on a folder that lists itself", async () => {
@@ -97,6 +120,29 @@ describe("media adapter: find", () => {
     expect(await listed({ parentId: "d2" })).toBe(false);
     expect(await listed({ type: "folder" })).toBe(false);
     expect(await listed({ status: "trashed" })).toBe(false);
+  });
+
+  it("does not verify past a row it cannot read", async () => {
+    const entry = { id: "f1", name: "a", url: URL_A, parentId: null };
+    const requestFiles = library({ root: { file: ["junk", own({ _id: "f1", name: "a", url: URL_A })] } });
+    expect(await adapter({ requestFiles }).media.verify("t1", entry)).toBe(false);
+  });
+
+  it("finds a file past a server page cap when verifying", async () => {
+    const rows = Array.from({ length: 70 }, (_, i) => own({ _id: `f${i}`, name: "a", url: `${URL_A}-${i}` }));
+    const requestFiles = vi.fn<MediaAdapterDeps["requestFiles"]>(async (_t, _l, page) => json({ files: rows.slice(page.offset, page.offset + 50) }));
+    expect(await adapter({ requestFiles }).media.verify("t1", { id: "f69", name: "a", url: `${URL_A}-69`, parentId: null })).toBe(true);
+  });
+
+  it("stops verifying when its time is spent", async () => {
+    const rows = Array.from({ length: 500 }, (_, i) => own({ _id: `f${i}`, name: "a", url: `${URL_A}-${i}` }));
+    let clock = 0;
+    const requestFiles = vi.fn<MediaAdapterDeps["requestFiles"]>(async (_t, _l, page) => {
+      clock += 3_000;
+      return json({ files: rows.slice(page.offset, page.offset + 50) });
+    });
+    expect(await adapter({ requestFiles, now: () => clock }).media.verify("t1", { id: "f499", name: "a", url: `${URL_A}-499`, parentId: null })).toBe(false);
+    expect(requestFiles.mock.calls.length).toBeLessThanOrEqual(3);
   });
 
   it("trashes one id with the recoverable status", async () => {

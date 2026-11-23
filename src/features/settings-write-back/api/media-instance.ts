@@ -11,6 +11,7 @@ export function replaceTenantImage(input: { tenantId: string; actorId: string; k
   const hosts = allowedLogoHosts();
   return replaceImage(input, {
     read: values.read,
+    readAll: values.readAll,
     update: values.update,
     begin: beginValueChange,
     finish: finishValueChange,

@@ -8,6 +8,8 @@ const KEY = "1_our_work_after";
 const OLD = "https://assets.cdn.filesafe.space/x/old.webp";
 const NEW = "https://files.leadconnectorhq.com/x/new";
 const BYTES = new Uint8Array([1, 2, 3, 4]);
+const OLD_BYTES = new Uint8Array([5, 6, 7, 8]);
+const OTHER = "https://files.leadconnectorhq.com/x/earlier";
 const HASH = createHash("sha256").update(BYTES).digest("hex");
 const NAME = "Project photo.webp";
 const FOLDER = "folder-1";
@@ -66,7 +68,9 @@ function deps(options: Options = {}) {
       calls.push("upload");
       return options.uploaded ?? { kind: "uploaded", fileId: "f1", url: NEW };
     }),
-    fetchBytes: vi.fn<MediaDeps["fetchBytes"]>(async () => (options.fetched === undefined ? BYTES : options.fetched)),
+    // The current file holds other bytes than the new image, unless a test says otherwise.
+    fetchBytes: vi.fn<MediaDeps["fetchBytes"]>(async (url) => (url === OLD ? OLD_BYTES : options.fetched === undefined ? BYTES : options.fetched)),
+    readAll: vi.fn<MediaDeps["readAll"]>(async () => ({ ok: true, rows: [...store.values()].map(({ key, value }) => ({ key, value })) })),
     hosts: ["assets.cdn.filesafe.space", "files.leadconnectorhq.com"],
   };
   return d;
@@ -81,7 +85,9 @@ describe("replaceImage: the good path", () => {
   it("finds the old file, uploads under its name and folder, saves, then trashes the old file", async () => {
     const d = deps();
     expect(await run(d)).toEqual(SAVED);
-    expect(d.calls).toEqual(["find", "audit", "upload", "audit", "put", "verify", "audit", "trash"]);
+    expect(d.calls).toEqual(["find", "audit", "upload", "audit", "put", "verify", "verify", "audit", "trash"]);
+    expect(d.verify.mock.calls[0]).toEqual(["T1", { id: "f1", name: NAME, url: NEW, parentId: FOLDER }]);
+    expect(d.fetchBytes).toHaveBeenLastCalledWith(NEW, 2 * 1024 * 1024);
     expect(d.find).toHaveBeenCalledWith("T1", OLD);
     expect(d.store.get(KEY)?.value).toBe(NEW);
     expect(d.upload).toHaveBeenCalledWith("T1", expect.objectContaining({ name: NAME, fileName: NAME, parentId: FOLDER, contentType: "image/webp" }));
@@ -181,12 +187,13 @@ describe("replaceImage: stops before any external write", () => {
 });
 
 describe("replaceImage: a name match is not proof", () => {
-  it("stops on a hash mismatch and keeps the old value", async () => {
-    const d = deps({ found: hit(), fetched: new Uint8Array([9, 9, 9, 9]) });
-    expect(await run(d)).toEqual({ status: "hash_mismatch" });
-    expect(d.upload).not.toHaveBeenCalled();
-    expect(d.update).not.toHaveBeenCalled();
-    expect(d.store.get(KEY)?.value).toBe(OLD);
+  it("treats a same-name file with other bytes as no match: it uploads and leaves that file alone", async () => {
+    const d = deps({ found: hit(OTHER) });
+    d.fetchBytes.mockImplementation(async (url) => (url === OTHER ? new Uint8Array([9, 9, 9, 9]) : url === OLD ? OLD_BYTES : BYTES));
+    expect(await run(d)).toEqual(SAVED);
+    expect(d.upload).toHaveBeenCalledTimes(1);
+    expect(d.trash).toHaveBeenCalledExactlyOnceWith("T1", "old-id");
+    expect(d.trash).not.toHaveBeenCalledWith("T1", "sibling");
   });
 
   it("stops when the file cannot be fetched to compare", async () => {
@@ -384,6 +391,7 @@ describe("replaceImage: the file keeps its name, so the format must match", () =
   it("does not read a dot in a name as a format", async () => {
     const d = deps({ found: { ok: true, files: [{ ...OLD_FILE, name: "Logo v1.2", url: "https://assets.cdn.filesafe.space/x/abc" }], siblings: [] } });
     d.store.get(KEY)!.value = "https://assets.cdn.filesafe.space/x/abc";
+    d.fetchBytes.mockImplementation(async (url) => (url.endsWith("/abc") ? OLD_BYTES : BYTES));
     expect((await run(d, { expected: "https://assets.cdn.filesafe.space/x/abc" })).status).toBe("saved");
     expect(d.upload).toHaveBeenCalledWith("T1", expect.objectContaining({ name: "Logo v1.2" }));
   });
@@ -406,25 +414,79 @@ describe("replaceImage: removing the old file", () => {
 
   it("keeps the old file when a value listed twice still uses it", async () => {
     const d = deps();
-    const read = d.read.getMockImplementation() as MediaDeps["read"];
-    d.read.mockImplementation(async (tenant) => ({ ...(await read(tenant)), duplicates: [{ key: "twice", value: OLD }] }) as Awaited<ReturnType<MediaDeps["read"]>>);
+    d.readAll.mockResolvedValue({ ok: true, rows: [{ key: KEY, value: NEW }, { key: "twice", value: "first" }, { key: "twice", value: OLD }] });
     expect((await run(d)).oldFile).toBe("in_use");
     expect(d.trash).not.toHaveBeenCalled();
   });
 
-  it("keeps the old file when the values cannot be read again", async () => {
+  it("keeps the old file when a row without a readable key holds its URL", async () => {
     const d = deps();
-    const read = d.read.getMockImplementation() as MediaDeps["read"];
-    let count = 0;
-    d.read.mockImplementation(async (tenant) => ((count += 1) >= 4 ? { ok: false, reason: "retry" } : read(tenant)));
+    d.readAll.mockResolvedValue({ ok: true, rows: [{ key: KEY, value: NEW }, { key: null, value: OLD }] });
+    expect((await run(d)).oldFile).toBe("in_use");
+    expect(d.trash).not.toHaveBeenCalled();
+  });
+
+  it("keeps the old file when the key itself is listed twice afterwards", async () => {
+    const d = deps();
+    d.readAll.mockResolvedValue({ ok: true, rows: [{ key: KEY, value: NEW }, { key: KEY, value: NEW }] });
+    expect((await run(d)).oldFile).toBe("kept");
+    expect(d.trash).not.toHaveBeenCalled();
+  });
+
+  it("keeps the old file when the raw values cannot be read or a row is unreadable", async () => {
+    const d = deps();
+    d.readAll.mockResolvedValue({ ok: false, reason: "retry" });
     expect(await run(d)).toEqual({ ...SAVED, oldFile: "kept" });
     expect(d.trash).not.toHaveBeenCalled();
   });
 
   it("keeps the old file when its id no longer verifies", async () => {
     const d = deps();
-    d.verify.mockResolvedValue(false);
+    d.verify.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
     expect(await run(d)).toEqual({ ...SAVED, oldFile: "kept" });
+    expect(d.trash).not.toHaveBeenCalled();
+  });
+
+  it("keeps the old file when the listing does not show the new file with its name and folder", async () => {
+    const d = deps();
+    d.verify.mockResolvedValueOnce(false);
+    expect(await run(d)).toEqual({ ...SAVED, oldFile: "unproven" });
+    expect(d.verify).toHaveBeenCalledTimes(1);
+    expect(d.trash).not.toHaveBeenCalled();
+    expect(d.store.get(KEY)?.value).toBe(NEW);
+  });
+
+  it.each([
+    ["other bytes", new Uint8Array([9])],
+    ["no bytes", null],
+  ])("keeps the old file when the new file has %s", async (_name, stored) => {
+    const d = deps({ fetched: stored });
+    expect(await run(d)).toEqual({ ...SAVED, oldFile: "unproven" });
+    expect(d.trash).not.toHaveBeenCalled();
+  });
+
+  it("does not trash when the time runs out during the checks", async () => {
+    const d = deps();
+    let late = false;
+    d.now.mockImplementation(() => (late ? 40_001 : 0));
+    d.verify.mockImplementation(async () => {
+      late = true;
+      return true;
+    });
+    expect(await run(d)).toEqual({ ...SAVED, oldFile: "kept" });
+    expect(d.begin).toHaveBeenCalledTimes(2);
+    expect(d.trash).not.toHaveBeenCalled();
+  });
+
+  it("does not trash its own upload past the time limit either", async () => {
+    const d = deps({ putFails: "rejected" });
+    let late = false;
+    d.now.mockImplementation(() => (late ? 40_001 : 0));
+    d.verify.mockImplementation(async () => {
+      late = true;
+      return true;
+    });
+    expect(await run(d)).toEqual({ status: "rejected", leftover: true });
     expect(d.trash).not.toHaveBeenCalled();
   });
 
@@ -518,10 +580,56 @@ describe("replaceImage: a retry after a partial failure", () => {
     expect(d.trash).toHaveBeenCalledExactlyOnceWith("T1", "old-id");
   });
 
-  it("stops on a same-name file with other content instead of adding another", async () => {
-    const d = deps({ found: hit(), fetched: new Uint8Array([9]) });
-    expect(await run(d)).toEqual({ status: "hash_mismatch" });
+  it("after a kept state, the file the value points at is the current one: the next image replaces it", async () => {
+    const current = { id: "current", name: NAME, url: OLD, parentId: FOLDER };
+    const earlier = { id: "earlier", name: NAME, url: OTHER, parentId: FOLDER };
+    const d = deps({ found: { ok: true, files: [current], siblings: [earlier] } });
+    d.fetchBytes.mockImplementation(async (url) => (url === OTHER ? new Uint8Array([9]) : url === OLD ? OLD_BYTES : BYTES));
+    expect(await run(d)).toEqual(SAVED);
+    expect(d.find).toHaveBeenCalledWith("T1", OLD);
+    expect(d.upload).toHaveBeenCalledTimes(1);
+    expect(d.trash).toHaveBeenCalledExactlyOnceWith("T1", "current");
+  });
+
+  it("going back to an earlier image reuses that file and creates no duplicate", async () => {
+    const d = deps({ found: { ok: true, files: [OLD_FILE], siblings: [{ id: "earlier", name: NAME, url: OTHER, parentId: FOLDER }] } });
+    d.fetchBytes.mockImplementation(async (url) => (url === OLD ? OLD_BYTES : BYTES));
+    expect(await run(d)).toEqual({ ...SAVED, url: OTHER });
     expect(d.upload).not.toHaveBeenCalled();
+    expect(d.trash).toHaveBeenCalledExactlyOnceWith("T1", "old-id");
+  });
+
+  it("finds an identical file behind other same-name files", async () => {
+    const siblings = [1, 2, 3].map((n) => ({ id: `s${n}`, name: NAME, url: `${OTHER}${n}`, parentId: FOLDER }));
+    const d = deps({ found: { ok: true, files: [OLD_FILE], siblings } });
+    d.fetchBytes.mockImplementation(async (url) => (url === `${OTHER}3` ? BYTES : new Uint8Array([9])));
+    expect((await run(d)).url).toBe(`${OTHER}3`);
+    expect(d.upload).not.toHaveBeenCalled();
+  });
+
+  it("stops rather than risk a duplicate when too many same-name files cannot all be compared", async () => {
+    const siblings = Array.from({ length: 9 }, (_, n) => ({ id: `s${n}`, name: NAME, url: `${OTHER}${n}`, parentId: FOLDER }));
+    const d = deps({ found: { ok: true, files: [OLD_FILE], siblings } });
+    expect(await run(d)).toEqual({ status: "ambiguous" });
+    expect(d.upload).not.toHaveBeenCalled();
+  });
+
+  it("the same image as the current file changes nothing and removes nothing", async () => {
+    const d = deps();
+    d.fetchBytes.mockResolvedValue(BYTES);
+    expect(await run(d)).toEqual({ status: "saved", url: OLD, oldFile: "same" });
+    expect(d.upload).not.toHaveBeenCalled();
+    expect(d.update).not.toHaveBeenCalled();
+    expect(d.trash).not.toHaveBeenCalled();
+  });
+
+  it("after no answer, a same-name file that was already there is not taken for the upload", async () => {
+    const before = { id: "earlier", name: NAME, url: OTHER, parentId: FOLDER };
+    const list: MediaFind = { ok: true, files: [OLD_FILE], siblings: [before] };
+    const d = deps({ uploaded: { kind: "no_answer" }, found: [list, list] });
+    d.fetchBytes.mockImplementation(async (url) => (url === OTHER ? new Uint8Array([9]) : OLD_BYTES));
+    expect(await run(d)).toEqual({ status: "unknown" });
+    expect(d.upload).toHaveBeenCalledTimes(1);
     expect(d.trash).not.toHaveBeenCalled();
   });
 });

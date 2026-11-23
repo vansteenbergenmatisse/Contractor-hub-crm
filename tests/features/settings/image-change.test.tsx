@@ -150,6 +150,8 @@ describe("Change image: says exactly what happened", () => {
     ["in_use", /another setting still uses it/i],
     ["kept", /could not be removed/i],
     ["unconfirmed", /could not confirm/i],
+    ["unproven", /old file was kept/i],
+    ["same", /already your current image/i],
   ] as const)("old file %s", async (oldFile, message) => {
     show({ uploadImage: vi.fn<ImageUploader>(async () => ({ status: "saved", url: NEW_URL, oldFile })), prepareImage: prepareOk() });
     pick(vector());

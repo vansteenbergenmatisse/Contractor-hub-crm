@@ -50,7 +50,8 @@ export type ImageStatus =
   | "not_found" | "ambiguous" | "library_limit" | "format_mismatch";
 export type ImageFormat = "webp" | "png" | "jpeg" | "svg";
 // What happened to the old file after the image changed.
-export type ImageOldFile = "trashed" | "in_use" | "kept" | "unconfirmed";
+// `unproven`: the new file's name, folder or bytes could not be confirmed. `same`: nothing to change.
+export type ImageOldFile = "trashed" | "in_use" | "kept" | "unconfirmed" | "unproven" | "same";
 export type SvgProblemCode = "script" | "outside_link" | "embedded" | "animation" | "doctype" | "style" | "reference" | "too_complex" | "unsupported" | "broken";
 // `leftover`: the change failed and the file it uploaded could not be removed.
 export type ImageAnswer = { status: ImageStatus; url?: string; current?: string; format?: ImageFormat; oldFile?: ImageOldFile; leftover?: boolean; svgProblem?: SvgProblemCode };

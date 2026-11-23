@@ -8,9 +8,11 @@ const MAX_LIST_BYTES = 5 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 10_000;
 const PAGE_SIZE = 100;
 // Proposals, not measured. A library that does not fit is reported, never half-checked.
-const MAX_LIST_CALLS = 60;
+// Each folder costs at least two calls per type, because only an empty page ends it.
+const MAX_LIST_CALLS = 120;
 const WALK_BUDGET_MS = 12_000;
 const MAX_VERIFY_PAGES = 20;
+const VERIFY_BUDGET_MS = 5_000;
 
 export type MediaFile = { id: string; name: string; url: string; parentId: string | null };
 // `files`: every live file holding the exact URL. `siblings`: other files with the same name in the
@@ -44,19 +46,20 @@ class ListStop extends Error {
 
 const filled = (value: unknown): value is string => typeof value === "string" && value.trim().length > 0;
 
-type Row = { kind: "file"; file: MediaFile } | { kind: "folder"; id: string };
+// `gone`: a readable row of this location that is trashed or deleted.
+type Row = { kind: "file"; id: string; file: MediaFile } | { kind: "folder"; id: string } | { kind: "gone"; id: string };
 
-// A row counts only when it proves it belongs to this location and is live.
+// Null: this row cannot be read, so a listing holding it cannot be called complete.
 function parseRow(raw: unknown, locationId: string): Row | null {
   if (typeof raw !== "object" || raw === null) return null;
   const item = raw as Record<string, unknown>;
   if (item.altId !== locationId || item.altType !== "location") return null;
-  if (item.deleted === true || item.status === "trashed" || item.status === "deleted") return null;
   const id = filled(item._id) ? item._id : filled(item.id) ? item.id : null;
   if (!id) return null;
+  if (item.deleted === true || item.status === "trashed" || item.status === "deleted") return { kind: "gone", id };
   if (item.type === "folder") return { kind: "folder", id };
   if (!filled(item.name) || !filled(item.url)) return null;
-  return { kind: "file", file: { id, name: item.name, url: item.url, parentId: filled(item.parentId) ? item.parentId : null } };
+  return { kind: "file", id, file: { id, name: item.name, url: item.url, parentId: filled(item.parentId) ? item.parentId : null } };
 }
 
 async function readPage(deps: MediaAdapterDeps, token: string, locationId: string, page: ListPage): Promise<unknown[]> {
@@ -73,24 +76,27 @@ async function readPage(deps: MediaAdapterDeps, token: string, locationId: strin
   return list;
 }
 
-// Every page of one folder and type. A full page that adds nothing new means paging does not work,
-// so the result cannot be called complete.
+// Every page of one folder and type. A server may cap a page below the limit, so the offset moves by
+// what came back and only an empty page ends the folder. A page with nothing new means paging does
+// not work, and a row that cannot be read may hide a file: neither can be called complete.
 async function readFolder(deps: MediaAdapterDeps, token: string, locationId: string, type: "file" | "folder", parentId: string | null, spend: () => void, into: Map<string, Row>) {
-  for (let offset = 0; ; offset += PAGE_SIZE) {
+  const seen = new Set<string>();
+  for (let offset = 0; ; ) {
     spend();
     const list = await readPage(deps, token, locationId, { type, parentId, offset, limit: PAGE_SIZE });
-    let added = 0;
+    if (list.length === 0) return;
+    let fresh = 0;
     for (const raw of list) {
       const row = parseRow(raw, locationId);
-      if (!row) continue;
-      const key = `${row.kind}:${row.kind === "file" ? row.file.id : row.id}`;
-      if (!into.has(key)) {
-        into.set(key, row);
-        added += 1;
+      if (!row) throw new ListStop("incomplete");
+      if (!seen.has(row.id)) {
+        seen.add(row.id);
+        fresh += 1;
       }
+      if (row.kind !== "gone") into.set(`${row.kind}:${row.id}`, row);
     }
-    if (list.length < PAGE_SIZE) return;
-    if (added === 0) throw new ListStop("incomplete");
+    if (fresh === 0) throw new ListStop("incomplete");
+    offset += list.length;
   }
 }
 
@@ -149,17 +155,28 @@ export function createMediaAdapter(deps: MediaAdapterDeps) {
         const locationId = await deps.readLocationId(tenantId);
         if (!locationId) return false;
         const token = await deps.getLocationToken(tenantId);
-        const hits = new Map<string, MediaFile>();
-        for (let page = 0; page < MAX_VERIFY_PAGES; page += 1) {
-          const list = await readPage(deps, token, locationId, { type: "file", parentId: file.parentId, offset: page * PAGE_SIZE, limit: PAGE_SIZE });
+        const started = clock();
+        const seen = new Set<string>();
+        let offset = 0;
+        for (let page = 0; page < MAX_VERIFY_PAGES && clock() - started <= VERIFY_BUDGET_MS; page += 1) {
+          const list = await readPage(deps, token, locationId, { type: "file", parentId: file.parentId, offset, limit: PAGE_SIZE });
+          if (list.length === 0) return false;
+          let fresh = 0;
           for (const raw of list) {
             const row = parseRow(raw, locationId);
-            if (row?.kind === "file" && row.file.id === file.id) hits.set(row.file.id, row.file);
+            if (!row) return false;
+            if (!seen.has(row.id)) {
+              seen.add(row.id);
+              fresh += 1;
+            }
+            if (row.id === file.id) {
+              return row.kind === "file" && row.file.url === file.url && row.file.name === file.name && row.file.parentId === file.parentId;
+            }
           }
-          if (list.length < PAGE_SIZE) break;
+          if (fresh === 0) return false;
+          offset += list.length;
         }
-        const hit = hits.get(file.id);
-        return !!hit && hit.url === file.url && hit.name === file.name && hit.parentId === file.parentId;
+        return false;
       } catch {
         console.error("HighLevel media list failed: step=verify");
         return false;
