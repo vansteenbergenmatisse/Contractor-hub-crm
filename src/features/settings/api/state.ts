@@ -20,6 +20,9 @@ export type SettingsState = {
   open: boolean; // phone: a section is open as a pushed detail
   q: string;
   focus: { key: string; n: number } | null; // field to put the cursor in
+  // Kept here, not in the page, so a save that outlives the page still shows when the owner returns.
+  saving: boolean;
+  saveProblem: string | null;
 };
 
 export type SettingsAction =
@@ -30,6 +33,9 @@ export type SettingsAction =
   | { type: "save" }
   | { type: "normalize"; draft: CustomValues }
   | { type: "remoteSaved"; results: readonly SaveResult[]; submitted: CustomValues }
+  | { type: "saveStart" }
+  | { type: "saveEnd"; problem: string | null }
+  | { type: "loaded"; values: CustomValues }
   | { type: "toggleCols" }
   | { type: "switch"; index: 0 | 1 }
   | { type: "how"; index: number }
@@ -55,6 +61,8 @@ export function initialState(values?: CustomValues, section?: SectionKey): Setti
     open: section !== undefined,
     q: "",
     focus: null,
+    saving: false,
+    saveProblem: null,
   };
 }
 
@@ -96,6 +104,11 @@ export function prepareSave(s: Pick<SettingsState, "draft" | "values">): { trimm
   return { trimmed, problem, changedKeys: Object.keys(trimmed).filter((k) => trimmed[k] !== (s.values[k] ?? "").trim()) };
 }
 
+// Fields whose text differs from the saved value. Spaces around a value are not a change: Save trims them.
+export function dirtyKeysOf(values: CustomValues, draft: CustomValues): string[] {
+  return Object.keys({ ...values, ...draft }).filter((k) => (draft[k] ?? "").trim() !== (values[k] ?? "").trim());
+}
+
 export function settingsReducer(s: SettingsState, a: SettingsAction): SettingsState {
   switch (a.type) {
     case "go":
@@ -118,6 +131,15 @@ export function settingsReducer(s: SettingsState, a: SettingsAction): SettingsSt
       return { ...s, how: { ...s.how, [a.index]: !s.how[a.index] } };
     case "ask":
       return { ...s, asked: { ...s.asked, [a.index]: true } };
+    case "saveStart":
+      return { ...s, saving: true, saveProblem: null };
+    case "saveEnd":
+      return { ...s, saving: false, saveProblem: a.problem };
+    case "loaded": {
+      // The values arrived after a failed read. What the owner typed meanwhile stays in the fields.
+      const typed = Object.fromEntries(Object.entries(s.draft).filter(([, v]) => v.trim() !== ""));
+      return { ...s, values: { ...a.values }, draft: { ...a.values, ...typed } };
+    }
     case "normalize":
       return { ...s, draft: a.draft, err: null, ok: false };
     case "remoteSaved": {

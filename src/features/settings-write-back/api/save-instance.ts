@@ -30,7 +30,8 @@ export function freshValuesReader(fallback: (tenantId: string) => Promise<readon
   return async (tenantId: string): Promise<readonly Row[]> => {
     try {
       const answer = await createTenantCustomValueAdapter().read(tenantId);
-      if (answer.ok) return answer.values.map(({ key, value }) => ({ key, value }));
+      // A key listed twice shows its first value, as the brand reader does. The save never writes it.
+      if (answer.ok) return [...answer.values, ...(answer.duplicates ?? [])].map(({ key, value }) => ({ key, value }));
     } catch {
       console.error("Settings fresh read failed");
     }

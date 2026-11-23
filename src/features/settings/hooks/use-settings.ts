@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { useKeptReducer, usePushed, useShell } from "@/features/app-shell";
-import { CONNECTIONS, SWITCHES, extraKeys } from "../api/fields";
+import { CONNECTIONS, SWITCHES, extraKeys, shadowedKeys } from "../api/fields";
 import { NOT_AVAILABLE, connectionRowText } from "../api/connections";
 import { applyBrandToDocument, changedBusinessPatch, type BusinessPatch } from "../api/live-save";
 import { filterSettings } from "../api/search";
@@ -37,6 +37,19 @@ export function useSettings(
   const arrivedSave = useRef(state.ok ? state.values : null);
   const lastValues = useRef(state.values);
   const extras = useMemo(() => extraKeys(state.values), [state.values]);
+  // No key at all: the read failed or the account holds none of these values. A key with an empty
+  // value is still a key, so a new client's blank account does not count.
+  const notLoaded = Object.keys(state.values).length === 0;
+  // The kept state outlives the page, so values that load on a later visit must replace the empty ones.
+  useEffect(() => {
+    if (notLoaded && initialValues && Object.keys(initialValues).length > 0) dispatch({ type: "loaded", values: initialValues });
+  }, [notLoaded, initialValues, dispatch]);
+  // A key the reader ignores gets no field, unless the owner has an unsaved edit in it.
+  const hidden = useMemo(() => {
+    const out = shadowedKeys(state.values);
+    for (const key of out) if ((state.draft[key] ?? "").trim() !== (state.values[key] ?? "").trim()) out.delete(key);
+    return out;
+  }, [state.values, state.draft]);
   const phone = (state.values.business_phone_number ?? "").trim();
   // With a tenant's real values the choices have no source yet, so they read "Not available yet".
   const choicesAvailable = initialValues === undefined;
@@ -57,7 +70,7 @@ export function useSettings(
     });
     return out;
   }, [connections, phone, state.how, state.asked, state.sw, choicesAvailable]);
-  const filter = useMemo(() => filterSettings(state.q, extras, rowText), [state.q, extras, rowText]);
+  const filter = useMemo(() => filterSettings(state.q, extras, rowText, hidden), [state.q, extras, rowText, hidden]);
   const shell = useShell() as ShellWithUpdate;
   // Held in a ref so a new function identity from the shell never re-runs the Save effect (no loop).
   const updateRef = useRef(shell.updateBusiness);
@@ -89,5 +102,5 @@ export function useSettings(
     else updateRef.current?.(patch);
   }, [state.ok, state.values, live]);
 
-  return { state, dispatch, filter, extras, phone, choicesAvailable };
+  return { state, dispatch, filter, extras, phone, choicesAvailable, notLoaded };
 }

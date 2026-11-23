@@ -79,7 +79,29 @@ export function labelOfKey(key: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-export const LINK_KEYS: string[] = ["business_logo", "business_favicon_url", "business_main_background_video_or_image"];
+export const LINK_KEYS: string[] = [
+  "business_logo", "business_favicon_url", "business_main_background_video_or_image",
+  "business_website_url", "request_a_job_booking_link", "request_a_quote_booking_link",
+  "business_google_profile_url", "google_review_request_url", "bbb_review_request_url",
+];
+
+// The brand reader's spellings of one fact, in its order (brand/api/build-brand.ts).
+const READER_SPELLINGS: readonly (readonly string[])[] = [
+  ["business_address_city", "business_main_city"],
+  ["business_address_state", "business_main_state_abbreviation"],
+];
+
+// Keys the reader ignores for this account, so an edit there would change nothing the app shows. The
+// reader takes the first filled-in spelling; with none filled in, the first the account has.
+export function shadowedKeys(values: Record<string, string>): Set<string> {
+  const out = new Set<string>();
+  for (const keys of READER_SPELLINGS) {
+    const present = keys.filter((key) => Object.hasOwn(values, key));
+    const used = present.find((key) => values[key].trim() !== "") ?? present[0];
+    if (used) for (const key of keys) if (key !== used) out.add(key);
+  }
+  return out;
+}
 
 export const SECTIONS: { key: SectionKey; title: string; headingId: string }[] = [
   { key: "biz", title: "Business details", headingId: "fd-st-1" },

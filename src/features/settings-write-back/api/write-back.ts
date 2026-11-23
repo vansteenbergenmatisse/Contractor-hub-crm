@@ -144,6 +144,11 @@ async function writePair(input: Input, first: Candidate, second: Candidate, star
     a.unresolved = true;
     return list;
   }
+  // Restoring an empty value would blank it, which this save never does.
+  if (!first.previous.trim()) {
+    a.unresolved = true;
+    return list;
+  }
   await restore(input, a, deps);
   return list;
 }
@@ -196,6 +201,22 @@ async function confirmingRead(tenantId: string, written: readonly Written[], sta
   return after.ok ? valuesOf(after.values) : null;
 }
 
+// One side of the pair stopped before any write: the other waits too, so the two never end up half
+// changed. A side that already holds the wanted value does not stop it.
+function withoutHalfPair(writable: readonly Candidate[], out: Results): Candidate[] {
+  const pair: readonly string[] = COLOR_PAIR;
+  const stopped = pair.some((key) => {
+    const status = out.get(key)?.status;
+    return status !== undefined && status !== "unchanged";
+  });
+  if (!stopped) return [...writable];
+  return writable.filter((c) => {
+    if (!pair.includes(c.key)) return true;
+    out.set(c.key, { key: c.key, status: "retry" });
+    return false;
+  });
+}
+
 function toUnits(candidates: readonly Candidate[]): Candidate[][] {
   const main = candidates.find((c) => c.key === COLOR_PAIR[0]);
   const text = candidates.find((c) => c.key === COLOR_PAIR[1]);
@@ -238,6 +259,7 @@ async function runSave(input: Input, deps: SaveDeps): Promise<{ results: SaveRes
   }
   const byKey = new Map(read.values.map((row) => [row.key, row]));
   const current = valuesOf(read.values);
+  const listedTwice = new Set((read.duplicates ?? []).map((row) => row.key));
   const out: Results = new Map();
   const candidates: Candidate[] = [];
   for (const change of changes) {
@@ -245,6 +267,7 @@ async function runSave(input: Input, deps: SaveDeps): Promise<{ results: SaveRes
     const value = change.value.trim();
     // The allowlist comes first, so the answer never reveals whether a denied key exists.
     if (!isSettingsKeyAllowed(key)) out.set(key, { key, status: "denied" });
+    else if (listedTwice.has(key)) out.set(key, { key, status: "duplicate" });
     else {
       const target = byKey.get(key);
       const now = target?.value.trim();
@@ -261,7 +284,7 @@ async function runSave(input: Input, deps: SaveDeps): Promise<{ results: SaveRes
     out.set(c.key, { key: c.key, status: "invalid" });
     return false;
   });
-  const units = toUnits(writable);
+  const units = toUnits(withoutHalfPair(writable, out));
   const written: Written[] = [];
   let keepLease = false;
   for (let i = 0; i < units.length; i += UNITS_AT_ONCE) {
