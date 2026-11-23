@@ -1,6 +1,7 @@
 import { MOCK_CUSTOM_VALUES, MOCK_SWITCHES } from "../mock";
-import type { CustomValues, Problem, SectionKey } from "../types";
+import type { CustomValues, Problem, SaveResult, SectionKey } from "../types";
 import { COLOR_KEYS, LINK_KEYS } from "./fields";
+import { isSaved } from "./save-summary";
 import { validateValues } from "./validate";
 
 // Local state. In Phase 3 Save writes values back to the sub-account's custom values behind an
@@ -27,6 +28,8 @@ export type SettingsAction =
   | { type: "search"; q: string }
   | { type: "edit"; key: string; value: string }
   | { type: "save" }
+  | { type: "normalize"; draft: CustomValues }
+  | { type: "remoteSaved"; results: readonly SaveResult[]; submitted: CustomValues }
   | { type: "toggleCols" }
   | { type: "switch"; index: 0 | 1 }
   | { type: "how"; index: number }
@@ -83,6 +86,16 @@ function withFixedInput(trimmed: CustomValues, saved: CustomValues): CustomValue
   return out;
 }
 
+// What Save would store: the cleaned-up values, the form's first problem, and the keys that changed.
+export function prepareSave(s: Pick<SettingsState, "draft" | "values">): { trimmed: CustomValues; problem: Problem | null; changedKeys: string[] } {
+  const typed: CustomValues = {};
+  for (const k of Object.keys(s.draft)) typed[k] = String(s.draft[k]).trim();
+  const trimmed = withFixedInput(typed, s.values);
+  // Only what the owner changed since the last save is checked (see validateValues).
+  const problem = validateValues(trimmed, s.values);
+  return { trimmed, problem, changedKeys: Object.keys(trimmed).filter((k) => trimmed[k] !== (s.values[k] ?? "").trim()) };
+}
+
 export function settingsReducer(s: SettingsState, a: SettingsAction): SettingsState {
   switch (a.type) {
     case "go":
@@ -105,12 +118,20 @@ export function settingsReducer(s: SettingsState, a: SettingsAction): SettingsSt
       return { ...s, how: { ...s.how, [a.index]: !s.how[a.index] } };
     case "ask":
       return { ...s, asked: { ...s.asked, [a.index]: true } };
+    case "normalize":
+      return { ...s, draft: a.draft, err: null, ok: false };
+    case "remoteSaved": {
+      // Only what HighLevel confirmed becomes saved. A conflict moves the saved value to what the
+      // account holds now and keeps the owner's text, so the next save starts from the real value.
+      const values = { ...s.values };
+      for (const result of a.results) {
+        if (isSaved(result.status)) values[result.key] = a.submitted[result.key] ?? "";
+        else if (result.status === "conflict" && result.current !== undefined) values[result.key] = result.current;
+      }
+      return { ...s, values, ok: a.results.some((result) => isSaved(result.status)) };
+    }
     case "save": {
-      const typed: CustomValues = {};
-      for (const k of Object.keys(s.draft)) typed[k] = String(s.draft[k]).trim();
-      const trimmed = withFixedInput(typed, s.values);
-      // Only what the owner changed since the last save is checked (see validateValues).
-      const bad = validateValues(trimmed, s.values);
+      const { trimmed, problem: bad, changedKeys } = prepareSave(s);
       if (bad) {
         return {
           ...s,
@@ -123,8 +144,7 @@ export function settingsReducer(s: SettingsState, a: SettingsAction): SettingsSt
         };
       }
       // Nothing really changed: keep the stored values and make no claim that something was applied.
-      const changed = Object.keys(trimmed).some((k) => trimmed[k] !== (s.values[k] ?? "").trim());
-      if (!changed) return { ...s, draft: s.values, err: null };
+      if (changedKeys.length === 0) return { ...s, draft: s.values, err: null };
       return { ...s, values: trimmed, draft: trimmed, ok: true, err: null };
     }
   }

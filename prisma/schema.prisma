@@ -263,3 +263,21 @@ model TenantSignInLink {
   slug      String   @unique
   createdAt DateTime @default(now())
 }
+
+// ---- feature: settings ----
+// One row per custom value the app tried to change in a client's HighLevel sub-account: who, what,
+// the value before (for undo) and the outcome. Written as "pending" before HighLevel is called.
+// No relations, so an audit row outlives the user or tenant it names.
+model CustomValueChange {
+  id            String    @id @default(cuid())
+  tenantId      String
+  actorId       String
+  key           String
+  previousValue String
+  newValue      String
+  outcome       String    @default("pending")
+  createdAt     DateTime  @default(now())
+  finishedAt    DateTime?
+
+  @@index([tenantId, createdAt])
+}

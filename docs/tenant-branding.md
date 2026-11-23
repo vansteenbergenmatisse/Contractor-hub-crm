@@ -58,3 +58,7 @@ Every client sub-account has these keys; only the values differ. Key names only 
 - **02_Branding** (confirmed by screenshot 2026-11-22, 14 of 14): `background_color`, `border_color`, `error_color`, `highlight_color`, `light_text_color`, `main_background_color`, `main_border_color`, `main_color`, `main_hover_color`, `main_light_color`, `section_background_color`, `sub_color`, `text_color`, `text_on_main_color`. All hex. There are NO font keys in this folder, so the font is not a custom value today (the app keeps the design font unless the user adds a font key). Also not shown: a sign-in background key other than `business_main_background_video_or_image`, and any keys for connection states.
 
 Use in the app (plan, not built): service names (residential, commercial, service types) feed the service choices in Leads, Quotes and Pipeline and the search; service areas feed the Leads service area line and Settings; `*content` (HTML) is website copy and is never rendered as HTML in the CRM (XSS) and never sent to the browser unless shown as plain text; `*path` slugs are website links and only used as text or with the client's own https website URL.
+
+## Settings write-back (built 2026-11-22, off by default)
+
+An owner's Save can update the sub-account's custom values. It runs only for tenants named in `SETTINGS_WRITE_BACK_TENANTS` while `SETTINGS_WRITE_BACK_ENABLED=true`. No sub-account has it on yet. Rules and rollback: `openspec/changes/settings-write-back/proposal.md`.

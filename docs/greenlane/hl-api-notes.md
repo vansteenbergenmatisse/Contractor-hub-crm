@@ -133,3 +133,5 @@ Sources: OpenAPI repo `GoHighLevel/highlevel-api-docs` at commit `0af86a4` (2026
 - **Limits (proposals, not measured):** 3 pages of 100 per load, then the page says the list is cut off; 60 loads per minute per tenant; 5 MiB per response. Only `open` deals are read, so a deal marked won or lost in HighLevel does not appear in any stage.
 - **Admin client view:** uses `withStoredLocationToken` (no refresh) and the limiter key `highlevel-pipeline-view:<viewerId>`.
 - **Off switch:** `PIPELINE_READ_DISABLED=true`.
+
+**Custom value write-back as built (2026-11-22). Response shape UNVERIFIED, no live call made.** Source: `apps/locations.json` at commit `0af86a4`. `PUT /locations/{locationId}/customValues/{id}`, `Version: 2021-07-28`, body `{ name, value }`, both required; documented 200, 400, 401, 422. The file lists no scope on the PUT; `locations/customValues.write` is on the POST and in our scope list. Unconfirmed: whether a stored token holds that scope, the real answer, the rate limit, and whether a change fires anything in HighLevel. Rules and rollback: `openspec/changes/settings-write-back/proposal.md`.

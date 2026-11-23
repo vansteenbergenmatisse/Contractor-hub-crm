@@ -451,5 +451,39 @@ export function createHighLevelClient(config: HighLevelClientConfig) {
     }
   }
 
-  return { exchangeAgencyCode, exchangeCode, listAgencyLocations, listCustomValues, listLocationUsers, listInstalledLocations, mintLocationToken, refreshToken, requestContactSearch, searchUsers };
+  // GET /locations/{locationId}/customValues as a raw Response, so withLocationToken can refresh once
+  // on a 401. custom-value-write.ts parses it, keeping each value's id and name for the update.
+  async function requestCustomValues(accessToken: string, locationId: string): Promise<Response> {
+    try {
+      return await doFetch(`${base}/locations/${encodeURIComponent(locationId)}/customValues`, {
+        method: "GET",
+        headers: { authorization: `Bearer ${accessToken}`, version: CUSTOM_VALUES_API_VERSION, accept: "application/json" },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+    } catch {
+      throw new HighLevelHttpError("HighLevel custom values could not be reached.", null);
+    }
+  }
+
+  // PUT /locations/{locationId}/customValues/{id}. The body needs both name and value (OpenAPI file,
+  // not yet seen on a real response). Only custom-value-write.ts calls it.
+  async function requestUpdateCustomValue(accessToken: string, locationId: string, id: string, body: { name: string; value: string }): Promise<Response> {
+    try {
+      return await doFetch(`${base}/locations/${encodeURIComponent(locationId)}/customValues/${encodeURIComponent(id)}`, {
+        method: "PUT",
+        headers: {
+          authorization: `Bearer ${accessToken}`,
+          version: CUSTOM_VALUES_API_VERSION,
+          "content-type": "application/json",
+          accept: "application/json",
+        },
+        body: JSON.stringify({ name: body.name, value: body.value }),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+    } catch {
+      throw new HighLevelHttpError("HighLevel custom value update could not reach HighLevel.", null);
+    }
+  }
+
+  return { exchangeAgencyCode, exchangeCode, listAgencyLocations, listCustomValues, listLocationUsers, listInstalledLocations, mintLocationToken, refreshToken, requestContactSearch, requestCustomValues, requestUpdateCustomValue, searchUsers };
 }

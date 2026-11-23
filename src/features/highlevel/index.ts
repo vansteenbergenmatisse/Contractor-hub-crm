@@ -8,7 +8,10 @@ export { handleOAuthStart } from "./api/start";
 export type { OAuthStartDeps } from "./api/start";
 export { handleOAuthCallback } from "./api/callback";
 export type { OAuthCallbackDeps } from "./api/callback";
+export { createCustomValueAdapter, parseCustomValueDetails } from "./api/custom-value-write";
+export type { CustomValueAdapterDeps, CustomValueDetail, CustomValueRead, CustomValueWriteOutcome } from "./api/custom-value-write";
 export {
+  createTenantCustomValueAdapter,
   createTenantContactsReader,
   createWebhookRoute,
   getOnboardingApi,

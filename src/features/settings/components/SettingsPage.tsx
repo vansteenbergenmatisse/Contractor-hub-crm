@@ -4,9 +4,10 @@ import { useState, type ReactNode } from "react";
 import { COLOR_GROUPS, CONNECTIONS, ESSENTIAL_FIELDS, SECTIONS, SOON_ITEMS, SWITCHES, labelOfKey, sectionOfKey } from "../api/fields";
 import type { SettingsState } from "../api/state";
 import { UNKNOWN_CONNECTIONS, connectionsIntro } from "../api/connections";
+import { useSaveValues } from "../hooks/use-save-values";
 import { useSettings } from "../hooks/use-settings";
 import { useSignOut } from "../hooks/use-sign-out";
-import type { ConnectionStatus, Field, SectionKey } from "../types";
+import type { ConnectionStatus, Field, SaveValues, SectionKey } from "../types";
 import { ConnectionRow } from "./ConnectionRow";
 import { svgProps } from "./svg-props";
 import { ValueField } from "./ValueField";
@@ -35,8 +36,11 @@ type Props = {
   connections?: readonly ConnectionStatus[];
 };
 
-export function SettingsPage({ initial, initialValues, initialSection, connections = UNKNOWN_CONNECTIONS, readOnly = false }: Props & { readOnly?: boolean }) {
+// `saveValues`: given only when this owner may save to the sub-account. Without it Save lasts for this visit.
+export function SettingsPage({ initial, initialValues, initialSection, connections = UNKNOWN_CONNECTIONS, readOnly = false, saveValues }: Props & { readOnly?: boolean; saveValues?: SaveValues }) {
   const { state, dispatch, filter, extras, phone, choicesAvailable } = useSettings(initial, initialValues, initialSection, connections);
+  const remote = useSaveValues(state, dispatch, saveValues);
+  const live = !!saveValues && !readOnly;
   const signOut = useSignOut();
   const [signOutFailed, setSignOutFailed] = useState(false);
   const { values, draft, err } = state;
@@ -126,7 +130,7 @@ export function SettingsPage({ initial, initialValues, initialSection, connectio
         {filter.sections.biz ? (
           <section className="fd-pnl fd-in" style={{ "--i": 1 } as React.CSSProperties} aria-labelledby="fd-st-1">
             <h2 className="fd-pnh" id="fd-st-1">Business details</h2>
-            <p className="fd-pns">Your business name, contact details and links. Changes here do not reach your website or texts yet.</p>
+            <p className="fd-pns">{live ? "Your business name, contact details and links. Saved changes update your account, and can change your website and texts." : "Your business name, contact details and links. Changes here do not reach your website or texts yet."}</p>
             <div className="fd-cvg">{bizFields.map((f) => <ValueField key={f.key} {...fieldProps(f)} />)}</div>
           </section>
         ) : null}
@@ -134,7 +138,7 @@ export function SettingsPage({ initial, initialValues, initialSection, connectio
         {filter.sections.colors ? (
           <section className="fd-pnl fd-in" style={{ "--i": 2 } as React.CSSProperties} aria-labelledby="fd-st-2">
             <h2 className="fd-pnh" id="fd-st-2">Brand colors</h2>
-            <p className="fd-pns">Type a color like #2E7D32, then press Apply for this visit.</p>
+            <p className="fd-pns">{live ? "Type a color like #2E7D32, then press Save to your account." : "Type a color like #2E7D32, then press Apply for this visit."}</p>
             <button
               type="button"
               className="fd-btn is-plain fd-cvt"
@@ -162,10 +166,15 @@ export function SettingsPage({ initial, initialValues, initialSection, connectio
           <div className="fd-cvsv fd-in" style={{ "--i": 3 } as React.CSSProperties}>
             <p className={`fd-okl${state.ok && !dirty ? "" : " is-off"}`} role="status" style={{ flexBasis: "100%", marginBottom: 0 }}>
               <svg width="16" height="16" {...svgProps} strokeWidth={2.2}><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
-              <span>Changed for this visit only. Not saved to your account yet.</span>
+              <span>{live ? "Saved to your account." : "Changed for this visit only. Not saved to your account yet."}</span>
             </p>
-            <button type="button" className="fd-btn is-fill fd-lgo fd-cvs" disabled={readOnly} onClick={() => dispatch({ type: "save" })}>{readOnly ? "Read-only view" : "Apply for this visit"}</button>
-            <p className="fd-pns fd-hint" role="status">{dirty ? "You have changes that are not applied yet." : "Changes last until you close or reload this page."}</p>
+            {live && remote.problem ? <p className="fd-pns" role="alert" style={{ flexBasis: "100%", marginBottom: 0 }}>{remote.problem}</p> : null}
+            <button type="button" className="fd-btn is-fill fd-lgo fd-cvs" disabled={readOnly || (live && remote.saving)} onClick={() => (live ? void remote.save() : dispatch({ type: "save" }))}>
+              {readOnly ? "Read-only view" : live ? (remote.saving ? "Saving…" : "Save to your account") : "Apply for this visit"}
+            </button>
+            <p className="fd-pns fd-hint" role="status">{live
+              ? (dirty ? "You have changes that are not saved yet." : "Your account has these values.")
+              : (dirty ? "You have changes that are not applied yet." : "Changes last until you close or reload this page.")}</p>
           </div>
         ) : null}
 

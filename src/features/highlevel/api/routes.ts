@@ -3,6 +3,7 @@ import { parseEnv, type EnvValues } from "@/shared/config";
 import { createHighLevelClient } from "./client";
 import { searchUsersWithRetry } from "./search-users";
 import { listCustomValuesWithRetry, readCustomValuesWithStoredToken } from "./custom-values";
+import { createCustomValueAdapter } from "./custom-value-write";
 import { listLocationUsersWithRetry } from "./location-users";
 import { CONTACTS_PAGE_SIZE, readContactsPage, readContactsThrottled } from "./contacts";
 import type { AgencyLocation, ContactsRead, CustomValue, HighLevelUser, InstalledLocation, SaveLocationConnectionInput, SearchUsersQuery } from "../types";
@@ -235,6 +236,19 @@ export function createTenantContactsReader(
     return (tenantId) => readContactsThrottled({ hit, read, now: () => new Date() }, tenantId, `highlevel-contacts-view:${viewerId}`);
   }
   return (tenantId) => readContactsThrottled({ hit, read: (id) => readTenantContacts(id, { ownEmail }), now: () => new Date() }, tenantId);
+}
+
+// Reads and updates custom values for the settings write-back. Throws when the environment is
+// incomplete. The tenant id always comes from the caller's server session.
+export function createTenantCustomValueAdapter() {
+  const env = parseEnv("highlevel");
+  const client = buildClient(env);
+  return createCustomValueAdapter({
+    readLocationId: async (id) => (await readLocationState(id, env.TOKEN_ENCRYPTION_KEY))?.locationId ?? null,
+    withLocationToken: buildTokenService(env, client).withLocationToken,
+    requestList: client.requestCustomValues,
+    requestUpdate: client.requestUpdateCustomValue,
+  });
 }
 
 export async function oauthStartRoute(request: Request, guard?: AdminGuard): Promise<Response> {

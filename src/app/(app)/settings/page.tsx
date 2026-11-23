@@ -1,5 +1,6 @@
 import { getTenantCustomValues, getTenantCustomValuesReadOnly } from "@/features/brand";
 import { SettingsPage, loadSettingsValues, sectionFromParam } from "@/features/settings";
+import { SettingsWriteBackPage, isWriteBackEnabled } from "@/features/settings-write-back";
 import { getRequestUser } from "../../session";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +15,8 @@ export default async function Page({ searchParams }: Props = {}) {
   const section = sectionFromParam((await searchParams)?.section) ?? undefined;
   return user?.viewing ? (
     <SettingsPage initialValues={values} initialSection={section} readOnly />
+  ) : user?.role === "owner" && user.tenantId && isWriteBackEnabled(user.tenantId) ? (
+    <SettingsWriteBackPage initialValues={values} initialSection={section} />
   ) : (
     <SettingsPage initialValues={values} initialSection={section} />
   );
