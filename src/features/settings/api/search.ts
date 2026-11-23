@@ -1,6 +1,7 @@
 import type { SearchFilter, SectionKey } from "../types";
 import { connectionRowText } from "./connections";
 import { COLOR_GROUPS, CONNECTIONS, ESSENTIAL_FIELDS, SECTIONS, SOON_ITEMS, SWITCHES, labelOfKey } from "./fields";
+import { folderSearchText } from "./folders";
 
 type Item = { id: string; section: SectionKey; text: string };
 
@@ -9,9 +10,9 @@ type Item = { id: string; section: SectionKey; text: string };
 // chip, the phone number, a switch's On or Off).
 function allItems(extra: readonly string[] = [], rowText: Readonly<Record<string, string>> = {}, hidden: ReadonlySet<string> = new Set()): Item[] {
   const items: Item[] = [];
-  for (const f of ESSENTIAL_FIELDS) if (!hidden.has(f.key)) items.push({ id: `cv-${f.key}`, section: "biz", text: `${f.label} custom_values.${f.key}` });
-  for (const k of extra) if (!hidden.has(k)) items.push({ id: `cv-${k}`, section: "biz", text: `${labelOfKey(k)} custom_values.${k}` });
-  for (const g of COLOR_GROUPS) for (const f of g.fields) if (!hidden.has(f.key)) items.push({ id: `cv-${f.key}`, section: "colors", text: `${f.label} custom_values.${f.key}` });
+  for (const f of ESSENTIAL_FIELDS) if (!hidden.has(f.key)) items.push({ id: `cv-${f.key}`, section: "biz", text: `${f.label} custom_values.${f.key} ${folderSearchText(f.key)}` });
+  for (const k of extra) if (!hidden.has(k)) items.push({ id: `cv-${k}`, section: "biz", text: `${labelOfKey(k)} custom_values.${k} ${folderSearchText(k)}` });
+  for (const g of COLOR_GROUPS) for (const f of g.fields) if (!hidden.has(f.key)) items.push({ id: `cv-${f.key}`, section: "colors", text: `${f.label} custom_values.${f.key} ${folderSearchText(f.key)}` });
   CONNECTIONS.forEach((c, i) => items.push({ id: `conn-${i}`, section: "conn", text: connectionRowText(c) }));
   SWITCHES.forEach((s, i) => items.push({ id: `sw-${i}`, section: "choice", text: s }));
   SOON_ITEMS.forEach((s, i) => items.push({ id: `soon-${i}`, section: "soon", text: `${s} Not available yet` }));

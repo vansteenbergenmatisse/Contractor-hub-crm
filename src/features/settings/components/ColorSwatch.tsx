@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useRef, useState } from "react";
 import { isHexColor } from "../api/live-save";
 import { pickerHex } from "../api/image-preview";
+import { ColorPad } from "./ColorPad";
 
 type Props = {
   fieldKey: string;
@@ -18,27 +19,42 @@ function swatchStyle(key: string, value: string, saved: string): React.CSSProper
   return { background: isHexColor(typed) ? typed : isHexColor(saved) ? saved : `var(--${key.replaceAll("_", "-")})` };
 }
 
-// A clickable swatch over a native color picker. The picker's value is set on the element and never
-// through state, so a 3-digit or invalid stored value stays as it is until the owner picks a color.
+// A swatch button that opens the color pad. Opening reads the color and writes nothing, so a 3-digit
+// or invalid stored value stays as it is until the owner picks a color.
 export function ColorSwatch({ fieldKey, label, value, saved, readOnly, onChange }: Props) {
-  const picker = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    const el = picker.current;
-    if (!el) return;
+  const button = useRef<HTMLButtonElement>(null);
+  const [pad, setPad] = useState<{ hex: string | null; host: Element } | null>(null);
+
+  function toggle() {
+    const el = button.current;
+    if (pad || !el) {
+      setPad(null);
+      return;
+    }
     const applied = getComputedStyle(el).getPropertyValue(`--${fieldKey.replaceAll("_", "-")}`);
-    const hex = pickerHex(value) ?? pickerHex(saved) ?? pickerHex(applied);
-    if (hex) el.value = hex;
-  }, [fieldKey, value, saved]);
+    // Inside the brand scope, so the pad has the client's colors, and outside any animated panel.
+    setPad({ hex: pickerHex(value) ?? pickerHex(saved) ?? pickerHex(applied), host: el.closest(".brand-scope") ?? document.body });
+  }
+
+  function close() {
+    setPad(null);
+    button.current?.focus();
+  }
+
   return (
-    <span className="fd-swt" style={swatchStyle(fieldKey, value, saved)}>
-      <input
-        ref={picker}
-        className="fd-swp"
-        type="color"
+    <>
+      <button
+        ref={button}
+        type="button"
+        className="fd-swt"
+        style={swatchStyle(fieldKey, value, saved)}
         aria-label={`Pick ${label}`}
+        aria-haspopup="dialog"
+        aria-expanded={pad !== null}
         disabled={readOnly}
-        onChange={(e) => onChange(fieldKey, e.target.value.toUpperCase())}
+        onClick={toggle}
       />
-    </span>
+      {pad ? <ColorPad anchor={button} host={pad.host} label={`Pick ${label}`} startHex={pad.hex} onPick={(hex) => onChange(fieldKey, hex)} onClose={close} /> : null}
+    </>
   );
 }

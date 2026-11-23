@@ -1,6 +1,7 @@
 import { MOCK_CUSTOM_VALUES, MOCK_SWITCHES } from "../mock";
 import type { CustomValues, Problem, SaveResult, SectionKey } from "../types";
 import { COLOR_KEYS, LINK_KEYS } from "./fields";
+import { folderIdOfKey } from "./folders";
 import { isSaved } from "./save-summary";
 import { validateValues } from "./validate";
 
@@ -13,7 +14,9 @@ export type SettingsState = {
   sw: [boolean, boolean];
   ok: boolean;
   err: Problem | null;
-  cols: boolean; // color fields open
+  cols: boolean; // color fields open on the Brand colors view and in a search
+  folders: Record<string, boolean>; // Business details: folders the owner opened or closed
+  searchClosed: Record<string, boolean>; // folders closed during the current search
   how: Record<number, boolean>;
   asked: Record<number, boolean>;
   sec: SectionKey;
@@ -37,6 +40,7 @@ export type SettingsAction =
   | { type: "saveEnd"; problem: string | null }
   | { type: "loaded"; values: CustomValues }
   | { type: "toggleCols" }
+  | { type: "setFolder"; id: string; open: boolean }
   | { type: "switch"; index: 0 | 1 }
   | { type: "how"; index: number }
   | { type: "ask"; index: number };
@@ -55,6 +59,8 @@ export function initialState(values?: CustomValues, section?: SectionKey): Setti
     ok: false,
     err: null,
     cols: true,
+    folders: {},
+    searchClosed: {},
     how: {},
     asked: {},
     sec: section ?? "biz",
@@ -116,12 +122,17 @@ export function settingsReducer(s: SettingsState, a: SettingsAction): SettingsSt
     case "back":
       return { ...s, open: false };
     case "search":
-      return { ...s, q: a.q };
+      // Starting a search opens the colors, and each new query opens every folder with a match.
+      return { ...s, q: a.q, searchClosed: {}, cols: !s.q.trim() && a.q.trim() ? true : s.cols };
     case "edit":
       // Typing leaves the applied line as it is. Editing the field with the error clears that error.
       return { ...s, draft: { ...s.draft, [a.key]: a.value }, err: s.err?.key === a.key ? null : s.err };
     case "toggleCols":
       return { ...s, cols: !s.cols };
+    case "setFolder":
+      return s.q.trim()
+        ? { ...s, searchClosed: { ...s.searchClosed, [a.id]: !a.open } }
+        : { ...s, folders: { ...s.folders, [a.id]: a.open } };
     case "switch": {
       const sw: [boolean, boolean] = [...s.sw];
       sw[a.index] = !sw[a.index];
@@ -155,8 +166,12 @@ export function settingsReducer(s: SettingsState, a: SettingsAction): SettingsSt
     case "save": {
       const { trimmed, problem: bad, changedKeys } = prepareSave(s);
       if (bad) {
+        // The bad field must be visible, whichever folder holds it.
+        const folder = folderIdOfKey(bad.key);
         return {
           ...s,
+          folders: { ...s.folders, [folder]: true },
+          searchClosed: { ...s.searchClosed, [folder]: false },
           ok: false,
           err: bad,
           sec: bad.section,

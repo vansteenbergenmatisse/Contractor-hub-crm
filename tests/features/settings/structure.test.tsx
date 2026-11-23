@@ -146,25 +146,31 @@ describe("keys that come and go", () => {
 });
 
 describe("color picker", () => {
-  const picker = (name: RegExp) => screen.getByLabelText(name) as HTMLInputElement;
+  const picker = (name: RegExp) => screen.getByRole("button", { name });
+  const hex = () => screen.getByLabelText(/^Hex color/) as HTMLInputElement;
 
   it("picker to text, and text to picker", async () => {
     page({ business_name: "Test Co", main_color: "#112233" }, { initialSection: "colors" });
-    const box = picker(/^Pick Main color/);
+    const user = userEvent.setup();
     const text = screen.getByLabelText(/^Main color/) as HTMLInputElement;
-    expect(box.type).toBe("color");
-    expect(box.value).toBe("#112233");
-    fireEvent.input(box, { target: { value: "#445566" } });
+    await user.click(picker(/^Pick Main color/));
+    expect(hex().value).toBe("#112233");
+    fireEvent.change(hex(), { target: { value: "#445566" } });
     expect(text.value).toBe("#445566");
+    await user.keyboard("{Escape}");
     fireEvent.change(text, { target: { value: "#778899" } });
-    expect(box.value).toBe("#778899");
+    await user.click(picker(/^Pick Main color/));
+    expect(hex().value).toBe("#778899");
   });
 
   it("does not rewrite a 3-digit or invalid stored value until it is edited", async () => {
     const send = vi.fn<SaveValues>(async () => ({ kind: "results", results: [] }));
     page({ business_name: "Test Co", sub_color: "#abc", text_color: "nope" }, { initialSection: "colors", saveValues: send });
     expect(screen.getByLabelText(/^Second color/)).toHaveValue("#abc");
-    expect(picker(/^Pick Second color/).value).toBe("#aabbcc");
+    await userEvent.setup().click(picker(/^Pick Second color/));
+    expect(hex().value).toBe("#AABBCC");
+    await userEvent.setup().keyboard("{Escape}");
+    expect(screen.getByLabelText(/^Second color/)).toHaveValue("#abc");
     expect(screen.getByLabelText(/^Text$/)).toHaveValue("nope");
     expect(screen.queryByText("You have changes that are not saved yet.")).toBeNull();
     await userEvent.setup().click(screen.getByRole("button", { name: "Save to your account" }));
@@ -173,8 +179,11 @@ describe("color picker", () => {
 
   it("a picked color still meets the contrast rule on Save", async () => {
     page({ business_name: "Test Co", main_color: "#112233", text_on_main_color: "#FFFFFF" }, { initialSection: "colors" });
-    fireEvent.input(picker(/^Pick Main color/), { target: { value: "#eeeeee" } });
-    await userEvent.setup().click(screen.getByRole("button", { name: "Apply for this visit" }));
+    const user = userEvent.setup();
+    await user.click(picker(/^Pick Main color/));
+    fireEvent.change(hex(), { target: { value: "#eeeeee" } });
+    await user.keyboard("{Escape}");
+    await user.click(screen.getByRole("button", { name: "Apply for this visit" }));
     expect(screen.getByText("The text on your main color is hard to read. Make Main color darker.")).toBeInTheDocument();
   });
 
@@ -185,8 +194,9 @@ describe("color picker", () => {
 
   it("puts no value attribute in the server markup, so no made-up color shows", () => {
     const out = renderToStaticMarkup(<SettingsPage initialValues={{}} />);
-    expect(out).toContain('type="color"');
-    expect(out).not.toMatch(/type="color"[^>]*value=/);
+    expect(out).toContain('aria-label="Pick Main color"');
+    expect(out).not.toContain('type="color"');
+    expect(out).not.toMatch(/class="fd-swt"[^>]*value=/);
   });
 
   it("reads only real hex colors", () => {

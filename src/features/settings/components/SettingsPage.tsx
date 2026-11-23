@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { COLOR_GROUPS, CONNECTIONS, ESSENTIAL_KEYS, SECTIONS, SOON_ITEMS, SWITCHES, sectionOfKey } from "../api/fields";
 import { groupFields } from "../api/field-groups";
+import { folderIdOfKey, foldersFor, type Folder } from "../api/folders";
 import type { AccountLayout } from "../api/load-values";
 import { dirtyKeysOf, type SettingsState } from "../api/state";
 import { UNKNOWN_CONNECTIONS, connectionsIntro } from "../api/connections";
@@ -12,6 +13,8 @@ import { useSignOut } from "../hooks/use-sign-out";
 import type { ConnectionStatus, Field, SaveValues, SectionKey } from "../types";
 import { BusinessGroups } from "./BusinessGroups";
 import { ConnectionRow } from "./ConnectionRow";
+import { FolderFields } from "./FolderFields";
+import { FolderSection, folderNameId } from "./FolderSection";
 import { svgProps } from "./svg-props";
 import { ValueField } from "./ValueField";
 
@@ -53,10 +56,25 @@ export function SettingsPage({ initial, initialValues, initialSection, connectio
   const dirtyKeys = dirtyKeysOf(values, draft);
   const dirty = dirtyKeys.length > 0;
   const dirtySections = new Set<SectionKey>(dirtyKeys.map((k) => sectionOfKey(k) ?? "biz"));
-  // An error shows next to its field when that field can be seen. A search shows the color fields
-  // even when they are closed. Otherwise the top alert carries the message.
-  const errFieldSeen = !!err && !!show(`cv-${err.key}`) &&
-    (filter.active || (state.sec === err.section && (err.section !== "colors" || state.cols)));
+  // The folders on screen, in HighLevel's order. A folder with no shown key is left out.
+  const colorKeys = COLOR_GROUPS.flatMap((g) => g.fields.map((f) => f.key));
+  const shownFolders = foldersFor([...ESSENTIAL_KEYS, ...extras, ...colorKeys].filter((key) => show(`cv-${key}`)));
+  const firstFolder = shownFolders[0]?.folder.id;
+  const dirtyFolders = new Set(dirtyKeys.map(folderIdOfKey));
+  // On the Brand colors view and in a search, Branding follows `cols`, as its toggle always has.
+  const brandFollowsCols = filter.active || state.sec === "colors";
+  const folderOpen = (id: string) => {
+    if (id === "branding" && brandFollowsCols) return state.cols;
+    if (filter.active) return !state.searchClosed[id];
+    return state.folders[id] ?? id === firstFolder;
+  };
+  const toggleFolder = (id: string) => {
+    if (id === "branding" && brandFollowsCols) dispatch({ type: "toggleCols" });
+    else dispatch({ type: "setFolder", id, open: !folderOpen(id) });
+  };
+  // An error shows next to its field when that field can be seen. Otherwise the top alert carries it.
+  const errFieldSeen = !!err && !!show(`cv-${err.key}`) && folderOpen(folderIdOfKey(err.key)) &&
+    (filter.active || state.sec === err.section);
   // Only where the page would otherwise speak for the account: a live save or a client view.
   const loadFailed = notLoaded && (live || readOnly);
   const loadMessage = readOnly ? "Your details did not load. Reload this page to try again." : "Your details did not load, so nothing can be saved. Reload this page to try again.";
@@ -64,7 +82,17 @@ export function SettingsPage({ initial, initialValues, initialSection, connectio
   const edit = (key: string, value: string) => dispatch({ type: "edit", key, value });
   const fieldProps = (f: Field) => ({ field: f, value: draft[f.key] ?? "", saved: values[f.key] ?? "", invalid: err?.key === f.key, error: errFieldSeen && err?.key === f.key ? err.message : undefined, readOnly, onChange: edit });
 
-  const bizGroups = groupFields([...ESSENTIAL_KEYS, ...extras].filter((key) => show(`cv-${key}`)));
+  const hasBizFields = shownFolders.some(({ folder }) => folder.id !== "branding");
+  // Only the Branding folder is on screen: the panel takes its name.
+  const brandOnly = filter.active ? !filter.sections.biz : state.sec === "colors";
+  const folderShell = (folder: Folder, keys: readonly string[]) => ({
+    folder,
+    total: keys.length,
+    filled: keys.filter((key) => (draft[key] ?? "").trim() !== "").length,
+    open: folderOpen(folder.id),
+    dirty: dirtyFolders.has(folder.id),
+    onToggle: () => toggleFolder(folder.id),
+  });
 
   return (
     <div
@@ -135,43 +163,41 @@ export function SettingsPage({ initial, initialValues, initialSection, connectio
           <span><span className="fd-h">{topMessage ?? ""}</span></span>
         </p>
 
-        {filter.sections.biz ? (
+        {filter.sections.biz || filter.sections.colors ? (
           <section className="fd-pnl fd-in" style={{ "--i": 1 } as React.CSSProperties} aria-labelledby="fd-st-1">
-            <h2 className="fd-pnh" id="fd-st-1">Business details</h2>
-            <p className="fd-pns">{readOnly ? "Your business name, contact details and links." : live ? "Your business name, contact details and links. Saved changes update your account, and can change your website and texts." : "Your business name, contact details and links. Changes here do not reach your website or texts yet."}</p>
-            <BusinessGroups groups={bizGroups} imageHosts={account?.imageHosts} fieldProps={fieldProps} />
-          </section>
-        ) : null}
-
-        {filter.sections.colors ? (
-          <section className="fd-pnl fd-in" style={{ "--i": 2 } as React.CSSProperties} aria-labelledby="fd-st-2">
-            <h2 className="fd-pnh" id="fd-st-2">Brand colors</h2>
-            <p className="fd-pns">{readOnly ? "The brand colors this account uses." : live ? "Type a color like #2E7D32, then press Save to your account." : "Type a color like #2E7D32, then press Apply for this visit."}</p>
-            <button
-              type="button"
-              className="fd-btn is-plain fd-cvt"
-              aria-expanded={state.cols}
-              aria-controls="fd-st-col"
-              onClick={() => dispatch({ type: "toggleCols" })}
-            >
-              <span className="fd-h">{state.cols ? "Hide the color fields" : readOnly ? "Show the brand colors" : "Change the brand colors"}</span>
-            </button>
-            <div className={`fd-cvg${state.cols ? "" : " is-off"}`} id="fd-st-col">
-              {/* The group headings stay while searching, as in the design; only fields hide. */}
-              {COLOR_GROUPS.map((g) => {
-                const fields = g.fields.filter((f) => show(`cv-${f.key}`));
-                if (fields.length === 0 && !filter.active) return null;
-                return [
-                  <h3 className="fd-cgh" key={`h-${g.heading}`}>{g.heading}</h3>,
-                  ...fields.map((f) => <ValueField key={f.key} {...fieldProps(f)} swatch />),
-                ];
-              })}
-            </div>
+            <h2 className="fd-pnh" id="fd-st-1">{brandOnly ? "Brand colors" : "Business details"}</h2>
+            {brandOnly ? null : <p className="fd-pns">{readOnly ? "Your business name, contact details and links." : live ? "Your business name, contact details and links. Saved changes update your account, and can change your website and texts." : "Your business name, contact details and links. Changes here do not reach your website or texts yet."}</p>}
+            {shownFolders.map(({ folder, keys }) => {
+              if (folder.id === "branding") {
+                return (
+                  <FolderSection key={folder.id} {...folderShell(folder, keys)} bodyId="fd-st-col" bodyClass="fd-cvg">
+                    <p className="fd-pns fd-pnx">{readOnly ? "The brand colors this account uses." : live ? "Type a color like #2E7D32, then press Save to your account." : "Type a color like #2E7D32, then press Apply for this visit."}</p>
+                    {/* The group headings stay while searching, as in the design; only fields hide. */}
+                    {COLOR_GROUPS.map((g) => {
+                      const fields = g.fields.filter((f) => show(`cv-${f.key}`));
+                      if (fields.length === 0 && !filter.active) return null;
+                      return [
+                        <h4 className="fd-cgh" key={`h-${g.heading}`}>{g.heading}</h4>,
+                        ...fields.map((f) => <ValueField key={f.key} {...fieldProps(f)} swatch />),
+                      ];
+                    })}
+                  </FolderSection>
+                );
+              }
+              const nameId = folder.name ? folderNameId(folder.id) : undefined;
+              return (
+                <FolderSection key={folder.id} {...folderShell(folder, keys)}>
+                  {folder.id === "essentials"
+                    ? <BusinessGroups groups={groupFields(keys)} imageHosts={account?.imageHosts} fieldProps={fieldProps} folderNameId={nameId} />
+                    : <FolderFields keys={keys} imageHosts={account?.imageHosts} fieldProps={fieldProps} folderNameId={nameId} />}
+                </FolderSection>
+              );
+            })}
           </section>
         ) : null}
 
         {/* CSS hides it on the sections without fields. While searching it shows only with a field. */}
-        {(filter.sections.biz && bizGroups.length > 0) || filter.sections.colors ? (
+        {(filter.sections.biz && hasBizFields) || filter.sections.colors ? (
           <div className="fd-cvsv fd-in" style={{ "--i": 3 } as React.CSSProperties}>
             <p className={`fd-okl${state.ok && !dirty ? "" : " is-off"}`} role="status" style={{ flexBasis: "100%", marginBottom: 0 }}>
               <svg width="16" height="16" {...svgProps} strokeWidth={2.2}><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
