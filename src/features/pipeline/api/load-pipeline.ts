@@ -40,7 +40,7 @@ export async function loadPipeline(
   pipelineId?: string,
   now: () => Date = () => new Date(),
 ): Promise<PipelineResult> {
-  if (!tenantId || process.env.PIPELINE_READ_DISABLED === "true") return { state: "unavailable" };
+  if (!tenantId || process.env.PIPELINE_READ_DISABLED?.trim() === "true") return { state: "unavailable" };
   let answer: PipelineBoardAnswer;
   try {
     answer = await read(tenantId, pipelineId);

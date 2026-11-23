@@ -10,7 +10,7 @@ export async function loadCalendar(
   read: CalendarWeekReader,
   now: () => Date = () => new Date(),
 ): Promise<CalendarResult> {
-  if (!tenantId || process.env.CALENDAR_READ_DISABLED === "true") return { state: "unavailable" };
+  if (!tenantId || process.env.CALENDAR_READ_DISABLED?.trim() === "true") return { state: "unavailable" };
   const at = now();
   let answer;
   try {

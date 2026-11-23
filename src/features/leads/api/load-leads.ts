@@ -24,7 +24,7 @@ export async function loadLeads(
   read: LeadContactsReader,
   now: () => Date = () => new Date(),
 ): Promise<LeadsResult> {
-  if (!tenantId || process.env.LEADS_READ_DISABLED === "true") return { state: "unavailable" };
+  if (!tenantId || process.env.LEADS_READ_DISABLED?.trim() === "true") return { state: "unavailable" };
   let answer;
   try {
     answer = await read(tenantId);

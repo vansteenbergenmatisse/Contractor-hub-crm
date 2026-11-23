@@ -35,7 +35,7 @@ async function loadThread(tenantId: string, read: InboxReader, conversationId: s
 // the server session. `row` is the URL's `inbox-<id>`: its thread is read only when that id is in this
 // tenant's own list. Never sample data. INBOX_READ_DISABLED=true shows the unavailable state.
 export async function loadInbox(tenantId: string | null | undefined, read: InboxReader, row: string | null | undefined): Promise<InboxResult> {
-  if (!tenantId || process.env.INBOX_READ_DISABLED === "true") return { state: "unavailable" };
+  if (!tenantId || process.env.INBOX_READ_DISABLED?.trim() === "true") return { state: "unavailable" };
   let answer;
   try {
     answer = await read.list(tenantId);
