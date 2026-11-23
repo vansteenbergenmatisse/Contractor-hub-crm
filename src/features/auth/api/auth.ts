@@ -21,7 +21,7 @@ export type CreateAuthOptions = {
   emailSender: EmailSender;
   // Sign-in from inside HighLevel (the /embed page). Left out, the endpoint does not exist.
   embedLogin?: EmbedLoginOptions;
-  // True when the user's tenant was uninstalled in HighLevel: no new session is created for them.
+  // True when the user's tenant was uninstalled or its login is off: no new session is created for them.
   isTenantBlocked?: (tenantId: string) => Promise<boolean>;
   // Removes the "never used" marker before a session is created. A failure never blocks sign-in.
   clearUnusedMarker?: (userId: string) => Promise<void>;

@@ -16,6 +16,7 @@ export async function resolveEmbedUser(
   if (found.role !== "owner" && found.role !== "office") return null;
   if (found.disabledAt) return null;
   if (found.tenant.status !== "connected") return null;
+  if (found.tenant.loginDisabledAt) return null;
   if (context.companyId && found.tenant.companyId && context.companyId !== found.tenant.companyId) return null;
   return found.userId;
 }
@@ -42,6 +43,7 @@ export async function resolveEmbedAccess(
     if (found.role !== "owner" && found.role !== "office") return { kind: "denied", reason: "role_not_allowed" };
     if (found.disabledAt) return { kind: "denied", reason: "user_disabled" };
     if (found.tenant.status !== "connected") return { kind: "denied", reason: `tenant_${found.tenant.status}` };
+    if (found.tenant.loginDisabledAt) return { kind: "denied", reason: "tenant_login_off" };
     if (context.companyId && found.tenant.companyId && context.companyId !== found.tenant.companyId) {
       return { kind: "denied", reason: "company_mismatch" };
     }
@@ -49,6 +51,7 @@ export async function resolveEmbedAccess(
   }
   if (!tenant) return { kind: "denied", reason: "location_not_installed" };
   if (tenant.status !== "connected") return { kind: "denied", reason: `tenant_${tenant.status}` };
+  if (tenant.loginDisabledAt) return { kind: "denied", reason: "tenant_login_off" };
   if (context.companyId && tenant.companyId && context.companyId !== tenant.companyId) {
     return { kind: "denied", reason: "company_mismatch" };
   }

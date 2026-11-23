@@ -31,7 +31,7 @@ export type GhlUserInput = {
 };
 
 export type ProvisionOutcome =
-  | "created" | "linked" | "exists" | "restored" | "skipped_agency" | "skipped_conflict" | "skipped_invalid" | "skipped_removed" | "capped" | "moved";
+  | "created" | "linked" | "exists" | "restored" | "skipped_agency" | "skipped_conflict" | "skipped_invalid" | "skipped_removed" | "skipped_login_off" | "capped" | "moved";
 
 export type ProvisionResult = { outcome: ProvisionOutcome; userId: string | null; reason?: MoveReason };
 
@@ -52,6 +52,10 @@ export type ProvisionDeps = {
     setLinkDeleted(tenantId: string, ghlUserId: string, deletedAt: Date | null): Promise<void>;
     findUserByEmail(email: string): Promise<UserRow | null>;
     findUserById(id: string): Promise<UserRow | null>;
+    // True when an admin turned login off for this client: nobody is created, linked, moved or restored.
+    isTenantLoginOff?(tenantId: string): Promise<boolean>;
+    // The role of the invite this person accepted in this tenant, or null when there is none.
+    findInvitedRole?(tenantId: string, email: string): Promise<Extract<Role, "owner" | "office"> | null>;
   };
   now(): Date;
   // Moving a never-used account between clients. Left out: an email conflict always stays a conflict.
@@ -77,6 +81,8 @@ async function unblockOrRemark(deps: ProvisionDeps, input: GhlUserInput, userId:
 
 export async function provisionGhlUser(deps: ProvisionDeps, input: GhlUserInput): Promise<ProvisionResult> {
   if (input.ghlRoleType?.toLowerCase() === "agency") return { outcome: "skipped_agency", userId: null };
+  // A failed lookup throws: the caller counts a failure and nobody is admitted.
+  if (await deps.store.isTenantLoginOff?.(input.tenantId)) return { outcome: "skipped_login_off", userId: null };
   const role = mapGhlRole(input.ghlRole);
   const roleKnown = input.ghlRole !== null && input.ghlRole !== undefined;
   const email = normalizeEmail(input.email);
@@ -91,8 +97,13 @@ export async function provisionGhlUser(deps: ProvisionDeps, input: GhlUserInput)
     if (user) {
       const patch: { name?: string; role?: Role } = {};
       if (input.name?.trim() && user.name !== name) patch.name = name;
-      // An unknown HighLevel role says nothing about the person: their role stays.
-      if (roleKnown && user.role !== "admin" && user.role !== role) patch.role = role;
+      // An unknown HighLevel role says nothing about the person: their role stays. A role from an
+      // invite wins over HighLevel's; a failed lookup throws, so nobody changes on a guess.
+      if (roleKnown && user.role !== "admin") {
+        const invited = await deps.store.findInvitedRole?.(input.tenantId, user.email ?? email);
+        const target = invited ?? role;
+        if (user.role !== target) patch.role = target;
+      }
       if (patch.name || patch.role) await deps.updateUser(user.id, patch);
     }
     if (link.deletedAt) {

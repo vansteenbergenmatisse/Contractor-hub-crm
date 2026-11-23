@@ -9,7 +9,7 @@ export async function listClients(): Promise<ClientRow[]> {
   const [tenants, users] = await Promise.all([
     prisma.tenant.findMany({
       orderBy: { createdAt: "desc" },
-      select: { id: true, name: true, locationId: true, status: true },
+      select: { id: true, name: true, locationId: true, status: true, loginLock: { select: { disabledAt: true } } },
     }),
     prisma.user.findMany({ where: { tenantId: { not: null } }, select: { tenantId: true, disabledAt: true } }),
   ]);
@@ -26,6 +26,6 @@ export async function listClients(): Promise<ClientRow[]> {
   return tenants.map((tenant) => {
     const entry = counts.get(tenant.id) ?? { users: 0, active: 0 };
     const slug = slugs.get(tenant.id);
-    return { ...toClientRow(tenant, entry.users, entry.active), signInPath: slug ? signInPath(slug) : null };
+    return { ...toClientRow({ ...tenant, loginDisabledAt: tenant.loginLock?.disabledAt ?? null }, entry.users, entry.active), signInPath: slug ? signInPath(slug) : null };
   });
 }

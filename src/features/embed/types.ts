@@ -12,7 +12,7 @@ export type UserContext = {
 };
 
 // The tenant of a sub-account, whether or not the user has an account yet.
-export type EmbedTenant = { tenantId: string; status: EmbedTenantStatus; companyId: string | null };
+export type EmbedTenant = { tenantId: string; status: EmbedTenantStatus; companyId: string | null; loginDisabledAt?: Date | null };
 
 // What the embed sign-in decides: an existing CRM user, a user to create on the spot (the caller must
 // still confirm with HighLevel that the person belongs to the sub-account), or a denial with a short
@@ -29,5 +29,5 @@ export type EmbedCandidate = {
   userId: string;
   role: string;
   disabledAt: Date | null;
-  tenant: { status: EmbedTenantStatus; companyId: string | null };
+  tenant: { status: EmbedTenantStatus; companyId: string | null; loginDisabledAt?: Date | null };
 };

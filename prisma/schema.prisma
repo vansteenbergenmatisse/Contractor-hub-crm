@@ -32,6 +32,16 @@ model Tenant {
   users         User[]
   invites       Invite[]
   syncState     TenantSyncState?
+  loginLock     TenantLoginLock?
+}
+
+// "Turn off login" for a whole client. A row means login is off; no row (the default) means on.
+// While it exists, no path creates or admits a user of this tenant (password, embed, provisioning,
+// invite). Admins have no tenant. A separate table so the Tenant table is not altered.
+model TenantLoginLock {
+  tenantId   String   @id
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  disabledAt DateTime @default(now())
 }
 
 // ---- feature: highlevel ----

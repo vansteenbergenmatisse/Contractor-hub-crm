@@ -35,6 +35,8 @@ export type InviteTenant = {
   locationId: string;
   companyId: string | null;
   status: "connected" | "needs_reconnect" | "uninstalled";
+  // Set while an admin has login turned off for this client: no invite is made or accepted.
+  loginDisabledAt?: Date | null;
 };
 
 export type InviteRole = "owner" | "office";
@@ -105,7 +107,7 @@ export function createInviteService(deps: InviteServiceDeps) {
     if (input.role !== "owner" && input.role !== "office") throw new InviteError("invalid_role");
     const tenant = await deps.store.findTenant(input.tenantId);
     // No company id means HighLevel cannot be asked who belongs to this sub-account.
-    if (!tenant || tenant.status !== "connected" || !tenant.companyId) throw new InviteError("tenant_unavailable");
+    if (!tenant || tenant.status !== "connected" || !tenant.companyId || tenant.loginDisabledAt) throw new InviteError("tenant_unavailable");
     const email = normalizeEmail(input.email);
     const eligibility = await deps.checkEligibility(tenant, email);
     if (!eligibility.eligible) throw new InviteError("not_eligible");
@@ -138,7 +140,9 @@ export function createInviteService(deps: InviteServiceDeps) {
 
   async function previewInvite(code: string): Promise<{ valid: true; email: string } | { valid: false }> {
     const invite = await deps.store.findInviteByCodeHash(hashInviteCode(code));
-    return isOpen(invite, deps.now()) ? { valid: true, email: invite.email } : { valid: false };
+    if (!isOpen(invite, deps.now())) return { valid: false };
+    const tenant = await deps.store.findTenant(invite.tenantId);
+    return tenant?.loginDisabledAt ? { valid: false } : { valid: true, email: invite.email };
   }
 
   async function acceptInvite(input: { code: string; name: string; password: string }): Promise<{ userId: string }> {
@@ -151,7 +155,7 @@ export function createInviteService(deps: InviteServiceDeps) {
     if (!isOpen(invite, deps.now())) throw new InviteError("invalid_invite");
     // The tenant must still be connected and the email must still be free at accept time.
     const tenant = await deps.store.findTenant(invite.tenantId);
-    if (!tenant || tenant.status !== "connected" || !tenant.companyId) throw new InviteError("invalid_invite");
+    if (!tenant || tenant.status !== "connected" || !tenant.companyId || tenant.loginDisabledAt) throw new InviteError("invalid_invite");
     if (await deps.store.emailTaken(invite.email)) throw new InviteError("email_taken");
     // The person may have left HighLevel since the invite was made. Checked before the claim, so a
     // refusal or a failed lookup leaves the invite unused.

@@ -39,6 +39,7 @@ export async function syncTenantUsers(
 ): Promise<UserCounts> {
   const counts = emptyUserCounts();
   let restoreSkipped = 0;
+  let loginOffSkipped = 0;
   const conflictReasons: Record<string, number> = {};
   const listed = new Set<string>();
   for (const user of users) {
@@ -64,6 +65,7 @@ export async function syncTenantUsers(
       else if (outcome === "capped") counts.capped += 1;
       else if (outcome === "skipped_invalid") counts.skippedInvalid += 1;
       else if (outcome === "skipped_removed") restoreSkipped += 1;
+      else if (outcome === "skipped_login_off") loginOffSkipped += 1;
       else {
         counts.skippedConflict += 1;
         const code = reason ?? "unspecified";
@@ -74,6 +76,7 @@ export async function syncTenantUsers(
     }
   }
   if (restoreSkipped > 0) console.info(`Onboarding: users left for the webhook or daily sync, restoreSkipped=${restoreSkipped}`);
+  if (loginOffSkipped > 0) console.info(`Onboarding: login is off for this client, usersSkipped=${loginOffSkipped}`);
   // Counts and reason codes only, for an admin: no email, no ids.
   if (counts.moved > 0 || counts.skippedConflict > 0) {
     console.info(JSON.stringify({ audit: "email_conflicts", moved: counts.moved, reasons: conflictReasons }));
