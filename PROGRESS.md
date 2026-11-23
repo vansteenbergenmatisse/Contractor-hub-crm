@@ -116,6 +116,7 @@ Single source of truth for where the project stands. Read it at the start of eve
 - Settings: self-written color pad; nine collapsible sections following the HighLevel folders. Content, path, webhook and secret-looking keys stay out. Routes: today's jobs, next job, keyless Google Maps Start link, optional location kept in the browser.
 - Existing test lines changed only where they pinned behavior the user decided or replaced (billing, 403, leads week, color picker, one Routes assertion).
 - Independent review rejected 0af3daa, then approved 202835d for dev only. The first combined deploy command was blocked by the permission system; the user then approved it. Migration applied to Neon `develop` with `prisma migrate deploy` before the push, after confirming the target differs from staging and production. `migrate status`: up to date. `pnpm check` exit 0: 3678 passed, 9 skipped.
+- Pushed: `develop` moved from 62ab277 to 97d7d03 with no force. CI run 45248809626 success. Vercel success, and `dev.crm.forgeforward.io` serves that deployment. Signed out: `/sign-in` and `/api/health/db` 200; `/routes`, `/inbox` and `/settings` 307; `/admin/clients` 404.
 - NOT VERIFIED: signed-in pages on dev with real JCR data, real touch drag on the pad, real HighLevel 403s, appointment status values, geolocation inside the HighLevel frame. Distance shows only when an address is written as coordinates.
 
 ### 2026-11-23 - Routes page, Communications name, Other values removed
