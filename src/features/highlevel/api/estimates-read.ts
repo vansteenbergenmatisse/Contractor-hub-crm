@@ -1,6 +1,7 @@
 import { parseEnv } from "@/shared/config";
 import { readLocationState } from "../db/token-store";
 import { HighLevelHttpError } from "./client";
+import { readFailureReason } from "./read-failure";
 import { getTokenService } from "./routes";
 import { withStoredLocationToken } from "./stored-token";
 import { TokenServiceError } from "./token-service";
@@ -170,7 +171,7 @@ function failure(error: unknown): { ok: false; reason: "reconnect" | "unavailabl
   }
   if (error instanceof HighLevelHttpError) {
     console.error(`HighLevel estimates read failed: step=request status=${error.status ?? "none"}`);
-    return { ok: false, reason: error.status === 401 || error.status === 403 ? "reconnect" : "unavailable" };
+    return { ok: false, reason: readFailureReason(error.status) };
   }
   const step = error instanceof EstimatesDeadlineError ? "deadline" : error instanceof EstimatesBodyTooLargeError ? "size" : "parse";
   console.error(`HighLevel estimates read failed: step=${step}`);

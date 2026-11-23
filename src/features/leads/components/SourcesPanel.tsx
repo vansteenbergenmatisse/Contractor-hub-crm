@@ -5,7 +5,7 @@ import { sourceRows } from "../api/leads-logic";
 import type { SourceCounts } from "../types";
 import { ChannelIcon } from "./ChannelIcon";
 
-// Where the last 7 days' leads came from, counted from real rows. A lead whose source is not an
+// Where this week's leads came from, counted from real rows. A lead whose source is not an
 // exact channel counts in the total and in no channel. The service area is the business's
 // own city, county and state, as in the design; a missing part is left out, and the whole sentence
 // when the sub-account has none. The county shows once the shell's business facts carry it

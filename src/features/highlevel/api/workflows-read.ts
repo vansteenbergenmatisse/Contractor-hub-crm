@@ -1,6 +1,7 @@
 import { parseEnv } from "@/shared/config";
 import { readLocationState } from "../db/token-store";
 import { HighLevelHttpError } from "./client";
+import { readFailureReason } from "./read-failure";
 import { getTokenService } from "./routes";
 import { withStoredLocationToken } from "./stored-token";
 import { TokenServiceError } from "./token-service";
@@ -181,7 +182,7 @@ function failure(error: unknown): Extract<WorkflowsRead, { ok: false }> {
   }
   if (error instanceof HighLevelHttpError) {
     console.error(`HighLevel workflow read failed: step=request status=${error.status ?? "none"}`);
-    return { ok: false, reason: error.status === 401 || error.status === 403 ? "reconnect" : "unavailable" };
+    return { ok: false, reason: readFailureReason(error.status) };
   }
   const step = error instanceof WorkflowsDeadlineError ? "deadline" : error instanceof WorkflowsThrottledError ? "throttled" : error instanceof WorkflowsBodyTooLargeError ? "size" : "parse";
   console.error(`HighLevel workflow read failed: step=${step}`);

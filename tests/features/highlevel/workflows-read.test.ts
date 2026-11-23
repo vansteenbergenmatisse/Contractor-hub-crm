@@ -135,8 +135,8 @@ describe("readWorkflows", () => {
     expect(out).toEqual({ ok: false, reason: "not-enabled" });
   });
 
-  it("reads any other 403 and a 401 as reconnect", async () => {
-    expect(await readWorkflows(deps(requests(json({ message: "Forbidden" }, 403))), "tenant-a")).toEqual({ ok: false, reason: "reconnect" });
+  it("reads any other 403 as unavailable and a 401 as reconnect", async () => {
+    expect(await readWorkflows(deps(requests(json({ message: "Forbidden" }, 403))), "tenant-a")).toEqual({ ok: false, reason: "unavailable" });
     expect(await readWorkflows(deps(requests(json({}, 401))), "tenant-a")).toEqual({ ok: false, reason: "reconnect" });
   });
 

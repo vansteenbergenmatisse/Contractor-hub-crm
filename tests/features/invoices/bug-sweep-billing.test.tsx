@@ -27,7 +27,7 @@ describe("B2: an open invoice with no liveMode on Payments", () => {
   });
 
   it("does not list a test, paid or nothing-owed invoice", async () => {
-    const out = await payments([row({ id: "test", liveMode: false }), row({ id: "paid", status: "paid", liveMode: null, amountDue: 0 }), row({ id: "zero", liveMode: null, amountDue: 0 })]);
+    const out = await payments([row({ id: "test", liveMode: false }), row({ id: "paid", status: "paid", liveMode: null, amountDue: 0 }), row({ id: "zero", liveMode: null, amountDue: 0, amountPaid: 999 })]);
     expect(out.state === "ready" ? out.due : []).toEqual([]);
   });
 });

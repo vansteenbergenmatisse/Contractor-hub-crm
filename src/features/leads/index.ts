@@ -4,7 +4,7 @@ export { LeadsSkeleton } from "./components/LeadsSkeleton";
 export { loadLeads } from "./api/load-leads";
 export { leadSearchRows, liveSearchRows } from "./api/search-rows";
 export {
-  MAX_ADDED, createInitialState, filterCounts, firstNeedId, hasWaitData, isWaiting, leadsReducer, mergeLeads, receivedLabel,
+  MAX_ADDED, createInitialState, filterCounts, firstNeedId, hasWaitData, isThisWeek, isWaiting, leadsReducer, mergeLeads, receivedLabel,
   sourceCounts, sourceKey, sourceRows, summarize, tiles, validateLead, visibleAdded, visibleLeads, waitClass, waitLevel,
   waitingCount, weekKnown, withReceived,
 } from "./api/leads-logic";

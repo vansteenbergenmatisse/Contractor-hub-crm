@@ -83,7 +83,7 @@ describe("what counts as due", () => {
   });
 
   it("leaves out a test invoice and a sent invoice with nothing left to pay", () => {
-    const out = dueSummary([row({ id: "test", liveMode: false }), row({ id: "zero", amountDue: 0 }), row({ id: "real", amountDue: 5 })], true);
+    const out = dueSummary([row({ id: "test", liveMode: false }), row({ id: "zero", amountDue: 0, amountPaid: 999 }), row({ id: "real", amountDue: 5 })], true);
     expect(out.due.map((r) => r.id)).toEqual(["real"]);
     expect(out.total?.amount).toBe(5);
   });

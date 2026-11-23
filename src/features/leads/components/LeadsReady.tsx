@@ -165,7 +165,7 @@ export function LeadsReady({ leads: loaded, loadedAt, complete, dropped, locatio
             onSubmit={() => dispatch({ type: "submit" })}
             onClose={() => dispatch({ type: "closeAdd" })}
           />
-          {weekKnown(leads, loadedAt, complete, dropped) && <SourcesPanel nAdded={state.nAdd} counts={sourceCounts(leads, loadedAt)} />}
+          {weekKnown(leads, loadedAt, complete, dropped, timeZone) && <SourcesPanel nAdded={state.nAdd} counts={sourceCounts(leads, loadedAt, timeZone)} />}
         </div>
       </div>
     </>

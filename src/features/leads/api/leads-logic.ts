@@ -1,3 +1,4 @@
+import { weekRange } from "@/features/calendar";
 import type {
   AddedLead, FocusField, FormErrors, FormValues, Lead, LeadsAction, LeadsState, LeadStatus, SourceCounts, SourceKey,
   Summary, WaitFilter, WaitLevel,
@@ -185,8 +186,6 @@ export function summarize(leads: readonly Lead[], state: LeadsState): Summary {
   return { tone: "calm", a: "Nobody waits on you.", b: "New leads show up here first.", button: "", target: null };
 }
 
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-
 const dayKey = (ms: number, timeZone: string) =>
   new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(ms);
 
@@ -201,14 +200,29 @@ export function hasWaitData(leads: readonly Lead[]): boolean {
   return leads.some((l) => l.status !== "new");
 }
 
-// "This week" is the last 7 days. With more contacts beyond the loaded page, a count is only known
-// when the page reaches past its window; otherwise it would undercount.
-// A row left out or without a usable date could fall inside the window, so no count is proven then.
-export function weekKnown(leads: readonly Lead[], loadedAt: string, complete: boolean, dropped = 0): boolean {
+// "This week" is the calendar's week (Sunday start) in the given zone, up to the moment of the load.
+// Null when the zone or the load time is unusable.
+function thisWeek(loadedAt: string, timeZone: string): { startMs: number; nowMs: number } | null {
+  const nowMs = Date.parse(loadedAt);
+  const range = weekRange(timeZone, null, new Date(nowMs));
+  return range ? { startMs: range.startMs, nowMs } : null;
+}
+
+export function isThisWeek(ms: number, loadedAt: string, timeZone: string): boolean {
+  const week = thisWeek(loadedAt, timeZone);
+  return week !== null && ms >= week.startMs && ms <= week.nowMs;
+}
+
+// With more contacts beyond the loaded page, a count is only known when the page reaches past the
+// start of the week; otherwise it would undercount. A row left out or without a usable date could
+// fall inside the week, so no count is proven then. Without a usable zone no week is proven.
+export function weekKnown(leads: readonly Lead[], loadedAt: string, complete: boolean, dropped = 0, timeZone?: string): boolean {
   const times = receivedTimes(leads);
-  if (dropped > 0 || times.length !== leads.length) return false;
+  if (dropped > 0 || times.length !== leads.length || !timeZone) return false;
+  const week = thisWeek(loadedAt, timeZone);
+  if (!week) return false;
   if (complete) return true;
-  return times.length > 0 && Math.min(...times) < Date.parse(loadedAt) - WEEK_MS;
+  return times.length > 0 && Math.min(...times) < week.startMs;
 }
 
 type TileContext = { loadedAt: string; complete: boolean; timeZone: string; dropped?: number };
@@ -224,7 +238,7 @@ export function tiles(leads: readonly Lead[], state: LeadsState, context: TileCo
   const todayKnown = allDated && (context.complete || (times.length > 0 && dayKey(Math.min(...times), context.timeZone) !== todayKey));
   return {
     today: todayKnown ? times.filter((t) => dayKey(t, context.timeZone) === todayKey).length : null,
-    week: weekKnown(leads, context.loadedAt, context.complete, dropped) ? times.filter((t) => t >= now - WEEK_MS && t <= now).length : null,
+    week: weekKnown(leads, context.loadedAt, context.complete, dropped, context.timeZone) ? times.filter((t) => isThisWeek(t, context.loadedAt, context.timeZone)).length : null,
     wait: hasWaitData(leads) ? waitingCount(leads, state) : null,
   };
 }
@@ -268,15 +282,14 @@ export function sourceKey(value: string | null | undefined): SourceKey | null {
 
 const NO_SOURCES: Readonly<Record<SourceKey, number>> = { call: 0, form: 0, text: 0, gmb: 0, fb: 0, ig: 0 };
 
-// The last 7 days' leads per channel. Unlabelled leads count in the total, in no channel.
-export function sourceCounts(leads: readonly Lead[], loadedAt: string): SourceCounts {
-  const now = Date.parse(loadedAt);
+// This week's leads per channel. Unlabelled leads count in the total, in no channel.
+export function sourceCounts(leads: readonly Lead[], loadedAt: string, timeZone: string): SourceCounts {
   const byKey = { ...NO_SOURCES };
   let unlabelled = 0;
   let total = 0;
   for (const l of leads) {
     const at = l.receivedAt ? Date.parse(l.receivedAt) : Number.NaN;
-    if (Number.isNaN(at) || at < now - WEEK_MS || at > now) continue;
+    if (Number.isNaN(at) || !isThisWeek(at, loadedAt, timeZone)) continue;
     total += 1;
     if (l.source) byKey[l.source] += 1;
     else unlabelled += 1;
