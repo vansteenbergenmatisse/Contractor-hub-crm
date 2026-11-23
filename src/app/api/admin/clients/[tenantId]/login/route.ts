@@ -1,11 +1,17 @@
 import {
+  createRemovedUserCheck,
+  deactivateGhlUser,
   getAuth,
   getGuards,
   getInviteLimiter,
+  getProvisionDeps,
   handleSetTenantLogin,
+  listActiveLinks,
   listTenantUserIds,
   setUserDisabled,
 } from "@/features/auth";
+import { getOnboardingApi } from "@/features/highlevel";
+import { syncTenantUsers } from "@/features/onboarding";
 import { parseEnv } from "@/shared/config";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +27,13 @@ export async function POST(request: Request, context: { params: Promise<{ tenant
       setUserDisabled: (userId, disabled) => setUserDisabled(getAuth(), userId, disabled),
       limiter: getInviteLimiter(),
       appOrigin: new URL(env.APP_URL).origin,
+      afterTurnOn: (id) =>
+        createRemovedUserCheck({
+          readUsers: (tenant) => getOnboardingApi().usersOfTenant(tenant),
+          syncUsers: syncTenantUsers,
+          deactivate: (tenant, ghlUserId) => deactivateGhlUser(getProvisionDeps(), tenant, ghlUserId),
+          activeLinks: listActiveLinks,
+        })(id),
     });
   } catch {
     return new Response("Server is not configured.", { status: 500, headers: { "cache-control": "no-store" } });
