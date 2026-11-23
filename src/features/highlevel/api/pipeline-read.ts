@@ -1,5 +1,6 @@
 import { HighLevelHttpError } from "./client";
 import { TokenServiceError } from "./token-service";
+import { readFailureReason } from "./read-failure";
 
 // Read-only adapter for pipelines, stages and open opportunities. It sends GET requests only: a stage
 // change can fire a HighLevel workflow, so nothing here can write. Shapes come from the public OpenAPI
@@ -194,7 +195,7 @@ function failure(error: unknown): PipelineBoardRead {
   }
   if (error instanceof HighLevelHttpError) {
     console.error(`HighLevel pipeline read failed: step=request status=${error.status ?? "none"}`);
-    return { ok: false, reason: error.status === 401 || error.status === 403 ? "reconnect" : "unavailable" };
+    return { ok: false, reason: readFailureReason(error.status) };
   }
   console.error(`HighLevel pipeline read failed: step=${error instanceof PipelineBodyTooLargeError ? "size" : "parse"}`);
   return { ok: false, reason: "unavailable" };

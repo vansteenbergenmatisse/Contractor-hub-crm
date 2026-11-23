@@ -185,7 +185,7 @@ describe("readPipelineBoard", () => {
     expect(await readPipelineBoard(d, "t")).toEqual({ ok: false, reason });
   });
 
-  it.each([[401, "reconnect"], [403, "reconnect"], [400, "unavailable"], [422, "unavailable"], [429, "unavailable"], [500, "unavailable"]])("HTTP %i on either call becomes %s, with no retry and no body in the log", async (status, reason) => {
+  it.each([[401, "reconnect"], [403, "unavailable"], [400, "unavailable"], [422, "unavailable"], [429, "unavailable"], [500, "unavailable"]])("HTTP %i on either call becomes %s, with no retry and no body in the log", async (status, reason) => {
     const a = deps({ pipelines: async () => json({ message: "Pat Test secret" }, status) });
     expect(await readPipelineBoard(a, "t")).toEqual({ ok: false, reason });
     expect(a.requestPipelines).toHaveBeenCalledTimes(1);

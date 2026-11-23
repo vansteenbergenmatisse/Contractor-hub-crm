@@ -116,7 +116,7 @@ describe("readContactsPage", () => {
     expect(await readContactsPage(d, "t")).toEqual({ ok: false, reason });
   });
 
-  it.each([[401, "reconnect"], [403, "reconnect"], [400, "unavailable"], [404, "unavailable"], [422, "unavailable"], [429, "unavailable"], [500, "unavailable"], [503, "unavailable"]])("HTTP %i becomes %s, in one request", async (status, reason) => {
+  it.each([[401, "reconnect"], [403, "unavailable"], [400, "unavailable"], [404, "unavailable"], [422, "unavailable"], [429, "unavailable"], [500, "unavailable"], [503, "unavailable"]])("HTTP %i becomes %s, in one request", async (status, reason) => {
     const d = deps(async () => json({ message: "Pat Test secret" }, status));
     expect(await readContactsPage(d, "t")).toEqual({ ok: false, reason });
     expect(d.requestContactSearch).toHaveBeenCalledTimes(1);

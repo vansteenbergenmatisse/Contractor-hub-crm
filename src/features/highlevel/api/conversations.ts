@@ -4,6 +4,7 @@ import { getTokenService } from "./routes";
 import { withStoredLocationToken } from "./stored-token";
 import { TokenServiceError } from "./token-service";
 import { readLocationState } from "../db/token-store";
+import { readFailureReason } from "./read-failure";
 
 // Read-only. The official OpenAPI file names this Version for both endpoints; no real response has
 // been seen (docs/greenlane/hl-api-notes.md).
@@ -181,7 +182,7 @@ function failure(error: unknown): ReadFailure {
   }
   if (error instanceof HighLevelHttpError) {
     console.error(`HighLevel inbox read failed: step=request status=${error.status ?? "none"}`);
-    return { ok: false, reason: error.status === 401 || error.status === 403 ? "reconnect" : "unavailable" };
+    return { ok: false, reason: readFailureReason(error.status) };
   }
   console.error(`HighLevel inbox read failed: step=${error instanceof InboxBodyTooLargeError ? "size" : "parse"}`);
   return { ok: false, reason: "unavailable" };

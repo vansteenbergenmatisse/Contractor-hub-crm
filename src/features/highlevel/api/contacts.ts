@@ -1,6 +1,7 @@
 import { HighLevelHttpError } from "./client";
 import { TokenServiceError } from "./token-service";
 import type { ContactsPage, ContactsRead, HighLevelContact } from "../types";
+import { readFailureReason } from "./read-failure";
 
 export const CONTACTS_PAGE_SIZE = 100;
 // Proposal, not a measured number: reads per tenant per minute, until real traffic is known.
@@ -93,7 +94,7 @@ function failure(error: unknown): ContactsRead {
   }
   if (error instanceof HighLevelHttpError) {
     console.error(`HighLevel contacts read failed: step=search status=${error.status ?? "none"}`);
-    return { ok: false, reason: error.status === 401 || error.status === 403 ? "reconnect" : "unavailable" };
+    return { ok: false, reason: readFailureReason(error.status) };
   }
   console.error(`HighLevel contacts read failed: step=${error instanceof ContactsBodyTooLargeError ? "size" : "parse"}`);
   return { ok: false, reason: "unavailable" };

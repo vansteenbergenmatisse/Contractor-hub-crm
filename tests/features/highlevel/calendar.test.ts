@@ -184,7 +184,7 @@ describe("readCalendarWeek", () => {
     expect(await readCalendarWeek(d, "t", bounds)).toEqual({ ok: false, reason });
   });
 
-  it.each([[401, "reconnect"], [403, "reconnect"], [400, "unavailable"], [404, "unavailable"], [429, "unavailable"], [500, "unavailable"]])("HTTP %i on an event read becomes %s, shows nothing partial and logs no body", async (status, reason) => {
+  it.each([[401, "reconnect"], [403, "unavailable"], [400, "unavailable"], [404, "unavailable"], [429, "unavailable"], [500, "unavailable"]])("HTTP %i on an event read becomes %s, shows nothing partial and logs no body", async (status, reason) => {
     const r = requests({
       calendars: async () => json({ calendars: [{ id: "cal-a" }, { id: "cal-b" }] }),
       events: vi.fn().mockResolvedValueOnce(json({ events: [event()] })).mockResolvedValue(json({ message: "Pat Test secret" }, status)),

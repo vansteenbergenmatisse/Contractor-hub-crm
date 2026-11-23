@@ -125,7 +125,7 @@ describe("reads", () => {
     expect(d.withToken).not.toHaveBeenCalled();
   });
 
-  it.each([[401, "reconnect"], [403, "reconnect"], [429, "unavailable"], [500, "unavailable"]])("maps status %i to %s with one attempt", async (status, reason) => {
+  it.each([[401, "reconnect"], [403, "unavailable"], [429, "unavailable"], [500, "unavailable"]])("maps status %i to %s with one attempt", async (status, reason) => {
     const d = deps(json({ message: "customer detail" }, status));
     expect(await readInboxConversations(d, "t1")).toEqual({ ok: false, reason });
     expect(d.requestConversations).toHaveBeenCalledTimes(1);

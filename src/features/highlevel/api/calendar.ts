@@ -4,6 +4,7 @@ import { HighLevelHttpError } from "./client";
 import { getTokenService } from "./routes";
 import { withStoredLocationToken } from "./stored-token";
 import { TokenServiceError } from "./token-service";
+import { readFailureReason } from "./read-failure";
 
 // Read-only calendar wiring. Facts and what is unverified: docs/greenlane/hl-api-notes.md. Every call
 // here is a GET. Calendar ids are looked up per tenant on each read, because every client has its own.
@@ -183,7 +184,7 @@ function failure(error: unknown): { ok: false; reason: "reconnect" | "unavailabl
   }
   if (error instanceof HighLevelHttpError) {
     console.error(`HighLevel calendar read failed: step=request status=${error.status ?? "none"}`);
-    return { ok: false, reason: error.status === 401 || error.status === 403 ? "reconnect" : "unavailable" };
+    return { ok: false, reason: readFailureReason(error.status) };
   }
   console.error(`HighLevel calendar read failed: step=${error instanceof CalendarBodyTooLargeError ? "size" : "parse"}`);
   return { ok: false, reason: "unavailable" };
