@@ -40,6 +40,7 @@ Single source of truth for where the project stands. Read it at the start of eve
 
 ## In progress
 
+- 2026-11-23 USER DECISIONS (chat), open: (1) Routes gets a toggle, worded by the user as "toggle the client when you are closeby": it notifies a client when the crew is close to that job, must not fire every time the crew passes within 5 minutes, and applies only to jobs and estimates. NOT built: a web page cannot read location while Google Maps is in front, addresses need geocoding, and a text to a JCR customer is forbidden by `loop-constraints.md` rule 12. (2) APPROVED: HighLevel media permissions with JCR re-approval, and one XML library for the SVG check (exact package to be logged). (3) When keeping an image link conflicts with WebP, keep the link. The documented API still has no same-link replace, so the user must choose the upload route. (4) JCR's media links use `files.leadconnectorhq.com`, which is not an allowed preview host, so Our work previews do not show yet.
 - 2026-11-23 OPEN from the user: image upload and replace is NOT built. It needs answers on HighLevel media scopes with JCR re-approval, the XML dependency, a test sub-account, and keeping the link versus WebP. The names of the two extra folders are still not defined. Routes: true background location needs a native app; distance needs geocoding; "5 minutes away" is a later HighLevel workflow.
 - **GATES before staging or production:** (1) add `TenantLoginLock` rows for clients already off (a migration backfill is forbidden by `tests/prisma/migrations.test.ts`). (2) Fix: when every user of a client was removed, turn-on clears the lock, the row reads off after reload, and a new HighLevel user can still enter. (3) The migration must reach the database before the code; check the Vercel deploy order.
 - 2026-11-23 RESUME HERE. The save-refresh fix, the combined bug sweep and the Settings layout are merged into `develop`, pushed, and deployed to the dev site (see the newest Log entry). The user retested a save on the dev site (Mike Dalton, back to Jon) and it worked. Not yet checked: Settings at 320px and the color picker.
@@ -110,6 +111,12 @@ Single source of truth for where the project stands. Read it at the start of eve
 - `develop` lacks the two merge commits GitHub created on `staging` and `main`. Harmless; merge `staging` into `develop` if it ever matters.
 
 ## Log
+
+### 2026-11-23 - Social links folder in Settings
+- Read the key names of `01a_Social_Links` from JCR's HighLevel screen, read-only: `business_facebook_url`, `business_instagram_url`, `business_yelp_url`, `business_youtube_url`.
+- Settings now has an editable Social links section. The four keys are allowlisted and validated as https links. The Our work section shows its real folder name, `07.5_Our-work`.
+- `tests/features/settings/folders.test.tsx`: one expected folder list updated. New: `tests/features/settings/social-links.test.tsx`.
+- Left out on purpose: `_google_maps_embed_src` in `01b_Google_Business_Profile`, because the safety rules keep embed keys on the server.
 
 ### 2026-11-23 - Six bug decisions, Settings rebuild and Routes on dev
 - A2: `TenantLoginLock` (migration `20261123120000_tenant_login_lock`) stops password, embed, provisioning and invites for a client that is off. A4: the latest accepted invite's role wins, and a null HighLevel role changes nothing. B1: "Check this invoice". B3: only a 401 says reconnect, on every reader. B4: a full last page with a stable total is complete. L7: calendar week for leads and appointments.

@@ -51,8 +51,8 @@ const header = (name: RegExp) => headers().find((b) => name.test(b.textContent ?
 describe("the folder map", () => {
   it("lists the folders in HighLevel's order, under their real names", () => {
     expect(FOLDERS.map((f) => f.name)).toEqual([
-      "01_Business_essentials", "01b_Google_Business_Profile", "01c_booking_links", "02_Branding",
-      "03.1_Residential_Services", "03.2_Commercial_Services", "04_Service-Types", "05_Service-Areas-(cities)", null,
+      "01_Business_essentials", "01a_Social_Links", "01b_Google_Business_Profile", "01c_booking_links", "02_Branding",
+      "03.1_Residential_Services", "03.2_Commercial_Services", "04_Service-Types", "05_Service-Areas-(cities)", "07.5_Our-work",
     ]);
   });
 

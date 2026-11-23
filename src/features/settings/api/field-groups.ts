@@ -14,6 +14,7 @@ export type FieldGroup = { title: string; fields: GroupField[] };
 export type ShownField = Field & GroupField;
 export type ShownGroup = { title: string; fields: ShownField[] };
 
+const SOCIAL_FOLDER = "01a_Social_Links";
 const GOOGLE_FOLDER = "01b_Google_Business_Profile";
 const BOOKING_FOLDER = "01c_booking_links";
 // docs/tenant-branding.md lists the website key with the Business essentials keys.
@@ -45,6 +46,10 @@ export const FIELD_GROUPS: FieldGroup[] = [
     title: "Links",
     fields: [
       { key: "business_website_url", folder: ESSENTIALS_FOLDER },
+      { key: "business_facebook_url", folder: SOCIAL_FOLDER },
+      { key: "business_instagram_url", folder: SOCIAL_FOLDER },
+      { key: "business_yelp_url", folder: SOCIAL_FOLDER },
+      { key: "business_youtube_url", folder: SOCIAL_FOLDER },
       { key: "business_google_profile_url", folder: GOOGLE_FOLDER },
       { key: "google_review_request_url", folder: GOOGLE_FOLDER },
       { key: "bbb_review_request_url", folder: GOOGLE_FOLDER },
