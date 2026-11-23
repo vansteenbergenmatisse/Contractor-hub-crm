@@ -74,3 +74,20 @@ export type PriceParse = { ok: true; low: number; high?: number } | { ok: false 
 export type BuildCheck = { ok: true; service: string; low: number; high?: number } | { ok: false; errors: { service: string; price: string }; field: "service" | "price" };
 export type EditDraft = { name: string; lines: ReadonlyArray<{ text: string; amount: string }> };
 export type EditCheck = { ok: true; name: string; lines: QuoteLine[] } | { ok: false; message: string; field: string };
+
+// One real quote on the read-only page. `amountText` is the number as received, with no unit claimed.
+export type LiveQuote = {
+  id: string;
+  title: string;
+  detail: string | null;
+  statusLabel: string | null;
+  statusTone: "is-plain" | "is-warn" | "is-ok" | "is-bad" | null;
+  amountText: string | null;
+  currency: string | null;
+  issuedLabel: string | null;
+};
+export type QuotesResult =
+  | { state: "ready"; quotes: LiveQuote[]; total: number; complete: boolean; dropped: number; loadedAt: string }
+  | { state: "empty" }
+  | { state: "reconnect" }
+  | { state: "unavailable" };

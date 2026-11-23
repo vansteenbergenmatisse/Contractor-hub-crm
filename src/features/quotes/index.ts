@@ -1,6 +1,9 @@
 // Public API of the quotes feature. Other code imports from "@/features/quotes" only.
 export { QuotesPage } from "./components/QuotesPage";
 export { QuoteSheet } from "./components/QuoteSheet";
+export { QuotesLivePage } from "./components/QuotesLivePage";
+export { loadQuotes, type QuotesReader } from "./api/load-quotes";
+export type { LiveQuote, QuotesResult } from "./types";
 export { searchRows, SEED_QUOTES, mockBuildLines } from "./mock";
 export {
   MAX_LINES, amountLabel, buildDraftOf, canApprove, checkBuild, checkEdit, chipClass, draftOf, filterCounts, formatMoney, initialState, isVisible,
