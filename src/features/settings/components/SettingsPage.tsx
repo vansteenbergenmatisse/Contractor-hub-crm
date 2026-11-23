@@ -10,11 +10,14 @@ import { UNKNOWN_CONNECTIONS, connectionsIntro } from "../api/connections";
 import { useSaveValues } from "../hooks/use-save-values";
 import { useSettings } from "../hooks/use-settings";
 import { useSignOut } from "../hooks/use-sign-out";
-import type { ConnectionStatus, Field, SaveValues, SectionKey } from "../types";
+import { imageKindOf } from "../api/image-keys";
+import { prepareImageFile } from "../api/prepare-image";
+import type { ConnectionStatus, Field, ImageUploader, PrepareImage, SaveValues, SectionKey } from "../types";
 import { BusinessGroups } from "./BusinessGroups";
 import { ConnectionRow } from "./ConnectionRow";
 import { FolderFields } from "./FolderFields";
 import { FolderSection, folderNameId } from "./FolderSection";
+import { ImageChange } from "./ImageChange";
 import { svgProps } from "./svg-props";
 import { ValueField } from "./ValueField";
 
@@ -45,7 +48,9 @@ type Props = {
 };
 
 // `saveValues`: given only when this owner may save to the sub-account. Without it Save lasts for this visit.
-export function SettingsPage({ initial, initialValues, initialSection, connections = UNKNOWN_CONNECTIONS, account, readOnly = false, saveValues }: Props & { readOnly?: boolean; saveValues?: SaveValues }) {
+// `uploadImage`: given only when the server flags allow Change image for this owner. Without it, or in
+// a read-only view, an image field is just its link.
+export function SettingsPage({ initial, initialValues, initialSection, connections = UNKNOWN_CONNECTIONS, account, readOnly = false, saveValues, uploadImage, prepareImage = prepareImageFile }: Props & { readOnly?: boolean; saveValues?: SaveValues; uploadImage?: ImageUploader; prepareImage?: PrepareImage }) {
   const live = !!saveValues && !readOnly;
   const { state, dispatch, filter, extras, phone, choicesAvailable, notLoaded } = useSettings(initial, initialValues, initialSection, connections, live, account);
   const remote = useSaveValues(state, dispatch, saveValues);
@@ -81,6 +86,22 @@ export function SettingsPage({ initial, initialValues, initialSection, connectio
   const topMessage = (errFieldSeen ? null : err?.message) ?? (loadFailed ? loadMessage : null);
   const edit = (key: string, value: string) => dispatch({ type: "edit", key, value });
   const fieldProps = (f: Field) => ({ field: f, value: draft[f.key] ?? "", saved: values[f.key] ?? "", invalid: err?.key === f.key, error: errFieldSeen && err?.key === f.key ? err.message : undefined, readOnly, onChange: edit });
+  const imageControl = (f: Field) => {
+    const kind = imageKindOf(f.key);
+    if (!uploadImage || readOnly || !kind) return null;
+    return (
+      <ImageChange
+        fieldKey={f.key}
+        label={f.label}
+        kind={kind}
+        current={values[f.key] ?? ""}
+        dirty={dirtyKeys.includes(f.key)}
+        upload={uploadImage}
+        prepare={prepareImage}
+        onValue={(key, value, saved) => dispatch({ type: "imageValue", key, value, saved })}
+      />
+    );
+  };
 
   const hasBizFields = shownFolders.some(({ folder }) => folder.id !== "branding");
   // Only the Branding folder is on screen: the panel takes its name.
@@ -188,8 +209,8 @@ export function SettingsPage({ initial, initialValues, initialSection, connectio
               return (
                 <FolderSection key={folder.id} {...folderShell(folder, keys)}>
                   {folder.id === "essentials"
-                    ? <BusinessGroups groups={groupFields(keys)} imageHosts={account?.imageHosts} fieldProps={fieldProps} folderNameId={nameId} />
-                    : <FolderFields keys={keys} imageHosts={account?.imageHosts} fieldProps={fieldProps} folderNameId={nameId} />}
+                    ? <BusinessGroups groups={groupFields(keys)} imageHosts={account?.imageHosts} fieldProps={fieldProps} folderNameId={nameId} imageControl={imageControl} />
+                    : <FolderFields keys={keys} imageHosts={account?.imageHosts} fieldProps={fieldProps} folderNameId={nameId} imageControl={imageControl} />}
                 </FolderSection>
               );
             })}

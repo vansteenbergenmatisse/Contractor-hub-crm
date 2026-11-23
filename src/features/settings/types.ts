@@ -41,3 +41,13 @@ export type SaveStatus = "saved" | "unchanged" | "conflict" | "invalid" | "missi
 export type SaveResult = { key: string; status: SaveStatus; current?: string };
 export type SaveAnswer = { kind: "results"; results: SaveResult[] } | { kind: "limited" } | { kind: "failed" };
 export type SaveValues = (changes: ValueChange[]) => Promise<SaveAnswer>;
+
+// Change image. The page gets the uploader from outside: this feature makes no network call.
+export type ImageKind = "svg" | "photo";
+export type ImageStatus =
+  | "saved" | "conflict" | "missing" | "duplicate" | "busy" | "needs_approval" | "connection"
+  | "rejected" | "bad_host" | "hash_mismatch" | "unknown" | "retry" | "limited" | "invalid" | "failed";
+export type ImageAnswer = { status: ImageStatus; url?: string; current?: string };
+export type ImageUploader = (input: { key: string; expected: string; blob: Blob }) => Promise<ImageAnswer>;
+export type PreparedImage = { ok: true; blob: Blob; previewUrl: string; summary: string } | { ok: false; message: string };
+export type PrepareImage = (file: File, kind: ImageKind) => Promise<PreparedImage>;

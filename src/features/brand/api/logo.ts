@@ -2,7 +2,7 @@
 // anyone with access to the sub-account in HighLevel can edit, so it is treated as untrusted:
 // https only, an allowed host only, no redirect followed, a short timeout, a size cap and an image
 // content type. Anything else gives null and the caller draws the initials instead.
-const DEFAULT_HOSTS = ["assets.cdn.filesafe.space"]; // HighLevel's media host seen in a real sub-account
+const DEFAULT_HOSTS = ["assets.cdn.filesafe.space", "files.leadconnectorhq.com"]; // HighLevel's media hosts seen in a real sub-account
 const ALLOWED_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "image/svg+xml"]);
 export const MAX_LOGO_BYTES = 512 * 1024;
 export const LOGO_TIMEOUT_MS = 4000;

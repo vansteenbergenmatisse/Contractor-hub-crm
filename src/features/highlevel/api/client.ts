@@ -18,6 +18,7 @@ const PAGE_SIZE = 100; // documented maximum
 const MAX_PAGES = 50; // guard against a paging loop
 const USER_SEARCH_LIMIT = 25; // the docs' default page size; the invite check searches by exact email
 const REQUEST_TIMEOUT_MS = 10_000; // a stalled HighLevel must not hold the route open
+const MEDIA_UPLOAD_TIMEOUT_MS = 20_000; // a proposal: an image of at most 2 MB, not a measured time
 const CONTACT_SEARCH_API_VERSION = API_VERSION; // the live docs name v3; older OpenAPI files say 2021-07-28 (not yet confirmed on a real response)
 
 // Carries the HTTP status (null: no response) and nothing else: never a body, token or secret.
@@ -488,7 +489,39 @@ export function createHighLevelClient(config: HighLevelClientConfig) {
     }
   }
 
-  return { exchangeAgencyCode, exchangeCode, listAgencyLocations, listCustomValues, listLocationUsers, listInstalledLocations, mintLocationToken, refreshToken, requestContactSearch, requestCustomValues, requestUpdateCustomValue, searchUsers };
+  // GET /medias/files for one exact file name (OpenAPI file, not yet seen on a real response). Only
+  // media-write.ts calls it.
+  async function requestMediaFiles(accessToken: string, locationId: string, name: string): Promise<Response> {
+    const query = new URLSearchParams({ sortBy: "createdAt", sortOrder: "desc", type: "file", query: name, altType: "location", altId: locationId, limit: "20" });
+    try {
+      return await doFetch(`${base}/medias/files?${query}`, {
+        method: "GET",
+        headers: { authorization: `Bearer ${accessToken}`, version: API_VERSION, accept: "application/json" },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+    } catch {
+      throw new HighLevelHttpError("HighLevel media list could not be reached.", null);
+    }
+  }
+
+  // POST /medias/upload-file. The location comes from the token. One attempt; only media-write.ts calls it.
+  async function requestMediaUpload(accessToken: string, file: { bytes: Uint8Array; name: string; fileName: string; contentType: string }): Promise<Response> {
+    const body = new FormData();
+    body.append("file", new Blob([file.bytes as BlobPart], { type: file.contentType }), file.fileName);
+    body.append("name", file.name);
+    try {
+      return await doFetch(`${base}/medias/upload-file`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${accessToken}`, version: API_VERSION, accept: "application/json" },
+        body,
+        signal: AbortSignal.timeout(MEDIA_UPLOAD_TIMEOUT_MS),
+      });
+    } catch {
+      throw new HighLevelHttpError("HighLevel media upload could not reach HighLevel.", null);
+    }
+  }
+
+  return { exchangeAgencyCode, exchangeCode, listAgencyLocations, listCustomValues, listLocationUsers, listInstalledLocations, mintLocationToken, refreshToken, requestContactSearch, requestCustomValues, requestMediaFiles, requestMediaUpload, requestUpdateCustomValue, searchUsers };
 }
 
 // Ids of people a parsed user list named but dropped for having no email. They are still in
