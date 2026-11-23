@@ -84,7 +84,7 @@ export type LiveInvoiceRow = {
 export type InvoicesRead =
   | { ok: true; rows: LiveInvoiceRow[]; expected: number; dropped: number; complete: boolean }
   | { ok: false; reason: "reconnect" | "unavailable" };
-export type InvoicesReader = (tenantId: string) => Promise<InvoicesRead>;
+export type InvoicesReader = (tenantId: string, signal?: AbortSignal) => Promise<InvoicesRead>;
 export type DueTotal = { amount: number; currency: string; count: number };
 export type DueSummary = { due: LiveInvoiceRow[]; total: DueTotal | null; blocked: boolean };
 export type LiveInvoiceView = {

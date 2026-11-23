@@ -20,7 +20,32 @@ export function formatLiveAmount(value: number | null, currency: string | null):
 }
 
 const isOpenStatus = (row: LiveInvoiceRow) => row.status === "sent" || row.status === "partially_paid";
-const isDue = (row: LiveInvoiceRow) => row.liveMode !== false && isOpenStatus(row) && row.amountDue !== 0;
+const isDue = (row: LiveInvoiceRow) => row.liveMode === true && isOpenStatus(row) && row.amountDue !== null && row.amountDue > 0;
+// amountDue above total is caught when the row is parsed (invoices-read.ts), which nulls both.
+// An open, non-test row that may be owed but has a field that cannot be trusted. Nothing owed is not blocked.
+const isUnreadable = (row: LiveInvoiceRow) =>
+  isOpenStatus(row) && row.liveMode !== false && row.amountDue !== 0 &&
+  (row.liveMode === null || row.amountDue === null || row.amountDue < 0 || row.currency === null);
+
+// One overall limit for a page load, shared by every read in it. Past it the load gives up.
+const BILLING_LOAD_DEADLINE_MS = 25_000;
+const DEADLINE_PASSED = Symbol("billing-deadline");
+export async function withBillingDeadline<T>(work: (signal: AbortSignal) => Promise<T>): Promise<T | { state: "unavailable" }> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<typeof DEADLINE_PASSED>((resolve) => {
+    timer = setTimeout(() => {
+      resolve(DEADLINE_PASSED);
+      controller.abort();
+    }, BILLING_LOAD_DEADLINE_MS);
+  });
+  try {
+    const answer = await Promise.race([work(controller.signal), expired]);
+    return answer === DEADLINE_PASSED ? { state: "unavailable" } : (answer as T);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 // Adds without binary rounding noise. Null when an amount cannot be added exactly.
 function sumExact(values: number[]): number | null {
@@ -42,7 +67,7 @@ export function dueSummary(rows: readonly LiveInvoiceRow[], complete: boolean): 
   const due = rows.filter(isDue);
   // A payment still processing may fail, so whether it is owed is not proven either way.
   const unknownStatus = rows.some((row) => (row.status === null || row.status === "payment_processing") && row.liveMode !== false);
-  const unreadable = due.some((row) => row.liveMode === null || row.amountDue === null || row.currency === null);
+  const unreadable = rows.some(isUnreadable);
   const currencies = new Set(due.map((row) => row.currency));
   const amount = unreadable || currencies.size > 1 || due.length === 0 ? null : sumExact(due.map((row) => row.amountDue as number));
   const blocked = !complete || unknownStatus || unreadable || currencies.size > 1 || (due.length > 0 && amount === null);
@@ -62,7 +87,7 @@ export function invoiceView(row: LiveInvoiceRow): LiveInvoiceView {
     statusLabel: known.label,
     tone: known.tone,
     bucket: known.bucket,
-    amountText: formatLiveAmount(due ? row.amountDue : row.total, row.currency),
+    amountText: isUnreadable(row) ? formatLiveAmount(null, null) : formatLiveAmount(due ? row.amountDue : row.total, row.currency),
     dueText,
     test: row.liveMode === false,
   };
@@ -74,10 +99,11 @@ export async function loadInvoices(tenantId: string | null | undefined, read: In
   if (!tenantId || process.env.INVOICES_READ_DISABLED === "true") return { state: "unavailable" };
   let answer;
   try {
-    answer = await read(tenantId);
+    answer = await withBillingDeadline((signal) => read(tenantId, signal));
   } catch {
     return { state: "unavailable" };
   }
+  if ("state" in answer) return { state: "unavailable" };
   if (!answer.ok) return { state: answer.reason };
   if (answer.dropped > 0) console.warn(`Invoices: left out ${answer.dropped} rows.`);
   if (answer.rows.length === 0) return answer.complete ? { state: "empty" } : { state: "unavailable" };

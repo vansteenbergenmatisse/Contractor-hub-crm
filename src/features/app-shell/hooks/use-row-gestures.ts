@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { EDGE_PX, LONG_PRESS, ROW_SWIPE, findBack, isPhone, point, rowSwipeFrame, rowSwipeIntent, snap, suppressClick, swipeActions, swipeText, type RowAction } from "../api/gestures";
 import { useGestures } from "../components/GestureLayer";
 
@@ -35,7 +35,7 @@ export function useRowGestures<T extends HTMLElement = HTMLElement>(options: Row
   const fx = useGestures();
   const [element, setElement] = useState<T | null>(null);
   const latest = useRef(options);
-  useEffect(() => {
+  useLayoutEffect(() => {
     latest.current = options;
   });
 
@@ -45,7 +45,7 @@ export function useRowGestures<T extends HTMLElement = HTMLElement>(options: Row
     fx.openMenu({ anchor: row, x, y, touch, keyboard, label: o.label, actions: o.actions });
   };
   const open = useRef(openMenu);
-  useEffect(() => {
+  useLayoutEffect(() => {
     open.current = openMenu;
   });
 

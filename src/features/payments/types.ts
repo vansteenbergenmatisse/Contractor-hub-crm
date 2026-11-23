@@ -52,7 +52,7 @@ export type LiveTransactionRow = {
 export type TransactionsRead =
   | { ok: true; rows: LiveTransactionRow[]; expected: number; dropped: number; complete: boolean }
   | { ok: false; reason: "reconnect" | "unavailable" };
-export type TransactionsReader = (tenantId: string) => Promise<TransactionsRead>;
+export type TransactionsReader = (tenantId: string, signal?: AbortSignal) => Promise<TransactionsRead>;
 export type LiveTransactionView = {
   id: string;
   name: string;

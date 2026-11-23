@@ -1,4 +1,4 @@
-import { dueSummary, formatLiveAmount, invoiceView, type InvoicesReader } from "@/features/invoices";
+import { dueSummary, formatLiveAmount, invoiceView, withBillingDeadline, type InvoicesReader } from "@/features/invoices";
 import type { LiveTransactionRow, LiveTransactionView, PaymentsResult, TransactionsRead, TransactionsReader } from "../types";
 
 const DAY = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
@@ -24,9 +24,9 @@ function transactionView(row: LiveTransactionRow): LiveTransactionView {
 
 const newestFirst = (a: LiveTransactionRow, b: LiveTransactionRow) => (b.createdAt ? Date.parse(b.createdAt) : -Infinity) - (a.createdAt ? Date.parse(a.createdAt) : -Infinity) || 0;
 
-async function readTransactions(read: TransactionsReader, tenantId: string): Promise<TransactionsRead> {
+async function readTransactions(read: TransactionsReader, tenantId: string, signal: AbortSignal): Promise<TransactionsRead> {
   try {
-    return await read(tenantId);
+    return await read(tenantId, signal);
   } catch {
     return { ok: false, reason: "unavailable" };
   }
@@ -40,16 +40,19 @@ export async function loadPayments(
   read: { invoices: InvoicesReader; transactions: TransactionsReader },
 ): Promise<PaymentsResult> {
   if (!tenantId || process.env.PAYMENTS_READ_DISABLED === "true" || process.env.INVOICES_READ_DISABLED === "true") return { state: "unavailable" };
-  let invoices;
   try {
-    invoices = await read.invoices(tenantId);
+    return await withBillingDeadline((signal) => readBoth(tenantId, read, signal));
   } catch {
     return { state: "unavailable" };
   }
+}
+
+async function readBoth(tenantId: string, read: { invoices: InvoicesReader; transactions: TransactionsReader }, signal: AbortSignal): Promise<PaymentsResult> {
+  const invoices = await read.invoices(tenantId, signal);
   if (!invoices.ok) return { state: invoices.reason };
   const summary = dueSummary(invoices.rows, invoices.complete);
   if (summary.due.length === 0 && !invoices.complete) return { state: "unavailable" };
-  const answer = await readTransactions(read.transactions, tenantId);
+  const answer = await readTransactions(read.transactions, tenantId, signal);
   if (answer.ok && answer.dropped > 0) console.warn(`Payments: left out ${answer.dropped} rows.`);
   if (summary.due.length === 0 && !summary.blocked && answer.ok && answer.complete && answer.rows.length === 0) return { state: "empty" };
   return {

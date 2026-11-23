@@ -141,6 +141,7 @@ export {
   buildInvoicesReader,
   buildTransactionsReader,
   createBillingRequests,
+  createTenantBillingReaders,
   createTenantInvoicesReader,
   createTenantTransactionsReader,
   parseInvoicePage,

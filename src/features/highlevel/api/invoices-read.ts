@@ -18,6 +18,7 @@ export const BILLING_PAGE_SIZE = 100;
 export const BILLING_MAX_PAGES = 3;
 export const BILLING_READS_PER_MINUTE = 30;
 export const MAX_BILLING_RESPONSE_BYTES = 5 * 1024 * 1024;
+const MAX_TEXT_CHARS = 200;
 
 export type HighLevelInvoiceStatus = (typeof INVOICE_STATUSES)[number];
 export type HighLevelInvoice = {
@@ -49,8 +50,8 @@ export type BillingRead<T> =
   | { ok: false; reason: "reconnect" | "unavailable" };
 export type BillingPage<T> = { rows: T[]; received: number; total: number; dropped: number };
 export type BillingRequests = {
-  invoices: (accessToken: string, locationId: string, offset: number) => Promise<Response>;
-  transactions: (accessToken: string, locationId: string, offset: number) => Promise<Response>;
+  invoices: (accessToken: string, locationId: string, offset: number, signal?: AbortSignal) => Promise<Response>;
+  transactions: (accessToken: string, locationId: string, offset: number, signal?: AbortSignal) => Promise<Response>;
 };
 type WithToken = (tenantId: string, call: (accessToken: string) => Promise<Response>) => Promise<Response>;
 export type BillingRuntime = {
@@ -68,6 +69,13 @@ const text = (value: unknown): string | null => {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
+};
+// Display text, cut at the cap without leaving half of a two-unit character.
+const shown = (value: unknown): string | null => {
+  const clean = text(value);
+  if (!clean || clean.length <= MAX_TEXT_CHARS) return clean;
+  const last = clean.charCodeAt(MAX_TEXT_CHARS - 1);
+  return clean.slice(0, last >= 0xd800 && last <= 0xdbff ? MAX_TEXT_CHARS - 1 : MAX_TEXT_CHARS);
 };
 const record = (value: unknown): Record<string, unknown> | null =>
   typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
@@ -94,7 +102,7 @@ function instant(value: unknown): string | null {
 function invoiceNumber(value: unknown): string | null {
   // The file types this as a number with a string example, so both are read.
   if (typeof value === "number") return Number.isSafeInteger(value) && value >= 0 ? String(value) : null;
-  return text(value);
+  return shown(value);
 }
 function invoiceStatus(value: unknown): HighLevelInvoiceStatus | null {
   return INVOICE_STATUSES.find((status) => status === value) ?? null;
@@ -114,7 +122,7 @@ function parsePage<T>(list: unknown, totalValue: unknown, locationId: string, to
   for (const raw of list.slice(0, BILLING_PAGE_SIZE)) {
     const row = record(raw);
     const id = text(row?._id);
-    if (!row || !id || !ownRow(row, locationId)) dropped += 1;
+    if (!row || !id || id.length > MAX_TEXT_CHARS || !ownRow(row, locationId)) dropped += 1;
     else rows.push(toRow(row, id));
   }
   return { rows, received: list.length, total, dropped };
@@ -123,20 +131,26 @@ function parsePage<T>(list: unknown, totalValue: unknown, locationId: string, to
 // Only what the page shows is kept: no contact phone, email, address, line items or business details.
 export function parseInvoicePage(json: unknown, locationId: string): BillingPage<HighLevelInvoice> {
   const body = record(json);
-  return parsePage(body?.invoices, body?.total, locationId, (row, id) => ({
-    id,
-    status: invoiceStatus(row.status),
-    liveMode: bool(row.liveMode),
-    name: text(row.name),
-    number: invoiceNumber(row.invoiceNumber),
-    contactName: text(record(row.contactDetails)?.name),
-    currency: currency(row.currency),
-    issueDate: day(row.issueDate),
-    dueDate: day(row.dueDate),
-    total: amount(row.total),
-    amountDue: amount(row.amountDue),
-    amountPaid: amount(row.amountPaid),
-  }));
+  return parsePage(body?.invoices, body?.total, locationId, (row, id) => {
+    const total = amount(row.total);
+    const amountDue = amount(row.amountDue);
+    // More due than the invoice is worth means the two are not in one unit, so neither is shown.
+    const mixed = total !== null && amountDue !== null && amountDue > total;
+    return {
+      id,
+      status: invoiceStatus(row.status),
+      liveMode: bool(row.liveMode),
+      name: shown(row.name),
+      number: invoiceNumber(row.invoiceNumber),
+      contactName: shown(record(row.contactDetails)?.name),
+      currency: currency(row.currency),
+      issueDate: day(row.issueDate),
+      dueDate: day(row.dueDate),
+      total: mixed ? null : total,
+      amountDue: mixed ? null : amountDue,
+      amountPaid: amount(row.amountPaid),
+    };
+  });
 }
 
 // No email, IP address, charge snapshot, payment method or provider ids.
@@ -144,11 +158,11 @@ export function parseTransactionPage(json: unknown, locationId: string): Billing
   const body = record(json);
   return parsePage(body?.data, body?.totalCount, locationId, (row, id) => ({
     id,
-    contactName: text(row.contactName),
+    contactName: shown(row.contactName),
     currency: currency(row.currency),
     amount: amount(row.amount),
     amountRefunded: amount(row.amountRefunded),
-    status: text(row.status),
+    status: shown(row.status),
     liveMode: bool(row.liveMode),
     createdAt: instant(row.createdAt),
   }));
@@ -156,12 +170,13 @@ export function parseTransactionPage(json: unknown, locationId: string): Billing
 
 export function createBillingRequests(baseUrl: string, doFetch: typeof fetch = fetch): BillingRequests {
   const base = baseUrl.replace(/\/+$/, "");
-  const get = async (path: string, accessToken: string): Promise<Response> => {
+  const get = async (path: string, accessToken: string, deadline?: AbortSignal): Promise<Response> => {
+    const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
     try {
       return await doFetch(`${base}${path}`, {
         method: "GET",
         headers: { authorization: `Bearer ${accessToken}`, version: BILLING_API_VERSION, accept: "application/json" },
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        signal: deadline ? AbortSignal.any([timeout, deadline]) : timeout,
       });
     } catch {
       throw new HighLevelHttpError("HighLevel billing read could not reach HighLevel.", null);
@@ -169,8 +184,8 @@ export function createBillingRequests(baseUrl: string, doFetch: typeof fetch = f
   };
   const paging = (locationId: string, offset: number) => ({ altId: locationId, altType: "location", limit: String(BILLING_PAGE_SIZE), offset: String(offset) });
   return {
-    invoices: (token, locationId, offset) => get(`/invoices/?${new URLSearchParams({ ...paging(locationId, offset), sortField: "issueDate", sortOrder: "descend" })}`, token),
-    transactions: (token, locationId, offset) => get(`/payments/transactions?${new URLSearchParams(paging(locationId, offset))}`, token),
+    invoices: (token, locationId, offset, signal) => get(`/invoices/?${new URLSearchParams({ ...paging(locationId, offset), sortField: "issueDate", sortOrder: "descend" })}`, token, signal),
+    transactions: (token, locationId, offset, signal) => get(`/payments/transactions?${new URLSearchParams(paging(locationId, offset))}`, token, signal),
   };
 }
 
@@ -213,13 +228,15 @@ function failure(label: string, error: unknown): { ok: false; reason: "reconnect
 }
 
 // All or nothing per read: a failed page fails it. `complete` is true only when the rows received
-// add up exactly to the documented total, with nothing dropped, repeated or moved between pages.
+// add up exactly to the documented total, with nothing dropped, repeated or moved between pages, and
+// the end was seen: a short page, or an empty page after a full one. A cap that stops first is incomplete.
 async function readAllPages<T extends { id: string }>(
   label: string,
   rt: { readLocationId: BillingRuntime["readLocationId"]; withToken: WithToken },
   tenantId: string,
-  request: (token: string, locationId: string, offset: number) => Promise<Response>,
+  request: BillingRequests["invoices"],
   parse: (json: unknown, locationId: string) => BillingPage<T>,
+  signal?: AbortSignal,
 ): Promise<BillingRead<T>> {
   try {
     const locationId = await rt.readLocationId(tenantId);
@@ -230,14 +247,17 @@ async function readAllPages<T extends { id: string }>(
     let dropped = 0;
     let expected: number | null = null;
     let moved = false;
+    let endSeen = false;
     for (let page = 0; page < BILLING_MAX_PAGES; page += 1) {
+      signal?.throwIfAborted();
       const offset = received;
-      const response = await rt.withToken(tenantId, (token) => request(token, locationId, offset));
+      const response = await rt.withToken(tenantId, (token) => request(token, locationId, offset, signal));
       if (!response.ok) {
         await response.body?.cancel().catch(() => {});
         throw new HighLevelHttpError("HighLevel billing read failed.", response.status);
       }
       const parsed = parse(await readLimitedJson(response), locationId);
+      signal?.throwIfAborted();
       if (expected !== null && parsed.total !== expected) moved = true;
       expected = parsed.total;
       received += parsed.received;
@@ -249,10 +269,13 @@ async function readAllPages<T extends { id: string }>(
           rows.push(row);
         }
       }
-      if (parsed.received === 0 || received >= expected) break;
+      if (parsed.received === 0 || (received >= expected && parsed.received < BILLING_PAGE_SIZE)) {
+        endSeen = true;
+        break;
+      }
     }
     const total = expected ?? 0;
-    return { ok: true, rows, expected: total, dropped, complete: !moved && dropped === 0 && received === total && rows.length === total };
+    return { ok: true, rows, expected: total, dropped, complete: endSeen && !moved && dropped === 0 && received === total && rows.length === total };
   } catch (error) {
     return failure(label, error);
   }
@@ -260,8 +283,8 @@ async function readAllPages<T extends { id: string }>(
 
 // The read behind a limit, counted before any env, token or HighLevel call; a limiter failure denies
 // it. With `viewer` (an admin's client view) the stored token is used and the count is the viewer's.
-function limited<T>(label: string, keyName: string, runtime: () => BillingRuntime, hit: Hit, viewer: Viewer | undefined, run: (rt: BillingRuntime, withToken: WithToken, tenantId: string) => Promise<BillingRead<T>>) {
-  return async (tenantId: string): Promise<BillingRead<T>> => {
+function limited<T>(label: string, keyName: string, runtime: () => BillingRuntime, hit: Hit, viewer: Viewer | undefined, run: (rt: BillingRuntime, withToken: WithToken, tenantId: string, signal?: AbortSignal) => Promise<BillingRead<T>>) {
+  return async (tenantId: string, signal?: AbortSignal): Promise<BillingRead<T>> => {
     const key = viewer ? `highlevel-${keyName}-view:${viewer.viewerId}` : `highlevel-${keyName}:${tenantId}`;
     let allowed: boolean;
     try {
@@ -281,18 +304,18 @@ function limited<T>(label: string, keyName: string, runtime: () => BillingRuntim
       console.error(`HighLevel ${label} read failed: step=env`);
       return { ok: false, reason: "unavailable" };
     }
-    return run(rt, viewer ? rt.withStoredLocationToken : rt.withLocationToken, tenantId);
+    return run(rt, viewer ? rt.withStoredLocationToken : rt.withLocationToken, tenantId, signal);
   };
 }
 
 export function buildInvoicesReader(runtime: () => BillingRuntime, hit: Hit, viewer?: Viewer) {
-  return limited<HighLevelInvoice>("invoices", "invoices", runtime, hit, viewer, (rt, withToken, tenantId) =>
-    readAllPages("invoices", { readLocationId: rt.readLocationId, withToken }, tenantId, rt.requests.invoices, parseInvoicePage));
+  return limited<HighLevelInvoice>("invoices", "invoices", runtime, hit, viewer, (rt, withToken, tenantId, signal) =>
+    readAllPages("invoices", { readLocationId: rt.readLocationId, withToken }, tenantId, rt.requests.invoices, parseInvoicePage, signal));
 }
 
 export function buildTransactionsReader(runtime: () => BillingRuntime, hit: Hit, viewer?: Viewer) {
-  return limited<HighLevelTransaction>("transactions", "payments", runtime, hit, viewer, (rt, withToken, tenantId) =>
-    readAllPages("transactions", { readLocationId: rt.readLocationId, withToken }, tenantId, rt.requests.transactions, parseTransactionPage));
+  return limited<HighLevelTransaction>("transactions", "payments", runtime, hit, viewer, (rt, withToken, tenantId, signal) =>
+    readAllPages("transactions", { readLocationId: rt.readLocationId, withToken }, tenantId, rt.requests.transactions, parseTransactionPage, signal));
 }
 
 function defaultRuntime(): BillingRuntime {
@@ -312,4 +335,9 @@ export function createTenantInvoicesReader(hit: Hit, viewer?: Viewer) {
 
 export function createTenantTransactionsReader(hit: Hit, viewer?: Viewer) {
   return buildTransactionsReader(defaultRuntime, hit, viewer);
+}
+
+// Both readers from one call, so a client view cannot use the viewer's token path for only one.
+export function createTenantBillingReaders(hit: Hit, viewer?: Viewer) {
+  return { invoices: createTenantInvoicesReader(hit, viewer), transactions: createTenantTransactionsReader(hit, viewer) };
 }
