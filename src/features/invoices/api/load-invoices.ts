@@ -1,4 +1,4 @@
-import type { DueSummary, InvoicesReader, InvoicesResult, LiveInvoiceRow, LiveInvoiceView } from "../types";
+import type { BlockedBy, DueSummary, InvoicesReader, InvoicesResult, LiveInvoiceRow, LiveInvoiceView } from "../types";
 
 const LABELS: Record<NonNullable<LiveInvoiceRow["status"]>, { label: string; tone: LiveInvoiceView["tone"]; bucket: LiveInvoiceView["bucket"] }> = {
   draft: { label: "Draft", tone: "is-plain", bucket: "draft" },
@@ -66,13 +66,28 @@ function sumExact(values: number[]): number | null {
 export function dueSummary(rows: readonly LiveInvoiceRow[], complete: boolean): DueSummary {
   const due = rows.filter(isDue);
   // A payment still processing may fail, so whether it is owed is not proven either way.
-  const unknownStatus = rows.some((row) => (row.status === null || row.status === "payment_processing") && row.liveMode !== false);
+  const noStatus = rows.some((row) => row.status === null && row.liveMode !== false);
+  const processing = rows.some((row) => row.status === "payment_processing" && row.liveMode !== false);
+  const unknownStatus = noStatus || processing;
   const unreadable = rows.some(isUnreadable);
   const currencies = new Set(due.map((row) => row.currency));
   const amount = unreadable || currencies.size > 1 || due.length === 0 ? null : sumExact(due.map((row) => row.amountDue as number));
   const blocked = !complete || unknownStatus || unreadable || currencies.size > 1 || (due.length > 0 && amount === null);
   const total = blocked || amount === null ? null : { amount, currency: due[0].currency as string, count: due.length };
-  return { due, total, blocked };
+  const cannotAdd = currencies.size <= 1 && due.length > 0 && amount === null;
+  const blockedBy: BlockedBy | undefined = noStatus || unreadable || cannotAdd ? undefined : currencies.size > 1 ? "currencies" : processing ? "processing" : undefined;
+  return { due, total, blocked, blockedBy };
+}
+
+// The rows Payments lists: what is proven due, and an open row that may be owed but cannot be read.
+export const owedOrUnreadable = (rows: readonly LiveInvoiceRow[]): LiveInvoiceRow[] => rows.filter((row) => isDue(row) || isUnreadable(row));
+
+// The warning above a page with no total.
+export function blockedNote(complete: boolean, blockedBy?: BlockedBy): string {
+  if (!complete) return "Not every invoice could be read, so no total is shown.";
+  if (blockedBy === "processing") return "A payment is still processing, so no total is shown.";
+  if (blockedBy === "currencies") return "Invoices are in more than one currency, so no total is shown.";
+  return "Some invoices could not be read in full, so no total is shown.";
 }
 
 export function invoiceView(row: LiveInvoiceRow): LiveInvoiceView {
@@ -108,5 +123,5 @@ export async function loadInvoices(tenantId: string | null | undefined, read: In
   if (answer.dropped > 0) console.warn(`Invoices: left out ${answer.dropped} rows.`);
   if (answer.rows.length === 0) return answer.complete ? { state: "empty" } : { state: "unavailable" };
   const summary = dueSummary(answer.rows, answer.complete);
-  return { state: "ready", rows: answer.rows.map(invoiceView), total: summary.total, blocked: summary.blocked, complete: answer.complete };
+  return { state: "ready", rows: answer.rows.map(invoiceView), total: summary.total, blocked: summary.blocked, blockedBy: summary.blockedBy, complete: answer.complete };
 }

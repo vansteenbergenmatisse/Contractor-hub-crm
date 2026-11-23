@@ -1,4 +1,4 @@
-import { dueSummary, formatLiveAmount, invoiceView, withBillingDeadline, type InvoicesReader } from "@/features/invoices";
+import { dueSummary, formatLiveAmount, invoiceView, owedOrUnreadable, withBillingDeadline, type InvoicesReader } from "@/features/invoices";
 import type { LiveTransactionRow, LiveTransactionView, PaymentsResult, TransactionsRead, TransactionsReader } from "../types";
 
 const DAY = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
@@ -57,9 +57,10 @@ async function readBoth(tenantId: string, read: { invoices: InvoicesReader; tran
   if (summary.due.length === 0 && !summary.blocked && answer.ok && answer.complete && answer.rows.length === 0) return { state: "empty" };
   return {
     state: "ready",
-    due: summary.due.map(invoiceView),
+    due: owedOrUnreadable(invoices.rows).map(invoiceView),
     total: summary.total,
     blocked: summary.blocked,
+    blockedBy: summary.blockedBy,
     complete: invoices.complete,
     transactions: answer.ok ? { rows: [...answer.rows].sort(newestFirst).map(transactionView), complete: answer.complete } : null,
   };

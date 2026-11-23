@@ -86,7 +86,9 @@ export type InvoicesRead =
   | { ok: false; reason: "reconnect" | "unavailable" };
 export type InvoicesReader = (tenantId: string, signal?: AbortSignal) => Promise<InvoicesRead>;
 export type DueTotal = { amount: number; currency: string; count: number };
-export type DueSummary = { due: LiveInvoiceRow[]; total: DueTotal | null; blocked: boolean };
+// Set when every row was readable and this alone stops the total.
+export type BlockedBy = "processing" | "currencies";
+export type DueSummary = { due: LiveInvoiceRow[]; total: DueTotal | null; blocked: boolean; blockedBy?: BlockedBy };
 export type LiveInvoiceView = {
   id: string;
   name: string;
@@ -100,4 +102,4 @@ export type LiveInvoiceView = {
 };
 export type InvoicesResult =
   | { state: "reconnect" | "unavailable" | "empty" }
-  | { state: "ready"; rows: LiveInvoiceView[]; total: DueTotal | null; blocked: boolean; complete: boolean };
+  | { state: "ready"; rows: LiveInvoiceView[]; total: DueTotal | null; blocked: boolean; blockedBy?: BlockedBy; complete: boolean };
