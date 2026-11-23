@@ -1,14 +1,18 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { COLOR_GROUPS, CONNECTIONS, ESSENTIAL_FIELDS, SECTIONS, SOON_ITEMS, SWITCHES, labelOfKey, sectionOfKey } from "../api/fields";
+import { COLOR_GROUPS, CONNECTIONS, ESSENTIAL_KEYS, SECTIONS, SOON_ITEMS, SWITCHES, sectionOfKey } from "../api/fields";
+import { groupFields } from "../api/field-groups";
+import type { AccountLayout } from "../api/load-values";
 import { dirtyKeysOf, type SettingsState } from "../api/state";
 import { UNKNOWN_CONNECTIONS, connectionsIntro } from "../api/connections";
 import { useSaveValues } from "../hooks/use-save-values";
 import { useSettings } from "../hooks/use-settings";
 import { useSignOut } from "../hooks/use-sign-out";
 import type { ConnectionStatus, Field, SaveValues, SectionKey } from "../types";
+import { BusinessGroups } from "./BusinessGroups";
 import { ConnectionRow } from "./ConnectionRow";
+import { OtherValues } from "./OtherValues";
 import { svgProps } from "./svg-props";
 import { ValueField } from "./ValueField";
 
@@ -34,12 +38,14 @@ type Props = {
   initialValues?: Record<string, string>;
   initialSection?: SectionKey;
   connections?: readonly ConnectionStatus[];
+  // From a good server read: names of keys without a field, and the image hosts. Never a value.
+  account?: AccountLayout;
 };
 
 // `saveValues`: given only when this owner may save to the sub-account. Without it Save lasts for this visit.
-export function SettingsPage({ initial, initialValues, initialSection, connections = UNKNOWN_CONNECTIONS, readOnly = false, saveValues }: Props & { readOnly?: boolean; saveValues?: SaveValues }) {
+export function SettingsPage({ initial, initialValues, initialSection, connections = UNKNOWN_CONNECTIONS, account, readOnly = false, saveValues }: Props & { readOnly?: boolean; saveValues?: SaveValues }) {
   const live = !!saveValues && !readOnly;
-  const { state, dispatch, filter, extras, phone, choicesAvailable, notLoaded } = useSettings(initial, initialValues, initialSection, connections, live);
+  const { state, dispatch, filter, extras, phone, choicesAvailable, notLoaded } = useSettings(initial, initialValues, initialSection, connections, live, account);
   const remote = useSaveValues(state, dispatch, saveValues);
   const signOut = useSignOut();
   const [signOutFailed, setSignOutFailed] = useState(false);
@@ -59,8 +65,9 @@ export function SettingsPage({ initial, initialValues, initialSection, connectio
   const edit = (key: string, value: string) => dispatch({ type: "edit", key, value });
   const fieldProps = (f: Field) => ({ field: f, value: draft[f.key] ?? "", saved: values[f.key] ?? "", invalid: err?.key === f.key, error: errFieldSeen && err?.key === f.key ? err.message : undefined, readOnly, onChange: edit });
 
-  const bizFields = [...ESSENTIAL_FIELDS, ...extras.map((key) => ({ key, label: labelOfKey(key) }))].filter((f) => show(`cv-${f.key}`));
-  
+  const bizGroups = groupFields([...ESSENTIAL_KEYS, ...extras].filter((key) => show(`cv-${key}`)));
+  const otherNames = (account?.otherNames ?? []).filter((name) => show(`other-${name}`));
+
   return (
     <div
       className="fd-view"
@@ -134,7 +141,8 @@ export function SettingsPage({ initial, initialValues, initialSection, connectio
           <section className="fd-pnl fd-in" style={{ "--i": 1 } as React.CSSProperties} aria-labelledby="fd-st-1">
             <h2 className="fd-pnh" id="fd-st-1">Business details</h2>
             <p className="fd-pns">{readOnly ? "Your business name, contact details and links." : live ? "Your business name, contact details and links. Saved changes update your account, and can change your website and texts." : "Your business name, contact details and links. Changes here do not reach your website or texts yet."}</p>
-            <div className="fd-cvg">{bizFields.map((f) => <ValueField key={f.key} {...fieldProps(f)} />)}</div>
+            <BusinessGroups groups={bizGroups} imageHosts={account?.imageHosts} fieldProps={fieldProps} />
+            <OtherValues names={otherNames} searching={filter.active} />
           </section>
         ) : null}
 
@@ -155,6 +163,7 @@ export function SettingsPage({ initial, initialValues, initialSection, connectio
               {/* The group headings stay while searching, as in the design; only fields hide. */}
               {COLOR_GROUPS.map((g) => {
                 const fields = g.fields.filter((f) => show(`cv-${f.key}`));
+                if (fields.length === 0 && !filter.active) return null;
                 return [
                   <h3 className="fd-cgh" key={`h-${g.heading}`}>{g.heading}</h3>,
                   ...fields.map((f) => <ValueField key={f.key} {...fieldProps(f)} swatch />),
@@ -165,7 +174,7 @@ export function SettingsPage({ initial, initialValues, initialSection, connectio
         ) : null}
 
         {/* CSS hides it on the sections without fields. While searching it shows only with a field. */}
-        {filter.sections.biz || filter.sections.colors ? (
+        {(filter.sections.biz && bizGroups.length > 0) || filter.sections.colors ? (
           <div className="fd-cvsv fd-in" style={{ "--i": 3 } as React.CSSProperties}>
             <p className={`fd-okl${state.ok && !dirty ? "" : " is-off"}`} role="status" style={{ flexBasis: "100%", marginBottom: 0 }}>
               <svg width="16" height="16" {...svgProps} strokeWidth={2.2}><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>

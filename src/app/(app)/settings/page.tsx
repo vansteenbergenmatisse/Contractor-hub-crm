@@ -1,5 +1,5 @@
 import { getTenantCustomValues, getTenantCustomValuesReadOnly } from "@/features/brand";
-import { SettingsPage, loadSettingsValues, sectionFromParam } from "@/features/settings";
+import { SettingsPage, loadSettingsValues, sectionFromParam, type AccountLayout } from "@/features/settings";
 import { SettingsWriteBackPage, freshValuesReader, isWriteBackEnabled } from "@/features/settings-write-back";
 import { getRequestUser } from "../../session";
 
@@ -13,13 +13,16 @@ export default async function Page({ searchParams }: Props = {}) {
   const user = await getRequestUser();
   const canSave = !user?.viewing && user?.role === "owner" && !!user.tenantId && isWriteBackEnabled(user.tenantId);
   const read = user?.viewing ? getTenantCustomValuesReadOnly : canSave ? freshValuesReader(getTenantCustomValues) : getTenantCustomValues;
-  const values = await loadSettingsValues(user?.tenantId, read);
+  const loaded: { layout?: AccountLayout } = {};
+  const values = await loadSettingsValues(user?.tenantId, read, (layout) => {
+    loaded.layout = layout;
+  });
   const section = sectionFromParam((await searchParams)?.section) ?? undefined;
   return user?.viewing ? (
-    <SettingsPage initialValues={values} initialSection={section} readOnly />
+    <SettingsPage initialValues={values} initialSection={section} account={loaded.layout} readOnly />
   ) : canSave ? (
-    <SettingsWriteBackPage initialValues={values} initialSection={section} />
+    <SettingsWriteBackPage initialValues={values} initialSection={section} account={loaded.layout} />
   ) : (
-    <SettingsPage initialValues={values} initialSection={section} />
+    <SettingsPage initialValues={values} initialSection={section} account={loaded.layout} />
   );
 }

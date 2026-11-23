@@ -8,6 +8,7 @@ export { COLOR_KEYS, ESSENTIAL_KEYS, LINK_KEYS, labelOfKey, sectionOfKey } from 
 export { MOCK_CUSTOM_VALUES } from "./mock";
 export { MAX_VALUE_LENGTH, isKeyAllowedBy, isSettingsKeyAllowed, settingsValuesFrom } from "./api/allowlist";
 export { loadSettingsValues } from "./api/load-values";
+export type { AccountLayout } from "./api/load-values";
 export { NOT_AVAILABLE, UNKNOWN_CONNECTIONS, connectionChip } from "./api/connections";
 export { sectionFromParam } from "./api/section-param";
 export { applyBrandVars, brandCssVars, brandScopeRule, businessPatchFromValues, safeHttpsUrl } from "./api/live-save";

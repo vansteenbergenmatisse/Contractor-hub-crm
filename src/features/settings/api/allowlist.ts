@@ -36,8 +36,11 @@ export const MAX_VALUE_LENGTH = 2000;
 // `key` passes when it is on `list` and clears every backstop: plain characters, at most 100 long,
 // no `0_` or `_` start, and no secret-looking word (the deny rule decides even for a listed key).
 export function isKeyAllowedBy(key: string, list: ReadonlySet<string>): boolean {
-  if (!KEY_CHARS.test(key) || key.startsWith("0_") || key.startsWith("_") || DENY.test(key)) return false;
-  return list.has(key);
+  return clearsBackstops(key) && list.has(key);
+}
+
+function clearsBackstops(key: string): boolean {
+  return KEY_CHARS.test(key) && !key.startsWith("0_") && !key.startsWith("_") && !DENY.test(key);
 }
 
 export function isSettingsKeyAllowed(key: string): boolean {
@@ -57,4 +60,11 @@ export function settingsValuesFrom(rows: readonly Row[]): Record<string, string>
     out[key] = v;
   }
   return out;
+}
+
+// The NAMES of the account's keys that get no field, for the "Other values" group. Never a value. A
+// name that fails a backstop (the form webhook, anything secret-looking) is not listed at all.
+export function otherKeyNames(rows: readonly Row[], sent: Readonly<Record<string, string>>): string[] {
+  const names = rows.map((row) => row.key).filter((key) => typeof key === "string" && clearsBackstops(key) && !Object.hasOwn(sent, key));
+  return [...new Set(names)].sort();
 }

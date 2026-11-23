@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { useKeptReducer, usePushed, useShell } from "@/features/app-shell";
-import { CONNECTIONS, SWITCHES, extraKeys, shadowedKeys } from "../api/fields";
+import { COLOR_KEYS, CONNECTIONS, ESSENTIAL_KEYS, SWITCHES, extraKeys, shadowedKeys } from "../api/fields";
+import type { AccountLayout } from "../api/load-values";
 import { NOT_AVAILABLE, connectionRowText } from "../api/connections";
 import { applyBrandToDocument, changedBusinessPatch, type BusinessPatch } from "../api/live-save";
 import { filterSettings } from "../api/search";
@@ -24,6 +25,8 @@ export function useSettings(
   connections: readonly ConnectionStatus[],
   // Save really writes to the sub-account. Otherwise an applied edit lasts for this visit.
   live = false,
+  // Given after a good read of the account: its keys decide which fields exist.
+  account?: AccountLayout,
 ) {
   const [state, dispatch] = useKeptReducer("settings", settingsReducer, initial, (i) => i ?? initialState(initialValues, initialSection));
   // A link such as `?section=connections` always opens its section, as the design's `toSet` does:
@@ -44,12 +47,18 @@ export function useSettings(
   useEffect(() => {
     if (notLoaded && initialValues && Object.keys(initialValues).length > 0) dispatch({ type: "loaded", values: initialValues });
   }, [notLoaded, initialValues, dispatch]);
-  // A key the reader ignores gets no field, unless the owner has an unsaved edit in it.
+  // A key the reader ignores, or one the account no longer has, gets no field, unless the owner has
+  // an unsaved edit in it. An empty read proves nothing, so it removes no field.
   const hidden = useMemo(() => {
     const out = shadowedKeys(state.values);
+    const present = account && initialValues ? Object.keys(initialValues) : [];
+    if (present.length > 0) {
+      for (const key of [...ESSENTIAL_KEYS, ...COLOR_KEYS, ...extras]) if (!present.includes(key)) out.add(key);
+    }
     for (const key of out) if ((state.draft[key] ?? "").trim() !== (state.values[key] ?? "").trim()) out.delete(key);
     return out;
-  }, [state.values, state.draft]);
+  }, [state.values, state.draft, account, initialValues, extras]);
+  const otherNames = account?.otherNames;
   const phone = (state.values.business_phone_number ?? "").trim();
   // With a tenant's real values the choices have no source yet, so they read "Not available yet".
   const choicesAvailable = initialValues === undefined;
@@ -70,7 +79,7 @@ export function useSettings(
     });
     return out;
   }, [connections, phone, state.how, state.asked, state.sw, choicesAvailable]);
-  const filter = useMemo(() => filterSettings(state.q, extras, rowText, hidden), [state.q, extras, rowText, hidden]);
+  const filter = useMemo(() => filterSettings(state.q, extras, rowText, hidden, otherNames), [state.q, extras, rowText, hidden, otherNames]);
   const shell = useShell() as ShellWithUpdate;
   // Held in a ref so a new function identity from the shell never re-runs the Save effect (no loop).
   const updateRef = useRef(shell.updateBusiness);
