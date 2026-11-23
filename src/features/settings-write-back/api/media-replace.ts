@@ -9,7 +9,8 @@ import { MAX_IMAGE_BYTES } from "./webp-check";
 // through the normal save rules. The old file is never deleted, renamed or changed. A failure at any
 // step leaves the old value live; at worst an unused new file stays in the library.
 const UPLOAD_CUTOFF_MS = 15_000;
-const PUT_CUTOFF_MS = 35_000;
+// The save after this reads, PUTs and reads again at 10 seconds each: 25 + 30 stays inside the route's 60.
+const PUT_CUTOFF_MS = 25_000;
 const MAX_CANDIDATES = 2;
 
 export type CheckedImage = { bytes: Uint8Array; contentType: string; extension: string; hash: string };
@@ -92,11 +93,12 @@ async function uploadNew(input: Input, name: string, deps: MediaDeps): Promise<{
   return stopped("unknown", true);
 }
 
-async function pointValueAt(input: Input, url: string, deps: MediaDeps): Promise<Run> {
+async function pointValueAt(input: Input, url: string, started: number, deps: MediaDeps): Promise<Run> {
   // This replace already holds the tenant's lease, so the save must not claim or release it.
   const { results } = await saveCustomValues(
     { tenantId: input.tenantId, actorId: input.actorId, changes: [{ key: input.key, expected: input.expected, value: url }] },
     { ...deps, claim: async () => "held", release: async () => {} },
+    started,
   );
   const result = results[0];
   switch (result?.status) {
@@ -146,7 +148,7 @@ async function run(input: Input, deps: MediaDeps): Promise<Run> {
   // Never widened automatically: a host not on the list stops here, before the value changes.
   if (!isAllowedLogoUrl(url, deps.hosts)) return stopped("bad_host");
   if (deps.now() - started > PUT_CUTOFF_MS) return stopped("retry");
-  return pointValueAt(input, url, deps);
+  return pointValueAt(input, url, started, deps);
 }
 
 export async function replaceImage(input: Input, deps: MediaDeps): Promise<ImageAnswer> {

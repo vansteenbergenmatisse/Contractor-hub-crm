@@ -249,9 +249,9 @@ function stillClean(unit: readonly Candidate[], rows: readonly CustomValueDetail
   return null;
 }
 
-async function runSave(input: Input, deps: SaveDeps): Promise<{ results: SaveResult[]; keepLease: boolean }> {
+async function runSave(input: Input, deps: SaveDeps, startedAt?: number): Promise<{ results: SaveResult[]; keepLease: boolean }> {
   const { tenantId, changes } = input;
-  const started = deps.now();
+  const started = startedAt ?? deps.now();
   const read = await safeRead(tenantId, deps);
   if (!read.ok) {
     const status = read.reason;
@@ -328,8 +328,9 @@ async function runSave(input: Input, deps: SaveDeps): Promise<{ results: SaveRes
 }
 
 // Saves the owner's changes to the tenant's sub-account. Never creates or deletes a custom value and
-// never overwrites a value that changed in HighLevel after the owner loaded it.
-export async function saveCustomValues(input: Input, deps: SaveDeps): Promise<{ results: SaveResult[] }> {
+// never overwrites a value that changed in HighLevel after the owner loaded it. `startedAt`: a caller
+// that already spent part of the request passes its own start, so the time limits cover the whole of it.
+export async function saveCustomValues(input: Input, deps: SaveDeps, startedAt?: number): Promise<{ results: SaveResult[] }> {
   let holder: string | null;
   try {
     holder = await deps.claim(input.tenantId);
@@ -340,7 +341,7 @@ export async function saveCustomValues(input: Input, deps: SaveDeps): Promise<{ 
   if (!holder) return { results: input.changes.map(({ key }) => ({ key, status: "busy" as const })) };
   let keepLease = false;
   try {
-    const answer = await runSave(input, deps);
+    const answer = await runSave(input, deps, startedAt);
     keepLease = answer.keepLease;
     return { results: answer.results };
   } finally {

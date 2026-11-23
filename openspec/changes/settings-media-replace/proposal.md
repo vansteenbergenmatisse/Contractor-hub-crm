@@ -14,7 +14,10 @@ Why the same-URL route was dropped: the public API documents no way to replace a
 - SVG parser: `@xmldom/xmldom` 0.9.12, pinned, no dependencies and no install scripts.
 - Stricter than a typical export: the SVG allowlist has no `style` element, gradients, `use`, masks or clip paths, because each needs `url()` or a reference. Such a logo is refused with a message, never changed silently.
 - Audit: no new table and no migration. Each upload writes a `CustomValueChange` row first, with `newValue` `upload:<key>-<sha256-12>`. **That row records a file, not a value change, so it is not a rollback target.** The row of the PUT that follows holds the previous and new URL. The file id is not stored.
-- Time limits (proposals, not measured): no upload starts after 15 seconds and no PUT after 35, inside the route's 60 seconds.
+- **OAuth scopes:** `medias.readonly` and `medias.write` are NOT in the default list, so an install or reconnect never requests a scope the Marketplace app may not have enabled. After the app version with those scopes is approved (gate 1), add them through `GHL_OAUTH_SCOPES`, which replaces the default list, so it must hold the full list plus the two. Until a client has the grant, a refused media call shows the "needs re-approval" message.
+- SVG limit: at most 20,000 nodes in the file, counting elements, comments, text and whitespace. Comments are left out while serializing.
+- WebP: every RIFF chunk is walked. Accepted: one `VP8 ` or `VP8L` frame, alone or as `VP8X`, optional `ICCP`, optional `ALPH`, frame, with the frame size equal to the canvas. `ANIM`, `ANMF`, `EXIF`, `XMP ` and unknown chunks are refused. Chrome's canvas output was checked and writes `VP8X` + `ICCP`; other browsers' encoders are not tested.
+- Time limits (proposals, not measured): no upload starts after 15 seconds and no PUT after 25, measured from the start of the request through the save's own read, PUT and confirming read, inside the route's 60 seconds.
 - Hosts: `files.leadconnectorhq.com` is added to the logo and preview defaults. Its files have no extension, so the background rule also accepts a last path segment with no dot on that host only. A named video or page is still refused.
 
 **Known limits, not verified live:**
@@ -96,7 +99,7 @@ security_baseline:
         C1_auth:        { status: covered, mechanism: "session owner, exact origin, admin and client view refused, tenant from the session only" }
         C2_rate_limit:  { status: covered, mechanism: "hitRateLimit, proposal 20 per hour per user and 40 per tenant, before the body is read, fails closed" }
         C3_input:       { status: covered, mechanism: "strict three-field form, capped body, image keys only, WebP container and size re-read from bytes, SVG allowlist on a real XML parser" }
-        C4_timeout:     { status: covered, mechanism: "10s calls, 20s upload, 15s and 35s step cutoffs, no blind upload retry; flag is the breaker" }
+        C4_timeout:     { status: covered, mechanism: "10s calls, 20s upload, 15s and 25s step cutoffs, no blind upload retry; flag is the breaker" }
         C5_output_rate: { status: opted_out, justification: "one short JSON status" }
         C6_redaction:   { status: opted_out, justification: "no LLM; logs hold no content" }
         C7_idempotency: { status: covered, mechanism: "hash name, lookup with byte-hash check before upload" }

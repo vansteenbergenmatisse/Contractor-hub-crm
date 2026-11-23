@@ -285,6 +285,32 @@ describe("replaceImage: partial failure at the PUT", () => {
   });
 });
 
+describe("replaceImage: the time budget covers the whole request", () => {
+  it("does not PUT after 25 seconds", async () => {
+    const d = deps();
+    d.now.mockReturnValueOnce(0).mockReturnValueOnce(1_000).mockReturnValue(25_001);
+    expect(await run(d)).toEqual({ status: "retry" });
+    expect(d.update).not.toHaveBeenCalled();
+    expect(d.store.get(KEY)?.value).toBe(OLD);
+  });
+
+  it("still PUTs at exactly 25 seconds", async () => {
+    const d = deps();
+    d.now.mockReturnValueOnce(0).mockReturnValueOnce(1_000).mockReturnValue(25_000);
+    expect(await run(d)).toEqual({ status: "saved", url: NEW });
+  });
+
+  it("measures the confirming reads from the start of the replace, so the audit row is closed in time", async () => {
+    const d = deps();
+    const wait = vi.fn<NonNullable<MediaDeps["wait"]>>(async () => {});
+    d.update.mockResolvedValue("saved");
+    d.now.mockReturnValueOnce(0).mockReturnValueOnce(1_000).mockReturnValueOnce(24_000).mockReturnValue(36_000);
+    expect(await run({ ...d, wait })).toEqual({ status: "unknown" });
+    expect(wait).not.toHaveBeenCalled();
+    expect(d.finish).toHaveBeenLastCalledWith("audit-2", "unknown");
+  });
+});
+
 describe("replaceImage: tenant isolation", () => {
   it("uses only the given tenant for every call", async () => {
     const d = deps();

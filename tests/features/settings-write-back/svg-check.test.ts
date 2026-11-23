@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { Node } from "@xmldom/xmldom";
+import { describe, expect, it, vi } from "vitest";
 import { checkSvg, MAX_SVG_BYTES } from "../../../src/features/settings-write-back/api/svg-check";
 
 const NS = 'xmlns="http://www.w3.org/2000/svg"';
@@ -79,6 +80,33 @@ describe("checkSvg refuses malicious files", () => {
 
   it("refuses too many elements", () => {
     expect(checkSvg(bytes(wrap("<g/>".repeat(20_001))))).toEqual({ ok: false, reason: "svg_unsafe" });
+  });
+});
+
+describe("checkSvg caps every child node", () => {
+  const within = (unit: string, kb: number) => unit.repeat(Math.floor((kb * 1024 - 80) / unit.length));
+
+  it.each([
+    ["a 512 KB file of comments", wrap(within("<!---->", 512))],
+    ["a 209 KB mix of groups and comments", wrap(within("<g/><!---->", 209))],
+    ["comments before the root", `${within("<!---->", 512)}${wrap("")}`],
+    ["comments after the root", `${wrap("")}${within("<!---->", 512)}`],
+    ["comments spread over groups", wrap(`<g>${"<!---->".repeat(10_001)}</g><g>${"<!---->".repeat(10_001)}</g>`)],
+    ["one comment over the cap", wrap("<!---->".repeat(20_000))],
+    ["whitespace between too many groups", wrap("<g/> ".repeat(10_001))],
+  ])("refuses %s", (_name, text) => {
+    expect(checkSvg(bytes(text))).toEqual({ ok: false, reason: "svg_unsafe" });
+  });
+
+  it("accepts a file at the cap and drops its comments", () => {
+    expect(output(wrap("<!---->".repeat(19_999)))).not.toContain("<!--");
+  });
+
+  it("never removes comments one at a time, which is quadratic", () => {
+    const removeChild = vi.spyOn(Node.prototype, "removeChild");
+    output(wrap('<!-- a --><g><!-- b --><rect width="1" height="1"/></g><!-- c -->'));
+    expect(removeChild).not.toHaveBeenCalled();
+    removeChild.mockRestore();
   });
 });
 
