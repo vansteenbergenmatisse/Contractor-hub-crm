@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { hitRateLimit } from "@/features/auth";
 import { createTenantEstimatesReader } from "@/features/highlevel";
-import { QuotesLivePage, isQuotesPageLive, loadQuotes } from "@/features/quotes";
+import { QuotesLivePage, QuotesSkeleton, isQuotesPageLive, loadQuotes } from "@/features/quotes";
 import { NotAvailablePage } from "@/shared/ui/not-available-page";
 import { getRequestUser } from "../../session";
 
@@ -20,7 +20,7 @@ async function QuotesData() {
 export default function Page() {
   if (!isQuotesPageLive()) return <NotAvailablePage title="Quotes" />;
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<QuotesSkeleton />}>
       <QuotesData />
     </Suspense>
   );

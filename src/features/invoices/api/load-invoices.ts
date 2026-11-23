@@ -96,7 +96,7 @@ export function invoiceView(row: LiveInvoiceRow): LiveInvoiceView {
 // The invoices of one tenant, read by `read` (the server page passes its reader). Never sample data.
 // Setting the server flag INVOICES_READ_DISABLED=true turns the read off.
 export async function loadInvoices(tenantId: string | null | undefined, read: InvoicesReader): Promise<InvoicesResult> {
-  if (!tenantId || process.env.INVOICES_READ_DISABLED === "true") return { state: "unavailable" };
+  if (!tenantId || process.env.INVOICES_READ_DISABLED?.trim() === "true") return { state: "unavailable" };
   let answer;
   try {
     answer = await withBillingDeadline((signal) => read(tenantId, signal));

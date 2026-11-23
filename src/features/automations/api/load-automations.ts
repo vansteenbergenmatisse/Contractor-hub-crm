@@ -13,7 +13,7 @@ export async function loadAutomations(
   read: AutomationsReader,
   now: () => Date = () => new Date(),
 ): Promise<AutomationsResult> {
-  if (!tenantId || process.env.AUTOMATIONS_READ_DISABLED === "true") return { state: "unavailable" };
+  if (!tenantId || process.env.AUTOMATIONS_READ_DISABLED?.trim() === "true") return { state: "unavailable" };
   let answer;
   try {
     answer = await read(tenantId);

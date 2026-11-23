@@ -39,7 +39,7 @@ export async function loadPayments(
   tenantId: string | null | undefined,
   read: { invoices: InvoicesReader; transactions: TransactionsReader },
 ): Promise<PaymentsResult> {
-  if (!tenantId || process.env.PAYMENTS_READ_DISABLED === "true" || process.env.INVOICES_READ_DISABLED === "true") return { state: "unavailable" };
+  if (!tenantId || process.env.PAYMENTS_READ_DISABLED?.trim() === "true" || process.env.INVOICES_READ_DISABLED?.trim() === "true") return { state: "unavailable" };
   try {
     return await withBillingDeadline((signal) => readBoth(tenantId, read, signal));
   } catch {

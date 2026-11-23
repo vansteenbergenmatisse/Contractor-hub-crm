@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { hitRateLimit } from "@/features/auth";
-import { AutomationsLivePage, isAutomationsPageLive, loadAutomations } from "@/features/automations";
+import { AutomationsLivePage, AutomationsSkeleton, isAutomationsPageLive, loadAutomations } from "@/features/automations";
 import { createTenantWorkflowsReader } from "@/features/highlevel";
 import { NotAvailablePage } from "@/shared/ui/not-available-page";
 import { getRequestUser } from "../../session";
@@ -20,7 +20,7 @@ async function AutomationsData() {
 export default function Page() {
   if (!isAutomationsPageLive()) return <NotAvailablePage title="Automations" />;
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<AutomationsSkeleton />}>
       <AutomationsData />
     </Suspense>
   );
