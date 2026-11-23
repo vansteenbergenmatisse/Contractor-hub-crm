@@ -87,6 +87,15 @@ export function createBrandService(deps: {
     return request;
   }
 
+  // The brand for an admin's read-only client view: never reaches a token refresh.
+  async function getBrandReadOnly(tenantId: string): Promise<Brand> {
+    try {
+      return buildBrand(await getValuesReadOnly(tenantId));
+    } catch {
+      return EMPTY_BRAND;
+    }
+  }
+
   // Called by the onboarding feature's LocationUpdate webhook hook (tenant resolved from the signed
   // event's location). Per server instance only: other instances keep their entry until the TTL.
   function invalidate(tenantId: string) {
@@ -96,5 +105,5 @@ export function createBrandService(deps: {
     cache.delete(tenantId);
   }
 
-  return { getBrand, getValues, getValuesReadOnly, invalidate };
+  return { getBrand, getBrandReadOnly, getValues, getValuesReadOnly, invalidate };
 }

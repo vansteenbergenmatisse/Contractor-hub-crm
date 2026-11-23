@@ -10,6 +10,8 @@ async function loadBrand() {
   try {
     const user = await getRequestUser();
     if (!user?.tenantId) return { brand: EMPTY_BRAND, tenant: false };
+    // An admin's client view never refreshes the client's token, and is not an installable app.
+    if (user.viewing) return { brand: await getBrandService().getBrandReadOnly(user.tenantId), tenant: false };
     return { brand: await getBrandService().getBrand(user.tenantId), tenant: true };
   } catch {
     return { brand: EMPTY_BRAND, tenant: false };

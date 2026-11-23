@@ -27,6 +27,11 @@ export function getTenantCustomValues(tenantId: string): Promise<BrandValue[]> {
   return getBrandService().getValues(tenantId);
 }
 
+// The same values for an admin's read-only client view: never refreshes a token.
+export function getTenantCustomValuesReadOnly(tenantId: string): Promise<BrandValue[]> {
+  return getBrandService().getValuesReadOnly(tenantId);
+}
+
 let signInLoader: ReturnType<typeof createSignInBrandLoader> | undefined;
 
 // The public branding of a personal sign-in link, or null for the neutral page. Takes the raw query

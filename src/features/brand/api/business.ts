@@ -32,9 +32,12 @@ export function businessFromBrand(brand: Brand, fallbackOwner: string): Business
 
 // A tenant's business details through the 5-minute brand cache. Cached per request as well, so the
 // layout and a page share one lookup.
-export const loadBusiness = cache(async (tenantId: string, fallbackOwner: string): Promise<Business> => {
+// `readOnly` (an admin's client view) never refreshes a token.
+export const loadBusiness = cache(async (tenantId: string, fallbackOwner: string, readOnly = false): Promise<Business> => {
   try {
-    return businessFromBrand(await getBrandService().getBrand(tenantId), fallbackOwner);
+    const service = getBrandService();
+    const brand = await (readOnly ? service.getBrandReadOnly(tenantId) : service.getBrand(tenantId));
+    return businessFromBrand(brand, fallbackOwner);
   } catch {
     return buildBusiness({ owner: fallbackOwner });
   }

@@ -12,7 +12,8 @@ export const dynamic = "force-dynamic";
 // One read per request for both lead sections. The tenant comes from the session only.
 const loadTenantLeads = cache(async () => {
   const user = await getRequestUser();
-  return loadLeads(user?.tenantId, createTenantContactsReader(hitRateLimit));
+  const reader = user?.viewing ? createTenantContactsReader(hitRateLimit, { viewerId: user.id }) : createTenantContactsReader(hitRateLimit);
+  return loadLeads(user?.tenantId, reader);
 });
 
 async function LeadsTileData() {
@@ -29,7 +30,10 @@ async function LeadsCardData() {
 export default async function Page() {
   const user = await getRequestUser();
   // The owner's first name, or nothing: a missing name gives a plain "Morning." greeting.
-  const owner = user?.tenantId ? businessValues(await loadBusiness(user.tenantId, user.name)).business_owner_name : "";
+  const business = user?.tenantId
+    ? await (user.viewing ? loadBusiness(user.tenantId, "", true) : loadBusiness(user.tenantId, user.name))
+    : null;
+  const owner = business ? businessValues(business).business_owner_name : "";
   const first = owner.split(/\s+/)[0] || undefined;
   return <TodayPage ownerFirst={first} leadsTile={<LeadsTileData />} leadsCard={<LeadsCardData />} />;
 }

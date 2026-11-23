@@ -121,10 +121,12 @@ type ThrottleDeps = {
 // Counts the read per tenant before any token or HighLevel call. Over the limit, or when the counter
 // fails, the page gets `unavailable`. A limiter failure denies the read (fail closed), as the
 // limiter's existing callers do.
-export async function readContactsThrottled(deps: ThrottleDeps, tenantId: string): Promise<ContactsRead> {
+// `key` replaces the tenant's counter: an admin's client view has its own, so it never uses up the
+// client's reads.
+export async function readContactsThrottled(deps: ThrottleDeps, tenantId: string, key = `highlevel-contacts:${tenantId}`): Promise<ContactsRead> {
   let allowed: boolean;
   try {
-    allowed = await deps.hit(`highlevel-contacts:${tenantId}`, CONTACTS_READS_PER_MINUTE, CONTACTS_READ_WINDOW_MS, deps.now());
+    allowed = await deps.hit(key, CONTACTS_READS_PER_MINUTE, CONTACTS_READ_WINDOW_MS, deps.now());
   } catch {
     console.error("HighLevel contacts read failed: step=limiter");
     return { ok: false, reason: "unavailable" };

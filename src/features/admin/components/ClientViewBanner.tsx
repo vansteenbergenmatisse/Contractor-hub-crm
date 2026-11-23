@@ -1,11 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { announceViewChange, onViewChange } from "../api/view-channel";
 
-// Always visible while an admin views a client. Exit returns to the client list.
+// Always visible while an admin views a client. Exit returns to the client list. When another tab
+// changes or ends the view, this tab reloads, so the banner always names the client on screen.
 export function ClientViewBanner({ name }: { name: string }) {
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => onViewChange(() => window.location.reload()), []);
 
   async function exit() {
     setBusy(true);
@@ -13,6 +17,7 @@ export function ClientViewBanner({ name }: { name: string }) {
     try {
       const response = await fetch("/api/admin/view/exit", { method: "POST" });
       if (!response.ok) throw new Error("exit failed");
+      announceViewChange();
       window.location.assign("/admin/clients");
     } catch {
       setFailed(true);

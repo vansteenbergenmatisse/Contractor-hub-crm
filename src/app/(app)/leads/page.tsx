@@ -9,7 +9,8 @@ export const dynamic = "force-dynamic";
 // The signed-in tenant's leads. The tenant comes from the session only.
 async function LeadsData() {
   const user = await getRequestUser();
-  const result = await loadLeads(user?.tenantId, createTenantContactsReader(hitRateLimit));
+  const reader = user?.viewing ? createTenantContactsReader(hitRateLimit, { viewerId: user.id }) : createTenantContactsReader(hitRateLimit);
+  const result = await loadLeads(user?.tenantId, reader);
   return <LeadsPage result={result} />;
 }
 

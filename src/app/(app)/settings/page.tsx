@@ -1,4 +1,4 @@
-import { getTenantCustomValues } from "@/features/brand";
+import { getTenantCustomValues, getTenantCustomValuesReadOnly } from "@/features/brand";
 import { SettingsPage, loadSettingsValues, sectionFromParam } from "@/features/settings";
 import { getRequestUser } from "../../session";
 
@@ -10,7 +10,11 @@ type Props = { searchParams?: Promise<Record<string, string | string[] | undefin
 // 5-minute cache, filtered by the settings allowlist) and the section named in `?section=`.
 export default async function Page({ searchParams }: Props = {}) {
   const user = await getRequestUser();
-  const values = await loadSettingsValues(user?.tenantId, getTenantCustomValues);
+  const values = await loadSettingsValues(user?.tenantId, user?.viewing ? getTenantCustomValuesReadOnly : getTenantCustomValues);
   const section = sectionFromParam((await searchParams)?.section) ?? undefined;
-  return <SettingsPage initialValues={values} initialSection={section} />;
+  return user?.viewing ? (
+    <SettingsPage initialValues={values} initialSection={section} readOnly />
+  ) : (
+    <SettingsPage initialValues={values} initialSection={section} />
+  );
 }

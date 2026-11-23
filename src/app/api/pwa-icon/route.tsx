@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   let brand = EMPTY_BRAND;
   try {
     const user = await getRequestUser();
-    if (user?.tenantId) brand = await getBrandService().getBrand(user.tenantId);
+    if (user?.tenantId) brand = await (user.viewing ? getBrandService().getBrandReadOnly(user.tenantId) : getBrandService().getBrand(user.tenantId));
   } catch {
     brand = EMPTY_BRAND;
   }

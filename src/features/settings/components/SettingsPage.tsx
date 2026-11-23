@@ -35,7 +35,7 @@ type Props = {
   connections?: readonly ConnectionStatus[];
 };
 
-export function SettingsPage({ initial, initialValues, initialSection, connections = UNKNOWN_CONNECTIONS }: Props) {
+export function SettingsPage({ initial, initialValues, initialSection, connections = UNKNOWN_CONNECTIONS, readOnly = false }: Props & { readOnly?: boolean }) {
   const { state, dispatch, filter, extras, phone, choicesAvailable } = useSettings(initial, initialValues, initialSection, connections);
   const signOut = useSignOut();
   const [signOutFailed, setSignOutFailed] = useState(false);
@@ -164,7 +164,7 @@ export function SettingsPage({ initial, initialValues, initialSection, connectio
               <svg width="16" height="16" {...svgProps} strokeWidth={2.2}><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
               <span>Changed for this visit only. Not saved to your account yet.</span>
             </p>
-            <button type="button" className="fd-btn is-fill fd-lgo fd-cvs" onClick={() => dispatch({ type: "save" })}>Apply for this visit</button>
+            <button type="button" className="fd-btn is-fill fd-lgo fd-cvs" disabled={readOnly} onClick={() => dispatch({ type: "save" })}>{readOnly ? "Read-only view" : "Apply for this visit"}</button>
             <p className="fd-pns fd-hint" role="status">{dirty ? "You have changes that are not applied yet." : "Changes last until you close or reload this page."}</p>
           </div>
         ) : null}

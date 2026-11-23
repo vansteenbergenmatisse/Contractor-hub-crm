@@ -26,7 +26,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   if (!viewing) scheduleVisitSync(user.tenantId);
   // The reminder never throws and has a short read limit, so it cannot break or hold up the page.
   const [business, mailboxPrompt] = await Promise.all([
-    loadBusiness(user.tenantId, viewing ? "" : user.name),
+    viewing ? loadBusiness(user.tenantId, "", true) : loadBusiness(user.tenantId, user.name),
     viewing ? Promise.resolve({ show: false as const }) : loadMailboxPrompt(user),
   ]);
   // Keyed by user and tenant (hashed, keys reach the browser): another signed-in user gets a new frame.

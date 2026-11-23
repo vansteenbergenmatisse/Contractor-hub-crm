@@ -23,6 +23,7 @@ export {
   webhookRoute,
 } from "./api/routes";
 export type { AdminGuard, OnboardingApi } from "./api/routes";
+export { withStoredLocationToken } from "./api/stored-token";
 export { handleWebhook } from "./api/webhook";
 export type { WebhookDeps, WebhookHooks } from "./api/webhook";
 export { HIGHLEVEL_WEBHOOK_PUBLIC_KEY, verifyWebhookSignature } from "./api/webhook-signature";

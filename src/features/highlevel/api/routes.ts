@@ -7,6 +7,7 @@ import { listLocationUsersWithRetry } from "./location-users";
 import { CONTACTS_PAGE_SIZE, readContactsPage, readContactsThrottled } from "./contacts";
 import type { AgencyLocation, ContactsRead, CustomValue, HighLevelUser, InstalledLocation, SaveLocationConnectionInput, SearchUsersQuery } from "../types";
 import { createTokenService } from "./token-service";
+import { withStoredLocationToken } from "./stored-token";
 import { handleOAuthStart } from "./start";
 import { resolveScopes } from "./scopes";
 import { handleOAuthCallback, type OAuthCallbackDeps } from "./callback";
@@ -178,7 +179,8 @@ export async function readTenantCustomValuesStored(tenantId: string): Promise<Cu
 
 // One page of the tenant's newest contacts, read-only. The tenant id comes from the server session.
 // Never throws: a failure is an answer the page can show.
-export async function readTenantContacts(tenantId: string): Promise<ContactsRead> {
+// `storedTokenOnly` (an admin's client view) never refreshes or mints a token.
+export async function readTenantContacts(tenantId: string, options: { storedTokenOnly?: boolean } = {}): Promise<ContactsRead> {
   let env: EnvValues<"highlevel">;
   try {
     env = parseEnv("highlevel");
@@ -187,11 +189,10 @@ export async function readTenantContacts(tenantId: string): Promise<ContactsRead
     return { ok: false, reason: "unavailable" };
   }
   const client = buildClient(env);
-  const tokens = buildTokenService(env, client);
   return readContactsPage(
     {
       readLocationId: async (id) => (await readLocationState(id, env.TOKEN_ENCRYPTION_KEY))?.locationId ?? null,
-      withLocationToken: tokens.withLocationToken,
+      withLocationToken: options.storedTokenOnly ? withStoredLocationToken : buildTokenService(env, client).withLocationToken,
       requestContactSearch: client.requestContactSearch,
     },
     tenantId,
@@ -203,8 +204,13 @@ export async function readTenantContacts(tenantId: string): Promise<ContactsRead
 // hitRateLimit, already imports this feature.
 export function createTenantContactsReader(
   hit: (key: string, limit: number, windowMs: number, now: Date) => Promise<boolean>,
+  viewer?: { viewerId: string },
 ): (tenantId: string) => Promise<ContactsRead> {
-  return (tenantId) => readContactsThrottled({ hit, read: readTenantContacts, now: () => new Date() }, tenantId);
+  if (viewer) {
+    const read = (tenantId: string) => readTenantContacts(tenantId, { storedTokenOnly: true });
+    return (tenantId) => readContactsThrottled({ hit, read, now: () => new Date() }, tenantId, `highlevel-contacts-view:${viewer.viewerId}`);
+  }
+  return (tenantId) => readContactsThrottled({ hit, read: (id) => readTenantContacts(id), now: () => new Date() }, tenantId);
 }
 
 export async function oauthStartRoute(request: Request, guard?: AdminGuard): Promise<Response> {

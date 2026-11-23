@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useState } from "react";
+import { announceViewChange } from "../api/view-channel";
 import type { ClientRow } from "../types";
 
 // Plain styling on purpose (build prompt section 4.8). All text states are words, not colors.
@@ -38,6 +39,7 @@ export function ClientsTable({ clients }: { clients: ClientRow[] }) {
     try {
       const response = await fetch(`/api/admin/clients/${encodeURIComponent(tenantId)}/view`, { method: "POST" });
       if (!response.ok) return setMessage({ tenantId, text: "Could not open this client. Try again." });
+      announceViewChange();
       window.location.assign("/");
     } catch {
       setMessage({ tenantId, text: "Could not open this client. Try again." });
