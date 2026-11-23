@@ -74,3 +74,21 @@ export {
   readContactsPage,
   readContactsThrottled,
 } from "./api/contacts";
+export {
+  CALENDAR_READS_PER_MINUTE,
+  MAX_CALENDARS,
+  MAX_CALENDAR_RESPONSE_BYTES,
+  MAX_EVENTS_PER_CALENDAR,
+  buildCalendarReader,
+  createCalendarRequests,
+  createTenantCalendarReader,
+  parseCalendarEvents,
+  parseCalendarList,
+  parseLocationTimeZone,
+  readCalendarWeek,
+  type CalendarEventRow,
+  type CalendarRange,
+  type CalendarRequests,
+  type CalendarRuntime,
+  type CalendarWeekRead,
+} from "./api/calendar";
