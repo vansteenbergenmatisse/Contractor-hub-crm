@@ -40,7 +40,6 @@ Single source of truth for where the project stands. Read it at the start of eve
 
 ## In progress
 
-- 2026-11-23 USER DECISION (chat): replace "Inbox" with "Communications" in all user-visible text, including the seven sentences, and update test lines that pin the old text. Then fast-forward `develop` to `feat/settings-structure` and push it. Internal names and the `/inbox` URL stay. Touches `src/features` text, matching tests, git `develop`, GitHub and the Vercel dev deployment.
 - 2026-11-23 RESUME HERE. The save-refresh fix, the combined bug sweep and the Settings layout are merged into `develop`, pushed, and deployed to the dev site (see the newest Log entry). The user retested a save on the dev site (Mike Dalton, back to Jon) and it worked. Not yet checked: Settings at 320px and the color picker.
   - LIVE STATE, dev only (Vercel Preview `develop`, none on Production): `QUOTES_PAGE_LIVE`, `INVOICES_PAGE_LIVE`, `PAYMENTS_PAGE_LIVE`, `AUTOMATIONS_PAGE_LIVE` are on (user: keep them); `SETTINGS_WRITE_BACK_ENABLED` and `SETTINGS_WRITE_BACK_TENANTS` (JCR only) are on. Vercel requires the user's direct approval to remove a variable.
   - Neon `develop` holds one test owner for JCR, using the user's work email as login, with no HighLevel link. Its password is in a session scratchpad file that can vanish; it needs removal after testing, or a reset. JCR's `business_owner_name` is back to `Jon` (user confirmed).
@@ -118,7 +117,9 @@ Single source of truth for where the project stands. Read it at the start of eve
 - Tests changed with the user's approval: `app-shell`, `inbox-live`, `inbox-round3-dom`, `structure`. New: `tests/app/routes-page.test.tsx`.
 - `pnpm check` exit 0: 3543 passed, 9 skipped, build compiled.
 - Follow-up approved by the user: the seven "your Inbox" sentences (`settings/api/fields.ts`, `OldLeadsPanel.tsx`) now say "land in Communications", with the two pinned lines in `tests/features/settings/page.test.tsx` updated. A search of `src` found no other user-visible "Inbox".
-- NOT VERIFIED: these changes in a real browser or on the dev site.
+- Pushed with the user's approval: `develop` moved from 30ed974 to 9573696 with no force. `pnpm check` exit 0 (3543 passed, 9 skipped). CI run 45231833312 success. Vercel success, and `dev.crm.forgeforward.io` serves that deployment. Signed out: `/sign-in` and `/api/health/db` 200; `/routes`, `/inbox` and `/settings` 307.
+- NOT VERIFIED: the signed-in pages in a real browser, Settings at 320px, the color picker.
+- Proposed next order (not yet approved): browser check, turn off dev saving and remove the test owner, define Routes, required links, six bug decisions, image Replace test.
 
 ### 2026-11-23 - Bug sweep and Settings layout pushed to the dev site
 - User approved (chat): fast-forward `develop` to `feat/settings-structure`, push, keep the dev write-back flags on.
