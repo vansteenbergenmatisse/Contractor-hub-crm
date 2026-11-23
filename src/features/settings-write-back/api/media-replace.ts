@@ -98,11 +98,12 @@ async function matchSibling(input: Input, siblings: readonly MediaFile[], deps: 
   return at >= 0 ? siblings[at] : null;
 }
 
-// The owner picked the image that is already live. A failed read just means it is not proven the same.
-async function isCurrentImage(input: Input, old: MediaFile, deps: MediaDeps): Promise<boolean> {
-  if (!isAllowedLogoUrl(old.url, deps.hosts)) return false;
+// Whether the owner picked the image that is already live. `unknown`: the live file could not be read.
+async function compareCurrent(input: Input, old: MediaFile, deps: MediaDeps): Promise<"same" | "different" | "unknown"> {
+  if (!isAllowedLogoUrl(old.url, deps.hosts)) return "unknown";
   const bytes = await deps.fetchBytes(old.url, MAX_IMAGE_BYTES).catch(() => null);
-  return !!bytes && sha256(bytes) === input.file.hash;
+  if (!bytes) return "unknown";
+  return sha256(bytes) === input.file.hash ? "same" : "different";
 }
 
 // One upload, never repeated. After no answer the library is read again; a file still absent is
@@ -267,9 +268,12 @@ async function run(input: Input, deps: MediaDeps): Promise<Run> {
   const blocked = siblingStop(siblings, deps);
   if (blocked) return stopped(blocked);
   // Checked first: an identical copy in the folder must never move the value off the live file.
-  if (await isCurrentImage(input, old, deps)) return { answer: { status: "saved", url: old.url, oldFile: "same" }, keepLease: false };
+  const currentIs = await compareCurrent(input, old, deps);
+  if (currentIs === "same") return { answer: { status: "saved", url: old.url, oldFile: "same" }, keepLease: false };
   const match = await matchSibling(input, siblings, deps);
   if (match && "stop" in match) return stopped(match.stop);
+  // The copy may be the live image itself: moving to it could trash a file for no change.
+  if (match && currentIs === "unknown") return stopped("retry");
   let target: Target;
   if (match) target = { file: match, uploadedNow: false };
   else {

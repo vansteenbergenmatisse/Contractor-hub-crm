@@ -633,6 +633,16 @@ describe("replaceImage: a retry after a partial failure", () => {
     expect(d.trash).not.toHaveBeenCalled();
   });
 
+  it("an unreadable live file with an identical same-name copy stops before any change", async () => {
+    const copy = { id: "copy", name: NAME, url: OTHER, parentId: FOLDER };
+    const d = deps({ found: { ok: true, files: [OLD_FILE], siblings: [copy] } });
+    d.fetchBytes.mockImplementation(async (url) => (url === OLD ? null : BYTES));
+    expect(await run(d)).toEqual({ status: "retry" });
+    expect(d.upload).not.toHaveBeenCalled();
+    expect(d.update).not.toHaveBeenCalled();
+    expect(d.trash).not.toHaveBeenCalled();
+  });
+
   it("after no answer, a same-name file that was already there is not taken for the upload", async () => {
     const before = { id: "earlier", name: NAME, url: OTHER, parentId: FOLDER };
     const list: MediaFind = { ok: true, files: [OLD_FILE], siblings: [before] };
