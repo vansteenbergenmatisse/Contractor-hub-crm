@@ -89,7 +89,7 @@ describe("the flag", () => {
 });
 
 describe("the calendar rule", () => {
-  it.each(["Job", "Jobs", "Estimate", "Estimates", " jobs ", "ESTIMATES"])("accepts %s", (name) => {
+  it.each(["Job", "Jobs", "Estimate", "Estimates", " jobs ", "ESTIMATES", "Schedule a Job", "Request an Estimate", " request  an estimate "])("accepts %s", (name) => {
     expect(isNotifiableCalendar(name)).toBe(true);
   });
   it.each(["Job Interview", "Estimate review call", "Team meeting", "Not a job", "Jobs 2", "", null])("refuses %s", (name) => {

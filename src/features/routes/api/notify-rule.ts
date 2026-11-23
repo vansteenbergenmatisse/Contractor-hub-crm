@@ -2,7 +2,8 @@ import type { NotifyRefusal, RouteJob } from "../types";
 
 // HighLevel has no field that says job or estimate (docs/greenlane/hl-api-notes.md), so the calendar's
 // name decides. Exact names only: "Job Interview" or "Estimate review call" must never notify a client.
-const NOTIFIABLE = new Set(["job", "jobs", "estimate", "estimates"]);
+// "Schedule a Job" and "Request an Estimate" are the calendars of the JCR snapshot every client copies.
+const NOTIFIABLE = new Set(["job", "jobs", "estimate", "estimates", "schedule a job", "request an estimate"]);
 
 export function isNotifiableCalendar(name: string | null | undefined): boolean {
   return NOTIFIABLE.has((name ?? "").trim().replace(/\s+/g, " ").toLowerCase());

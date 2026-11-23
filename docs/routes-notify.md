@@ -34,7 +34,7 @@ Source: official OpenAPI files `apps/contacts.json` and `apps/calendars.json`, `
 
 ## Job or estimate rule
 
-HighLevel's event has no job or estimate field (`docs/greenlane/hl-api-notes.md`), so the **calendar name** decides. After trimming and ignoring letter case, it must be exactly `Job`, `Jobs`, `Estimate` or `Estimates`. Anything else fails closed: no notification, and the card says "Only calendars named Job or Estimate can notify a client." A name like "Job Interview" is refused on purpose. A client whose calendars have other names must rename them, or this rule must be extended.
+HighLevel's event has no job or estimate field (`docs/greenlane/hl-api-notes.md`), so the **calendar name** decides. After trimming and ignoring letter case, it must be exactly `Job`, `Jobs`, `Estimate`, `Estimates`, `Schedule a Job` or `Request an Estimate` (the last two are the JCR snapshot's calendars). Anything else fails closed: no notification, and the card says "Only calendars named Job or Estimate can notify a client." A name like "Job Interview" is refused on purpose. A client whose calendars have other names must rename them, or this rule must be extended.
 
 ## Which job may notify
 
