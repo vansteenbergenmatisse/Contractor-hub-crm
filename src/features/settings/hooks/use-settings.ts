@@ -4,13 +4,13 @@ import { useEffect, useMemo, useRef } from "react";
 import { useKeptReducer, usePushed, useShell } from "@/features/app-shell";
 import { CONNECTIONS, SWITCHES, extraKeys } from "../api/fields";
 import { NOT_AVAILABLE, connectionRowText } from "../api/connections";
-import { applyBrandToDocument, businessPatchFromValues, type BusinessPatch } from "../api/live-save";
+import { applyBrandToDocument, changedBusinessPatch, type BusinessPatch } from "../api/live-save";
 import { filterSettings } from "../api/search";
 import { initialState, settingsReducer, type SettingsState } from "../api/state";
 import type { ConnectionStatus, SectionKey } from "../types";
 
 // The shell's `updateBusiness`; when a shell does not offer it (a page rendered alone) the call is skipped.
-type ShellWithUpdate = { updateBusiness?: (patch: Partial<BusinessPatch>) => void };
+type ShellWithUpdate = { updateBusiness?: (patch: Partial<BusinessPatch>, options?: { expires?: boolean }) => void };
 
 // Settings state plus its side effects: the pushed detail screen on a phone, the cursor in a bad
 // field after Save, scrolling to the top when a section opens, and after a good Save the new colors
@@ -22,6 +22,8 @@ export function useSettings(
   initialValues: Record<string, string> | undefined,
   initialSection: SectionKey | undefined,
   connections: readonly ConnectionStatus[],
+  // Save really writes to the sub-account. Otherwise an applied edit lasts for this visit.
+  live = false,
 ) {
   const [state, dispatch] = useKeptReducer("settings", settingsReducer, initial, (i) => i ?? initialState(initialValues, initialSection));
   // A link such as `?section=connections` always opens its section, as the design's `toSet` does:
@@ -32,6 +34,8 @@ export function useSettings(
   }, [initialSection, dispatch]);
   // A focus request left from an earlier visit must not move the cursor on arrival.
   const arrivedFocus = useRef(state.focus);
+  const arrivedSave = useRef(state.ok ? state.values : null);
+  const lastValues = useRef(state.values);
   const extras = useMemo(() => extraKeys(state.values), [state.values]);
   const phone = (state.values.business_phone_number ?? "").trim();
   // With a tenant's real values the choices have no source yet, so they read "Not available yet".
@@ -75,10 +79,15 @@ export function useSettings(
   }, [state.focus]);
 
   useEffect(() => {
-    if (!state.ok) return;
+    const before = lastValues.current;
+    lastValues.current = state.values;
+    // A save kept from an earlier visit is not new, and must not cover a later edit.
+    if (!state.ok || state.values === arrivedSave.current) return;
     applyBrandToDocument(document, state.values);
-    updateRef.current?.(businessPatchFromValues(state.values));
-  }, [state.ok, state.values]);
+    const patch = changedBusinessPatch(before, state.values);
+    if (live) updateRef.current?.(patch, { expires: true });
+    else updateRef.current?.(patch);
+  }, [state.ok, state.values, live]);
 
   return { state, dispatch, filter, extras, phone, choicesAvailable };
 }

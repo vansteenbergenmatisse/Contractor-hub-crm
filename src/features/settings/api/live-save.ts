@@ -93,3 +93,10 @@ export function businessPatchFromValues(values: CustomValues): Partial<BusinessP
   }
   return out;
 }
+
+// Only the fields a save changed: a kept value must not cover a newer one the server holds.
+export function changedBusinessPatch(before: CustomValues, after: CustomValues): Partial<BusinessPatch> {
+  const old = businessPatchFromValues(before) as Record<string, unknown>;
+  const next = businessPatchFromValues(after) as Record<string, unknown>;
+  return Object.fromEntries(Object.entries(next).filter(([field, value]) => old[field] !== value)) as Partial<BusinessPatch>;
+}

@@ -1,4 +1,4 @@
-import type { OnboardingApi, WebhookHooks } from "@/features/highlevel";
+import type { OnboardingApi, WebhookHooks, WebhookUninstallHook } from "@/features/highlevel";
 import { syncTenantUsers, type UserSyncDeps } from "./users";
 
 export type WebhookHookDeps = {
@@ -13,7 +13,7 @@ export type WebhookHookDeps = {
 // What happens after INSTALL and on location and user events. The handler only calls these after
 // the webhook's signature is verified, and the tenant is always looked up from the event's location
 // in our own database, never taken from the payload.
-export function createWebhookHooks(deps: WebhookHookDeps): WebhookHooks {
+export function createWebhookHooks(deps: WebhookHookDeps): WebhookHooks & WebhookUninstallHook {
   const { hl, userSync } = deps;
   return {
     async onLocationConnected({ tenantId, companyId, locationId, accessToken }) {
@@ -32,6 +32,11 @@ export function createWebhookHooks(deps: WebhookHookDeps): WebhookHooks {
         console.error(`Onboarding: brand invalidation failed: ${error instanceof Error ? error.name : "unknown error"}`);
       }
       if (name) await hl.renameTenant(locationId, name);
+    },
+    // Per server instance: another instance keeps its copy until it restarts or reads newer values.
+    async onLocationUninstalled({ locationId }) {
+      const tenant = await hl.findTenant(locationId);
+      if (tenant) deps.invalidateBrand(tenant.tenantId);
     },
     async onUserEvent({ type, locationId }) {
       const tenant = await hl.findTenant(locationId);

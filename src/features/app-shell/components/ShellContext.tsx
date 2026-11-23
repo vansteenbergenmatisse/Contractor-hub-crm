@@ -19,8 +19,9 @@ export type ShellApi = {
   // Count of conversations that need a reply, for the Inbox badge. Mock until Phase 3.
   setInboxCount: (n: number) => void;
   // Puts edited business details on screen for this browser session (Settings). "" or null blanks
-  // a field; derived fields (initials, tag, site) follow. Nothing is saved or sent.
-  updateBusiness: (patch: BusinessPatch) => void;
+  // a field; derived fields (initials, tag, site) follow. Nothing is saved or sent. `expires`: the value
+  // was really saved, so it gives way to the server after an age limit. A visit-only edit stays.
+  updateBusiness: (patch: BusinessPatch, options?: { expires?: boolean }) => void;
   // Ends the session, then loads /sign-in in full (the menu card's Sign out; Settings' Sign out).
   signOut: () => Promise<void>;
   // A page's current search rows (see useSearchRows); they replace the layout's rows for that page.

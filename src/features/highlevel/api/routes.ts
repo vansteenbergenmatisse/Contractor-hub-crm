@@ -32,7 +32,7 @@ import {
 import { claimForcedRefresh } from "../db/forced-refresh";
 import { beginWebhookEvent, markWebhookProcessed } from "../db/webhook-events";
 import { findTenantByLocation, listAgencyCompanyIds, listConnectedTenants, updateTenantName } from "../db/onboarding";
-import type { WebhookHooks } from "./webhook";
+import type { WebhookHooks, WebhookUninstallHook } from "./webhook";
 
 // Wiring for the two OAuth routes in src/app. Env is read per request (lazy), so `next build`
 // needs none. A missing or malformed env answers 500 with no detail; the names are logged.
@@ -296,13 +296,13 @@ export async function oauthCallbackRoute(request: Request, guard?: AdminGuard, o
 }
 
 // publicKeyPem is for tests only; production uses HighLevel's published key.
-export function createWebhookRoute(options: { publicKeyPem?: string; hooks?: WebhookHooks } = {}) {
+export function createWebhookRoute(options: { publicKeyPem?: string; hooks?: WebhookHooks & WebhookUninstallHook } = {}) {
   return (request: Request) => handleWebhookRequest(request, options.publicKeyPem, options.hooks);
 }
 
 export const webhookRoute = createWebhookRoute();
 
-async function handleWebhookRequest(request: Request, publicKeyPem: string | undefined, hooks?: WebhookHooks): Promise<Response> {
+async function handleWebhookRequest(request: Request, publicKeyPem: string | undefined, hooks?: WebhookHooks & WebhookUninstallHook): Promise<Response> {
   let env;
   try {
     env = parseEnv("highlevel");
@@ -326,6 +326,7 @@ async function handleWebhookRequest(request: Request, publicKeyPem: string | und
     },
     client,
     hooks,
+    onLocationUninstalled: hooks?.onLocationUninstalled,
     companylessInstall: { listAgencyCompanyIds, findTenant: findTenantByLocation },
     reconcile: {
       listInstalledLocations: client.listInstalledLocations,

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { cache, type ReactNode } from "react";
 import { brandScopeCss, brandStyle, EMPTY_BRAND, getBrandService } from "@/features/brand";
 import { getRequestUser } from "./session";
 import "./globals.css";
@@ -6,7 +6,8 @@ import "./globals.css";
 // Brand at first paint: a signed-in tenant user gets their sub-account's colors printed on <html>
 // by the server, plus their favicon and the "Add to Home Screen" app (manifest, icon, theme color).
 // Signed-out pages, admins and any lookup failure get the design's default colors and no app link.
-async function loadBrand() {
+// Cached per request: the metadata and the layout share one lookup.
+const loadBrand = cache(async () => {
   try {
     const user = await getRequestUser();
     if (!user?.tenantId) return { brand: EMPTY_BRAND, tenant: false };
@@ -16,7 +17,7 @@ async function loadBrand() {
   } catch {
     return { brand: EMPTY_BRAND, tenant: false };
   }
-}
+});
 
 // The tab title is the client's business name (a neutral name when there is none).
 export async function generateMetadata() {

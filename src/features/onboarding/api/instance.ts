@@ -9,6 +9,7 @@ import {
   VISIT_RENEWAL_WINDOW_MS,
   type OAuthCallbackDeps,
   type WebhookHooks,
+  type WebhookUninstallHook,
 } from "@/features/highlevel";
 import { claimAlerts, releaseAlerts } from "../db/alerts";
 import { claimVisitSync, reserveSetPasswordMail } from "../db/sync-state";
@@ -86,7 +87,7 @@ export function getCallbackOnboard(): OAuthCallbackDeps["onboard"] {
 }
 
 // Passed to the webhook route: what happens after INSTALL and on location and user events.
-export function getWebhookHooks(): WebhookHooks | undefined {
+export function getWebhookHooks(): (WebhookHooks & WebhookUninstallHook) | undefined {
   let built: ReturnType<typeof build>;
   try {
     built = build();

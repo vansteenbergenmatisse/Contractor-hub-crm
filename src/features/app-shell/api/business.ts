@@ -133,3 +133,58 @@ export function pickPatch(patch: BusinessPatch): BusinessPatch {
   for (const key of PATCH_KEYS) if (Object.prototype.hasOwnProperty.call(patch, key)) out[key] = (patch as Record<string, unknown>)[key];
   return out as BusinessPatch;
 }
+
+// How long a saved value may stay on screen without the server showing it. A proposal, not measured.
+export const OVERRIDE_MAX_AGE_MS = 60_000;
+
+// Values on screen, what the server held before them, and when each saved field was saved. A field
+// without a time is a visit-only edit (nothing was sent), which has no age limit.
+export type BusinessOverride = { patch: BusinessPatch; base: Business; savedAt: Partial<Record<string, number>> };
+
+// The same object when every field stays.
+function keepFields(override: BusinessOverride, keep: (key: (typeof PATCH_KEYS)[number]) => boolean): BusinessOverride {
+  const patch: Record<string, unknown> = {};
+  const savedAt: Partial<Record<string, number>> = {};
+  let dropped = false;
+  for (const key of PATCH_KEYS) {
+    if (!Object.prototype.hasOwnProperty.call(override.patch, key)) continue;
+    if (keep(key)) {
+      patch[key] = override.patch[key];
+      savedAt[key] = override.savedAt[key];
+    } else dropped = true;
+  }
+  return dropped ? { patch: patch as BusinessPatch, base: override.base, savedAt } : override;
+}
+
+// Each field stays only while the server still holds its pre-save value: once the server moves on, it
+// has the save or a later edit made in HighLevel, and it wins for good.
+export function settleOverride(override: BusinessOverride, server: Business): BusinessOverride {
+  return keepFields(override, (key) => override.base[key] === server[key]);
+}
+
+// A value HighLevel reverted looks like a save the server has not shown yet, so each field has an age limit.
+export function dropExpiredOverride(override: BusinessOverride, at: number): BusinessOverride {
+  return keepFields(override, (key) => {
+    const saved = override.savedAt[key];
+    return saved === undefined || saved + OVERRIDE_MAX_AGE_MS > at;
+  });
+}
+
+// When the oldest field reaches its age limit. Null: nothing is held.
+export function nextOverrideExpiry(override: BusinessOverride): number | null {
+  const times = Object.values(override.savedAt).filter((time): time is number => time !== undefined);
+  return times.length > 0 ? Math.min(...times) + OVERRIDE_MAX_AGE_MS : null;
+}
+
+// A new save on top: fields the server already moved past are dropped first.
+// `savedAtTime` null: a visit-only edit.
+export function addToOverride(override: BusinessOverride, patch: BusinessPatch, server: Business, savedAtTime: number | null): BusinessOverride {
+  const settled = settleOverride(override, server);
+  const picked = pickPatch(patch);
+  const savedAt = { ...settled.savedAt };
+  for (const key of Object.keys(picked)) {
+    if (savedAtTime === null) delete savedAt[key];
+    else savedAt[key] = savedAtTime;
+  }
+  return { patch: { ...settled.patch, ...picked }, base: server, savedAt };
+}

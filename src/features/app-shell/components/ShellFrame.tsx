@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useOptimistic, useRef, useState, useSy
 import { usePathname, useRouter } from "next/navigation";
 import { BrandLogo } from "@/shared/ui/brand-logo";
 import { MENU_GROUPS, PAGE_PATH, PAGE_TITLE, TAB_PAGES, pageFromPath } from "../nav";
-import { patchBusiness, pickPatch, type BusinessPatch } from "../api/business";
+import { addToOverride, dropExpiredOverride, nextOverrideExpiry, patchBusiness, settleOverride, type BusinessOverride } from "../api/business";
 import { ROW_PICK_EVENT, mergeSearchRows, rowParam, sameRows } from "../api/search";
 import { createFocusReturn, focusables, isShown, viewClass } from "../api/focus";
 import { detectMac, findUndo, isTyping, moveRow, shortcutFor } from "../api/keys";
@@ -71,9 +71,24 @@ export function ShellFrame({ business: serverBusiness, searchRows, initialInboxC
     return mergeSearchRows(searchRows, byPage);
   }, [searchRows, handedRows]);
   const [entered, setEntered] = useState(false);
-  // Settings edits for this browser session only (no persistence, nothing sent).
-  const [override, setOverride] = useState<BusinessPatch>({});
-  const business = useMemo(() => patchBusiness(serverBusiness, override), [serverBusiness, override]);
+  // Saved Settings values on screen until the server shows a different value for that field.
+  const [storedOverride, setOverride] = useState<BusinessOverride>(() => ({ patch: {}, base: serverBusiness, savedAt: {} }));
+  const override = settleOverride(storedOverride, serverBusiness);
+  if (override !== storedOverride) setOverride(override);
+  const business = useMemo(() => patchBusiness(serverBusiness, override.patch), [serverBusiness, override.patch]);
+  // At its age limit a held value goes in the same transition as a fresh server render, so a save the
+  // server does hold never flashes back to the old value.
+  useEffect(() => {
+    const at = nextOverrideExpiry(override);
+    if (at === null) return;
+    const timer = setTimeout(() => {
+      startNav(() => {
+        router.refresh();
+        setOverride((current) => dropExpiredOverride(current, at));
+      });
+    }, Math.max(0, at - Date.now()));
+    return () => clearTimeout(timer);
+  }, [override, router, startNav]);
   const [drawerBack] = useState(createFocusReturn);
   const [feedbackBack] = useState(createFocusReturn);
   const drawerClose = useRef<HTMLButtonElement>(null);
@@ -231,7 +246,10 @@ export function ShellFrame({ business: serverBusiness, searchRows, initialInboxC
       openSearch: () => { setDrawer(false); drawerBack.forget(); setSearch(true); },
       openFeedback: () => { setDrawer(false); drawerBack.forget(); feedbackBack.remember(document.activeElement); setFeedback(true); },
       setInboxCount,
-      updateBusiness: (patch) => setOverride((o) => ({ ...o, ...pickPatch(patch) })),
+      updateBusiness: (patch, options) => {
+        const savedAt = options?.expires ? Date.now() : null;
+        setOverride((o) => addToOverride(o, patch, serverBusiness, savedAt));
+      },
       signOut,
       setSearchRows: (key, rows, options) => setHandedRows((all) => {
         const now = all[key];
@@ -241,7 +259,7 @@ export function ShellFrame({ business: serverBusiness, searchRows, initialInboxC
         return { ...all, [key]: { rows, seed: rows } };
       }),
     }),
-    [business, drawerBack, feedbackBack],
+    [business, serverBusiness, drawerBack, feedbackBack],
   );
 
   const go = useCallback((key: PageKey) => {

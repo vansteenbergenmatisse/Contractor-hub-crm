@@ -13,10 +13,11 @@ export function saveTenantValues(input: { tenantId: string; actorId: string; cha
     update: adapter.update,
     begin: beginValueChange,
     finish: finishValueChange,
-    invalidate: (tenantId) => getBrandService().invalidate(tenantId),
+    invalidate: (tenantId) => getBrandService().expire(tenantId),
     claim: claimSaveLock,
     release: releaseSaveLock,
     now: () => Date.now(),
+    wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   });
 }
 

@@ -18,6 +18,9 @@ export type WebhookHooks = {
   onUserEvent?(input: { type: string; locationId: string }): Promise<void>;
 };
 
+// A location was marked uninstalled: drop what this server instance still holds for it.
+export type WebhookUninstallHook = { onLocationUninstalled?(input: { locationId: string }): Promise<void> };
+
 export type WebhookDeps = {
   appId: string;
   publicKeyPem?: string; // tests only; production uses HighLevel's published key
@@ -35,6 +38,7 @@ export type WebhookDeps = {
     mintLocationToken(agencyAccessToken: string, companyId: string, locationId: string): Promise<LocationToken>;
   };
   hooks?: WebhookHooks;
+  onLocationUninstalled?: WebhookUninstallHook["onLocationUninstalled"];
   // Database reads for a location INSTALL that arrives without a companyId. The route wiring always
   // provides them; without them such an event is only stored and the daily sync handles it.
   companylessInstall?: {
@@ -131,6 +135,7 @@ export async function handleWebhook(request: Request, deps: WebhookDeps): Promis
       if (locationId) {
         if (!(await isStillInstalled(deps, locationId, companyId, now))) {
           await deps.store.markLocationUninstalled(locationId, now);
+          await runHook("onLocationUninstalled", () => deps.onLocationUninstalled?.({ locationId }));
         }
       } else if (companyId) await deps.store.deleteAgencyConnection(companyId);
     }

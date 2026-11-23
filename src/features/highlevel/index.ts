@@ -31,7 +31,7 @@ export { runTokenRenewal } from "./api/routes";
 export { CRON_RENEWAL_WINDOW_MS, renewDueTokens, VISIT_RENEWAL_INTERVAL_MS, VISIT_RENEWAL_WINDOW_MS } from "./api/token-renewal";
 export type { TokenRenewalDeps, TokenRenewalSummary } from "./api/token-renewal";
 export { handleWebhook } from "./api/webhook";
-export type { WebhookDeps, WebhookHooks } from "./api/webhook";
+export type { WebhookDeps, WebhookHooks, WebhookUninstallHook } from "./api/webhook";
 export { HIGHLEVEL_WEBHOOK_PUBLIC_KEY, verifyWebhookSignature } from "./api/webhook-signature";
 export {
   deleteAgencyConnection,

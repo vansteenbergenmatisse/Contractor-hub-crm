@@ -8,6 +8,8 @@ const UNITS_AT_ONCE = 3;
 const TIME_BUDGET_MS = 25_000;
 const RESTORE_CUTOFF_MS = 35_000;
 const COLOR_PAIR = ["main_color", "text_on_main_color"] as const;
+// HighLevel can answer a read just after a 2xx with the old value. A proposal, not a measured delay.
+const READ_BACK_WAITS_MS = [500, 1_000, 2_000];
 
 export type AuditStart = { tenantId: string; actorId: string; key: string; previousValue: string; newValue: string };
 export type AuditOutcome = "saved" | "rejected" | "permission" | "failed" | "unknown" | "reverted";
@@ -22,6 +24,8 @@ export type SaveDeps = {
   claim: (tenantId: string) => Promise<string | null>;
   release: (tenantId: string, holder: string) => Promise<void>;
   now: () => number;
+  // Pause between confirming reads. Without it there is one confirming read.
+  wait?: (ms: number) => Promise<void>;
 };
 
 type Input = { tenantId: string; actorId: string; changes: readonly ValueChange[] };
@@ -169,6 +173,29 @@ function confirmed(written: Written, now: CustomValues | null): Settled {
   return { status: http, audit: http === "retry" ? "failed" : http, restoreAudit: "failed" };
 }
 
+// Only a write HighLevel accepted is read again, and only while the read shows no answer or the old
+// value. A timeout stays unknown, and a third value is somebody else's edit.
+function awaitsConfirmation({ candidate, http, unresolved, restoreAuditId }: Written, now: CustomValues | null): boolean {
+  if (http !== "saved" || unresolved || restoreAuditId) return false;
+  const current = now?.[candidate.key];
+  return current === undefined || current === candidate.previous.trim();
+}
+
+// The newest successful read. Each one is a real call to HighLevel, so only it can confirm a value.
+async function confirmingRead(tenantId: string, written: readonly Written[], started: number, deps: SaveDeps): Promise<CustomValues | null> {
+  let after = await safeRead(tenantId, deps);
+  if (!deps.wait) return after.ok ? valuesOf(after.values) : null;
+  for (const ms of READ_BACK_WAITS_MS) {
+    const now = after.ok ? valuesOf(after.values) : null;
+    if (!written.some((item) => awaitsConfirmation(item, now))) break;
+    if (deps.now() - started > RESTORE_CUTOFF_MS) break;
+    await deps.wait(ms);
+    const next = await safeRead(tenantId, deps);
+    if (next.ok) after = next;
+  }
+  return after.ok ? valuesOf(after.values) : null;
+}
+
 function toUnits(candidates: readonly Candidate[]): Candidate[][] {
   const main = candidates.find((c) => c.key === COLOR_PAIR[0]);
   const text = candidates.find((c) => c.key === COLOR_PAIR[1]);
@@ -259,8 +286,7 @@ async function runSave(input: Input, deps: SaveDeps): Promise<{ results: SaveRes
     written.push(...done.flat());
   }
   if (written.length > 0) {
-    const after = await safeRead(tenantId, deps);
-    const now = after.ok ? valuesOf(after.values) : null;
+    const now = await confirmingRead(tenantId, written, started, deps);
     for (const item of written) {
       const { status, audit, restoreAudit } = confirmed(item, now);
       out.set(item.candidate.key, { key: item.candidate.key, status });

@@ -38,9 +38,9 @@ type Props = {
 
 // `saveValues`: given only when this owner may save to the sub-account. Without it Save lasts for this visit.
 export function SettingsPage({ initial, initialValues, initialSection, connections = UNKNOWN_CONNECTIONS, readOnly = false, saveValues }: Props & { readOnly?: boolean; saveValues?: SaveValues }) {
-  const { state, dispatch, filter, extras, phone, choicesAvailable } = useSettings(initial, initialValues, initialSection, connections);
-  const remote = useSaveValues(state, dispatch, saveValues);
   const live = !!saveValues && !readOnly;
+  const { state, dispatch, filter, extras, phone, choicesAvailable } = useSettings(initial, initialValues, initialSection, connections, live);
+  const remote = useSaveValues(state, dispatch, saveValues);
   const signOut = useSignOut();
   const [signOutFailed, setSignOutFailed] = useState(false);
   const { values, draft, err } = state;

@@ -1,7 +1,9 @@
+import { cache } from "react";
 import { listTenantCustomValues, readTenantCustomValuesStored } from "@/features/highlevel";
 import { createBrandService } from "./brand-service";
 import { allowedLogoHosts } from "./logo";
 import { createSignInBrandLoader } from "./sign-in-brand";
+import { readBrandVersion } from "../db/brand-version";
 import { findConnectedTenantBySlug } from "../db/sign-in-link";
 import type { BrandValue } from "../types";
 
@@ -14,6 +16,8 @@ export function getBrandService() {
   service ??= createBrandService({
     fetchValues: listTenantCustomValues,
     readStoredValues: (tenantId) => readTenantCustomValuesStored(tenantId),
+    // One database read per request, however many brand reads the page makes.
+    readVersion: cache(readBrandVersion),
     now: () => Date.now(),
     ttlMs: TTL_MS,
   });
