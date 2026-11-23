@@ -16,8 +16,8 @@ export type ShellApi = {
   askReason: (request: ReasonRequest) => void;
   openSearch: () => void;
   openFeedback: () => void;
-  // Count of conversations with unread messages, for the Inbox badge.
-  setInboxCount: (n: number) => void;
+  // Count of conversations with unread messages, for the Inbox badge. `partial`: at least this many.
+  setInboxCount: (n: number, partial?: boolean) => void;
   // Puts edited business details on screen for this browser session (Settings). "" or null blanks
   // a field; derived fields (initials, tag, site) follow. Nothing is saved or sent. `expires`: the value
   // was really saved, so it gives way to the server after an age limit. A visit-only edit stays.
