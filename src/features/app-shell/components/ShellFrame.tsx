@@ -58,6 +58,7 @@ export function ShellFrame({ business: serverBusiness, searchRows, initialInboxC
   const sendCount = useRef(0);
   const [reason, setReason] = useState<ReasonRequest | null>(null);
   const [inboxCount, setInboxCount] = useState(initialInboxCount);
+  const [inboxPartial, setInboxPartial] = useState(false);
   // Phone top bar (design `uxTtl`): glass once the page scrolls (`sc`), the page title in it once the
   // page's large title has passed under the bar (`ttl`).
   const [bar, setBar] = useState({ sc: false, ttl: false });
@@ -245,7 +246,7 @@ export function ShellFrame({ business: serverBusiness, searchRows, initialInboxC
       askReason: setReason,
       openSearch: () => { setDrawer(false); drawerBack.forget(); setSearch(true); },
       openFeedback: () => { setDrawer(false); drawerBack.forget(); feedbackBack.remember(document.activeElement); setFeedback(true); },
-      setInboxCount,
+      setInboxCount: (n, partial = false) => { setInboxCount(n); setInboxPartial(partial); },
       updateBusiness: (patch, options) => {
         const savedAt = options?.expires ? Date.now() : null;
         setOverride((o) => addToOverride(o, patch, serverBusiness, savedAt));
@@ -298,7 +299,7 @@ export function ShellFrame({ business: serverBusiness, searchRows, initialInboxC
   const navClass = (key: PageKey) => `fd-nav${shownPage === key ? " is-on" : ""}`;
   const tabClass = (key: PageKey) => `fd-tab${shownPage === key ? " is-on" : ""}`;
   const badge = (
-    <span className={`fd-badge${inboxCount ? "" : " is-off"}`} aria-label={`${inboxCount} unread`}>{inboxCount}</span>
+    <span className={`fd-badge${inboxCount ? "" : " is-off"}`} aria-label={inboxPartial ? `at least ${inboxCount} unread` : `${inboxCount} unread`}>{inboxPartial ? `${inboxCount}+` : inboxCount}</span>
   );
 
   return (

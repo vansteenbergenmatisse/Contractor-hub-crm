@@ -1,8 +1,7 @@
 import { Suspense } from "react";
 import { hitRateLimit } from "@/features/auth";
 import { loadBusiness } from "@/features/brand";
-import { calendarTimeZone, loadCalendar } from "@/features/calendar";
-import { createTenantCalendarReader, createTenantContactsReader } from "@/features/highlevel";
+import { createTenantContactsReader, createTenantLocationZoneReader } from "@/features/highlevel";
 import { LeadsPage, LeadsSkeleton, loadLeads } from "@/features/leads";
 import { getRequestUser } from "../../session";
 
@@ -16,13 +15,13 @@ async function LeadsData() {
     : null;
   const ownEmail = business?.email ?? null;
   const reader = createTenantContactsReader(hitRateLimit, user?.viewing ? { viewerId: user.id, ownEmail } : { ownEmail });
-  const calendarReader = user?.viewing ? createTenantCalendarReader(hitRateLimit, { viewerId: user.id }) : createTenantCalendarReader(hitRateLimit);
-  // The calendar read carries the location's time zone. If it fails, the zone stays unknown.
-  const [result, calendar] = await Promise.all([
+  const readZone = user?.viewing ? createTenantLocationZoneReader(hitRateLimit, { viewerId: user.id }) : createTenantLocationZoneReader(hitRateLimit);
+  // The zone read has a short time limit. If it fails, the zone stays unknown.
+  const [result, timeZone] = await Promise.all([
     loadLeads(user?.tenantId, reader),
-    loadCalendar(user?.tenantId, null, calendarReader).catch(() => null),
+    readZone(user?.tenantId).catch(() => null),
   ]);
-  return <LeadsPage result={result} timeZone={calendarTimeZone(calendar)} />;
+  return <LeadsPage result={result} timeZone={timeZone} />;
 }
 
 // Thin page. Suspense covers the data and useSearchParams (?add=1).

@@ -3,7 +3,7 @@ import { businessValues } from "@/features/app-shell";
 import { hitRateLimit } from "@/features/auth";
 import { loadBusiness } from "@/features/brand";
 import { calendarTimeZone, loadCalendar } from "@/features/calendar";
-import { createTenantCalendarReader, createTenantContactsReader } from "@/features/highlevel";
+import { createTenantCalendarReader, createTenantContactsReader, createTenantLocationZoneReader } from "@/features/highlevel";
 import { loadLeads } from "@/features/leads";
 import { AppointmentsTile, dayPartWord, LeadsTile, TodayCalendarCard, TodayLeadsCard, TodayPage } from "@/features/today";
 import { getRequestUser } from "../session";
@@ -31,14 +31,17 @@ const loadTenantCalendar = cache(async () => {
   return loadCalendar(user?.tenantId, null, reader);
 });
 
-// The location's time zone from the calendar read Today already makes. Null: unknown.
-async function locationZone(): Promise<string | null> {
+// The location's time zone, one short read per request, so the lead sections never wait on the
+// calendar. Null: unknown, and they use the viewer's zone.
+const locationZone = cache(async (): Promise<string | null> => {
   try {
-    return calendarTimeZone(await loadTenantCalendar());
+    const user = await getRequestUser();
+    const read = user?.viewing ? createTenantLocationZoneReader(hitRateLimit, { viewerId: user.id }) : createTenantLocationZoneReader(hitRateLimit);
+    return await read(user?.tenantId);
   } catch {
     return null;
   }
-}
+});
 
 async function LeadsTileData() {
   const [result, timeZone] = await Promise.all([loadTenantLeads(), locationZone()]);
@@ -61,7 +64,7 @@ async function CalendarCardData() {
 // The client's time of day. "Hello" when the calendar read cannot give its time zone.
 async function GreetingWord() {
   const result = await loadTenantCalendar();
-  const zone = result.state === "ready" || result.state === "empty" ? result.week.timeZone : null;
+  const zone = calendarTimeZone(result);
   return <>{(zone && dayPartWord(new Date(), zone)) || "Hello"}</>;
 }
 
