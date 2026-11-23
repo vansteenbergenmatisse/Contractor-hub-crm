@@ -14,7 +14,7 @@ function scrollToTop() {
 // Which stage is in view, and on a phone whether one stage is open. View state only: nothing here
 // changes a deal. A search result (?row=) opens the stage its card is in.
 export function useLiveBoard(columns: readonly LiveColumn[]) {
-  const [view, setView] = useState({ stage: 0, open: false });
+  const [picked, setView] = useState({ stage: 0, open: false });
   const row = useSearchParams().get("row");
   const latest = useRef(columns);
   useEffect(() => {
@@ -37,6 +37,8 @@ export function useLiveBoard(columns: readonly LiveColumn[]) {
   }, []);
 
   const last = columns.length - 1;
+  // A refresh can return fewer stages than the one in view.
+  const view = { ...picked, stage: Math.max(0, Math.min(picked.stage, last)) };
   const pick = useCallback((stage: number, open?: boolean) => {
     scrollToTop();
     setView((now) => ({ stage, open: open ?? now.open }));

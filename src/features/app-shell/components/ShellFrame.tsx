@@ -298,7 +298,7 @@ export function ShellFrame({ business: serverBusiness, searchRows, initialInboxC
   const navClass = (key: PageKey) => `fd-nav${shownPage === key ? " is-on" : ""}`;
   const tabClass = (key: PageKey) => `fd-tab${shownPage === key ? " is-on" : ""}`;
   const badge = (
-    <span className={`fd-badge${inboxCount ? "" : " is-off"}`} aria-label={`${inboxCount} need a reply`}>{inboxCount}</span>
+    <span className={`fd-badge${inboxCount ? "" : " is-off"}`} aria-label={`${inboxCount} unread`}>{inboxCount}</span>
   );
 
   return (

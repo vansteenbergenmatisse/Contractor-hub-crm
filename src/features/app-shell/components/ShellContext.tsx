@@ -16,7 +16,7 @@ export type ShellApi = {
   askReason: (request: ReasonRequest) => void;
   openSearch: () => void;
   openFeedback: () => void;
-  // Count of conversations that need a reply, for the Inbox badge. Mock until Phase 3.
+  // Count of conversations with unread messages, for the Inbox badge.
   setInboxCount: (n: number) => void;
   // Puts edited business details on screen for this browser session (Settings). "" or null blanks
   // a field; derived fields (initials, tag, site) follow. Nothing is saved or sent. `expires`: the value

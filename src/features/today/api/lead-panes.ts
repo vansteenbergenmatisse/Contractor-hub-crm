@@ -11,7 +11,7 @@ const dayKey = (ms: number, timeZone: string) =>
 
 // The counts Leads shows for the same data. Null: the loaded page cannot prove the number.
 export function leadCounts(result: Ready, timeZone: string): { today: number | null; week: number | null } {
-  const { today, week } = tiles(result.leads, createInitialState(result.leads), { loadedAt: result.loadedAt, complete: result.complete, timeZone });
+  const { today, week } = tiles(result.leads, createInitialState(result.leads), { loadedAt: result.loadedAt, complete: result.complete, timeZone, dropped: result.dropped });
   return { today, week };
 }
 

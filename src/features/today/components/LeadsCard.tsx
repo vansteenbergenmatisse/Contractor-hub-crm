@@ -48,7 +48,7 @@ export function LeadsCard({ result, range, onRange, timeZone }: {
             return (
               <div key={key} className={`fd-pane${range === key ? "" : " is-off"}`}>
                 {count !== null ? <p className="fd-big"><b>{count}</b> {key === "today" ? "new today" : "this week"}</p>
-                  : rows.length === 0 ? <p className="fd-big"><NotAvailableChip /></p> : null}
+                  : rows.length === 0 ? <p className="fd-big"><NotAvailableChip /></p> : <p className="fd-pns">Some leads may be missing from this list.</p>}
                 <ul className="fd-leads">
                   {rows.map((lead) => (
                     <li key={lead.id}>

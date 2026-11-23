@@ -10,6 +10,7 @@ export { useRowFocus } from "./hooks/use-row-focus";
 export { createUndoRegistry, useUndoShortcut } from "./hooks/use-undo-shortcut";
 export type { UndoRegistry } from "./hooks/use-undo-shortcut";
 export { useSearchRows } from "./hooks/use-search-rows";
+export { useInboxBadge } from "./hooks/use-inbox-badge";
 export { useDialog } from "./hooks/use-dialog";
 export type { DialogOptions } from "./hooks/use-dialog";
 export { SearchSheet } from "./components/SearchSheet";
