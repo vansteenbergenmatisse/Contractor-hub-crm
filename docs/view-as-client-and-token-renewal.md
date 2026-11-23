@@ -15,7 +15,7 @@ Written 2026-11-22. Reviewed by an independent security agent (code reading only
 ## Background token renewal
 
 - `renewDueTokens` (`src/features/highlevel/api/token-renewal.ts`) renews agency tokens, then location tokens, through the token service's row lock. Logs hold counts only.
-- **Daily cron** (`/api/integrations/sync`, 26-hour window, one run per hour at most). Vercel runs crons on production only, and the route needs `CRON_SECRET`.
+- **Daily cron** (`/api/integrations/sync`, 26-hour window, one run per hour at most). Vercel runs crons on production only, and the route needs `CRON_SECRET` (set for Production on 2026-11-22). It starts once `vercel.json` reaches `main` and production is deployed.
 - **Admin visit** (after an admin who is not viewing a client opens `/admin/clients`, 6-hour window, once per 10 minutes). This is what keeps dev and staging connected, so on those environments a token can still expire if no admin opens the page.
 - A 401 from HighLevel can force one token replacement per tenant per 10 minutes (`claimForcedRefresh`). If another request already replaced the token, the stored one is used.
 
