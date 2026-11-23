@@ -4,10 +4,24 @@ import type { InviteRecord, InviteRole, InviteTenant } from "../api/invites";
 // The only place the auth feature reads and writes invites (and the tenant row an invite needs).
 
 export async function findTenantForInvite(tenantId: string): Promise<InviteTenant | null> {
-  return getPrisma().tenant.findUnique({
+  const tenant = await getPrisma().tenant.findUnique({
     where: { id: tenantId },
-    select: { id: true, name: true, locationId: true, companyId: true, status: true },
+    select: { id: true, name: true, locationId: true, companyId: true, status: true, loginLock: { select: { disabledAt: true } } },
   });
+  if (!tenant) return null;
+  const { loginLock, ...row } = tenant;
+  return { ...row, loginDisabledAt: loginLock?.disabledAt ?? null };
+}
+
+// The role of the invite this person accepted in this tenant (the latest one), or null. It wins over
+// HighLevel's role on every sync. Accepted invites are kept, so existing accounts are covered too.
+export async function findInvitedRole(tenantId: string, email: string): Promise<InviteRole | null> {
+  const invite = await getPrisma().invite.findFirst({
+    where: { tenantId, email, usedAt: { not: null } },
+    orderBy: { usedAt: "desc" },
+    select: { role: true },
+  });
+  return invite?.role === "owner" || invite?.role === "office" ? invite.role : null;
 }
 
 export async function emailTaken(email: string): Promise<boolean> {

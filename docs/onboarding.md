@@ -26,7 +26,8 @@ Built 2026-11-22. Source of the facts: HighLevel's OpenAPI files and webhook doc
 5. **Caps:** at most 50 new users (and mails) per tenant per pass; a pass that would block more than half of a tenant's users (tenants with 5 or more) blocks nobody. Proposals, not measured numbers.
 6. **Set-password mail is OFF by default** (`ONBOARDING_SEND_SET_PASSWORD` must be exactly `true`) because `loop-constraints.md` rules 12 and 13 forbid mailing the JCR Landscaping owner. Accounts are created either way. Set it to `true` in production when real clients should get the mail.
 7. A user an admin turned off by hand stays off; only users the sync itself blocked (HighLevel removed them) are re-enabled when they come back. A person HighLevel re-created with a new id keeps their CRM account (the link moves).
-8. HighLevel's `role` overwrites the CRM role (owner/office) on every sync. A CRM-assigned role is not kept.
+8. HighLevel's `role` sets the CRM role (owner/office) on every sync, except for a person who accepted an invite in that tenant: the role on their latest accepted `Invite` row wins (user decision, 2026-11-23). A null HighLevel role never changes anyone.
+9. **Login off per client** (user decision, 2026-11-23): a row in `TenantLoginLock`. While it exists, password sign-in, embed, provisioning (create, link, move, restore) and invites admit nobody for that client. Admins and View as client still work. Turn-on clears it last, after the removed-user check.
 
 ## Known gaps
 - **Daily mail cap:** at most 50 set-password mails per tenant per UTC day (`MAX_SET_PASSWORD_MAILS_PER_TENANT_PER_DAY`, a proposal), counted in `TenantSyncState`, on the webhook, callback, cron and visit paths. A user over the cap still gets an account but is NOT mailed later: nothing retries it, so that person must use "forgot password". The count of skipped mails is in the log. If the table is missing, these mails are skipped too.

@@ -10,12 +10,13 @@ import { readSession } from "./session";
 import { checkInviteEligibility } from "./invite-check";
 import { createInviteService, newInviteCode } from "./invites";
 import { hitRateLimit } from "../db/rate-limit";
-import { isTenantUninstalled } from "../db/tenant-status";
+import { isTenantLoginBlocked, isTenantLoginOff, isTenantUninstalled } from "../db/tenant-status";
 import {
   claimInvite,
   deleteInvite,
   emailTaken,
   findInviteByCodeHash,
+  findInvitedRole,
   findTenantForInvite,
   insertInvite,
   releaseInvite,
@@ -111,7 +112,7 @@ export function getProvisionDeps(): ProvisionDeps {
       await auth.api.requestPasswordReset({ body: { email, redirectTo: `${env.BETTER_AUTH_URL}/reset-password` } });
     },
     randomPassword: () => randomBytes(32).toString("base64url"),
-    store: { findLink, findLinkByUserId, relinkUser, insertLink, setLinkDeleted, findUserByEmail, findUserById },
+    store: { findLink, findLinkByUserId, relinkUser, insertLink, setLinkDeleted, findUserByEmail, findUserById, isTenantLoginOff, findInvitedRole },
     now: () => new Date(),
     moves: createMoveStore(),
   };
@@ -133,7 +134,7 @@ export function getAuth(): Auth {
         resolveUserId: (payload) => resolveEmbedSession(payload),
         confirmSession: (input) => createMoveStore().confirmSessionTenant(input),
       },
-      isTenantBlocked: isTenantUninstalled,
+      isTenantBlocked: isTenantLoginBlocked,
       clearUnusedMarker: (userId) => createMoveStore().clearMarker(userId),
     });
   }
@@ -157,7 +158,7 @@ export async function authRoute(request: Request): Promise<Response> {
 const sessionFromRequest = (request: Request) => readSession(getAuth(), request.headers);
 
 export function getGuards() {
-  return createGuards({ getSession: sessionFromRequest, isTenantUninstalled });
+  return createGuards({ getSession: sessionFromRequest, isTenantUninstalled: isTenantLoginBlocked });
 }
 
 // Invites, built per call (cheap). The log-only sender means no real email goes out for now.

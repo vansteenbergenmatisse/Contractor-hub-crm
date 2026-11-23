@@ -20,6 +20,7 @@ export { createRemovedUserCheck, handleSetTenantLogin } from "./api/tenant-login
 export { applyClientView, clientViewCookieName, handleExitClientView, handleStartClientView, signClientView } from "./api/client-view";
 export { clientViewDeps } from "./api/instance";
 export { listTenantUserIds } from "./db/tenant-users";
+export { setTenantLoginDisabled } from "./db/tenant-status";
 export { createGuards, TenancyError } from "./api/guards";
 export { readSession } from "./api/session";
 export type { GuardDeps, SessionUser } from "./api/guards";

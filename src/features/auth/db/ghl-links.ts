@@ -4,7 +4,7 @@ import type { Role } from "../types";
 // Everything the provisioning code needs from the database. Only this file touches Prisma for it.
 export type LinkRow = { userId: string; deletedAt: Date | null };
 export type FullLinkRow = LinkRow & { tenantId: string; ghlUserId: string };
-export type UserRow = { id: string; name: string; role: Role; tenantId: string | null; disabledAt: Date | null };
+export type UserRow = { id: string; name: string; role: Role; email?: string; tenantId: string | null; disabledAt: Date | null };
 
 export async function findLink(tenantId: string, ghlUserId: string): Promise<LinkRow | null> {
   return getPrisma().ghlUserLink.findUnique({
@@ -30,7 +30,7 @@ export async function listActiveLinks(tenantId: string): Promise<Array<{ ghlUser
   return getPrisma().ghlUserLink.findMany({ where: { tenantId, deletedAt: null }, select: { ghlUserId: true, userId: true } });
 }
 
-const userSelect = { id: true, name: true, role: true, tenantId: true, disabledAt: true } as const;
+const userSelect = { id: true, name: true, role: true, email: true, tenantId: true, disabledAt: true } as const;
 
 export async function findUserByEmail(email: string): Promise<UserRow | null> {
   return getPrisma().user.findUnique({ where: { email }, select: userSelect });

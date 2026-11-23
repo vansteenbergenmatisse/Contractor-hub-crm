@@ -8,6 +8,7 @@ import {
   handleSetTenantLogin,
   listActiveLinks,
   listTenantUserIds,
+  setTenantLoginDisabled,
   setUserDisabled,
 } from "@/features/auth";
 import { getOnboardingApi } from "@/features/highlevel";
@@ -25,6 +26,7 @@ export async function POST(request: Request, context: { params: Promise<{ tenant
       guards: getGuards(),
       listUserIds: listTenantUserIds,
       setUserDisabled: (userId, disabled) => setUserDisabled(getAuth(), userId, disabled),
+      setTenantLoginDisabled: (id, disabled) => setTenantLoginDisabled(id, disabled),
       limiter: getInviteLimiter(),
       appOrigin: new URL(env.APP_URL).origin,
       afterTurnOn: (id) =>

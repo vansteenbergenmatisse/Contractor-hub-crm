@@ -55,6 +55,8 @@ export async function handleSetTenantLogin(
     // `excludeRemoved` leaves out users HighLevel no longer lists, so turning on never revives them.
     listUserIds: (tenantId: string, options?: { excludeRemoved?: boolean }) => Promise<string[] | null>;
     setUserDisabled: (userId: string, disabled: boolean) => Promise<void>;
+    // The client-level switch that stops new people too (embed, provisioning, invites).
+    setTenantLoginDisabled?: (tenantId: string, disabled: boolean) => Promise<void>;
     limiter: RateLimiter;
     appOrigin: string;
     // Runs after a turn-on. False or a throw never undoes it: the answer carries removedCheck "failed".
@@ -74,6 +76,16 @@ export async function handleSetTenantLogin(
   audit("tenant_login_attempt", { by: admin, tenantId, disabled: String(disabled) });
   const userIds = await deps.listUserIds(tenantId, { excludeRemoved: !disabled });
   if (userIds === null) return reply(404, { error: "not_found" });
+
+  // Off: set first, so nobody can arrive while the users are being switched.
+  if (disabled) {
+    try {
+      await deps.setTenantLoginDisabled?.(tenantId, true);
+    } catch (error) {
+      console.error("Tenant login switch failed:", error instanceof Error ? error.name : "unknown error");
+      return reply(500, { error: "partial", affected: 0 });
+    }
+  }
 
   let affected = 0;
   let failed = 0;
@@ -104,5 +116,15 @@ export async function handleSetTenantLogin(
     audit("tenant_login_removed_check", { by: admin, tenantId, outcome: checkFailed ? "failed" : "ok" });
   }
   const check = checkFailed ? { removedCheck: "failed" } : {};
+  // On: cleared last, so nobody signs in before the removed-user check has run. A partial turn-on
+  // keeps the client off until a retry finishes it.
+  if (!disabled && failed === 0) {
+    try {
+      await deps.setTenantLoginDisabled?.(tenantId, false);
+    } catch (error) {
+      console.error("Tenant login switch failed:", error instanceof Error ? error.name : "unknown error");
+      return reply(500, { error: "partial", affected, ...check });
+    }
+  }
   return failed > 0 ? reply(500, { error: "partial", affected, ...check }) : reply(200, { affected, ...check });
 }
