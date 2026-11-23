@@ -38,7 +38,6 @@ export function QuotesLivePage({ result }: { result: QuotesResult }) {
       </section>
       {result.state === "ready" ? (
         <div className="fd-in" style={{ "--i": 1 } as React.CSSProperties}>
-          <p className="fd-pw">Amounts show exactly as your CRM records them.</p>
           {!result.complete ? <p className="fd-pw" role="status">Showing {result.quotes.length} of {result.total} quotes.</p> : null}
           {result.dropped > 0 ? <p className="fd-pw" role="status">{result.dropped} {result.dropped === 1 ? "quote" : "quotes"} could not be read and {result.dropped === 1 ? "is" : "are"} left out.</p> : null}
           <div className="fd-lst">
