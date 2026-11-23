@@ -122,6 +122,28 @@ describe("loadRoutes", () => {
     expect(out.nextId).toBeNull();
   });
 
+  it("notifyId skips a past job that is not done, while nextId keeps it", async () => {
+    const out = await ready([
+      row({ id: "stale", startMs: at("2026-03-04T13:00:00Z"), endMs: at("2026-03-04T14:00:00Z") }),
+      row({ id: "later" }),
+    ]);
+    expect(out.nextId).toBe("stale");
+    expect(out.notifyId).toBe("later");
+  });
+
+  it("notifyId keeps a job in progress, and treats an end at this moment as past", async () => {
+    const running = await ready([row({ id: "running", startMs: at("2026-03-04T16:30:00Z"), endMs: at("2026-03-04T17:00:00.001Z") }), row({ id: "later" })]);
+    expect(running.notifyId).toBe("running");
+    const ended = await ready([row({ id: "ended", startMs: at("2026-03-04T16:30:00Z"), endMs: NOW.getTime() }), row({ id: "later" })]);
+    expect(ended.notifyId).toBe("later");
+  });
+
+  it("notifyId is null when every open job is past", async () => {
+    const out = await ready([row({ startMs: at("2026-03-04T14:00:00Z"), endMs: at("2026-03-04T15:00:00Z") })]);
+    expect(out.nextId).toBe("e1");
+    expect(out.notifyId).toBeNull();
+  });
+
   it("is a calm empty day when every row is cancelled", async () => {
     expect(await loadRoutes("t", reader([row({ status: "cancelled" })]), now)).toMatchObject({ state: "empty", reason: "no-appointments" });
   });

@@ -64,7 +64,8 @@ async function readAppointmentId(request: Request): Promise<string | null> {
 type Verified = { contactId: string; hasTag: boolean } | { refusal: NotifyRefusal };
 
 // The browser's id is only a question. Today's appointments are read again for the session's tenant,
-// with the same logic the page uses, and the id must be the real next job with a real contact.
+// with the same logic the page uses, and the id must be the one job that may notify (notifyId), with a
+// real contact.
 async function verify(deps: NotifyStartDeps, tenantId: string, appointmentId: string): Promise<Verified> {
   let rows: RouteEventRow[] = [];
   let day: { startMs: number; endMs: number } | null = null;
@@ -79,12 +80,11 @@ async function verify(deps: NotifyStartDeps, tenantId: string, appointmentId: st
   const result = await loadRoutes(tenantId, capture, deps.now);
   if (result.state !== "ready" || !day) return { refusal: "unavailable" };
   if (result.partial) return { refusal: "unsure_next" };
-  if (result.nextId !== appointmentId) return { refusal: "not_next" };
   const job = result.jobs.find((item) => item.id === appointmentId);
+  if (result.notifyId !== appointmentId) return { refusal: job?.pastTime ? "past" : "not_next" };
   const row = rows.find((item) => item.id === appointmentId);
   if (!job || !row) return { refusal: "not_next" };
   if (!isNotifiableCalendar(row.calendarName)) return { refusal: "wrong_type" };
-  if (job.pastTime) return { refusal: "past" };
   const { startMs, endMs } = day as { startMs: number; endMs: number };
   const contact = await deps.readAppointmentContact(tenantId, { calendarId: row.calendarId, appointmentId, startMs, endMs });
   if (!contact.ok) return { refusal: "unavailable" };

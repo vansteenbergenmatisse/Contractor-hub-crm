@@ -320,6 +320,71 @@ describe("what never fires", () => {
   });
 });
 
+describe("which job may notify", () => {
+  const stale = row({ id: "stale", startMs: NOW - 7_200_000, endMs: NOW - 3_600_000 });
+  const expectRefused = async (deps: MockDeps, id: string, reason: string) => {
+    expect((await send(deps, post({ appointmentId: id }))).body).toEqual({ status: "refused", reason });
+    expect(deps.claim).not.toHaveBeenCalled();
+    expect(deps.pulseTag).not.toHaveBeenCalled();
+  };
+
+  it("a past job never marked done does not stop the next job from notifying", async () => {
+    const { deps, claims } = setup({}, [stale, row()]);
+    expect((await send(deps)).body.status).toBe("notified");
+    expect(deps.pulseTag).toHaveBeenCalledTimes(1);
+    expect(deps.claim.mock.invocationCallOrder[0]).toBeLessThan(deps.pulseTag.mock.invocationCallOrder[0]);
+    expect(claims.get("T1|appt-1")?.outcome).toBe("notified");
+  });
+
+  it("the skipped past job itself is still refused as past", async () => {
+    await expectRefused(setup({}, [stale, row()]).deps, "stale", "past");
+  });
+
+  it("a crew member running late can notify for a job in progress", async () => {
+    const late = row({ startMs: NOW - 600_000, endMs: NOW + 3_000_000 });
+    expect((await send(setup({}, [stale, late]).deps)).body.status).toBe("notified");
+  });
+
+  it("a job starting at this moment can notify", async () => {
+    expect((await send(setup({}, [row({ startMs: NOW, endMs: NOW + 1000 })]).deps)).body.status).toBe("notified");
+  });
+
+  it("a job one millisecond before its end can notify", async () => {
+    expect((await send(setup({}, [row({ startMs: NOW - 1000, endMs: NOW + 1 })]).deps)).body.status).toBe("notified");
+  });
+
+  it("a job ending at this moment is past", async () => {
+    await expectRefused(setup({}, [row({ startMs: NOW - 1000, endMs: NOW })]).deps, "appt-1", "past");
+  });
+
+  it("a job in progress holds the turn: the one after it is refused", async () => {
+    const running = row({ id: "running", startMs: NOW - 600_000, endMs: NOW + 600_000 });
+    await expectRefused(setup({}, [running, row()]).deps, "appt-1", "not_next");
+  });
+
+  it("the job after a skipped past job is refused when it is not first", async () => {
+    const first = row({ id: "first", startMs: NOW + 60_000, endMs: NOW + 120_000 });
+    await expectRefused(setup({}, [stale, first, row()]).deps, "appt-1", "not_next");
+  });
+
+  it("a wrong-type job in the notify slot is refused and passes the turn to nobody", async () => {
+    const meeting = row({ id: "meeting", calendarName: "Team meeting", startMs: NOW + 60_000, endMs: NOW + 120_000 });
+    await expectRefused(setup({}, [stale, meeting, row()]).deps, "meeting", "wrong_type");
+    await expectRefused(setup({}, [stale, meeting, row()]).deps, "appt-1", "not_next");
+  });
+
+  it("a repeat tap after skipping a past job fires once", async () => {
+    const { deps } = setup({}, [stale, row()]);
+    await send(deps);
+    expect((await send(deps, post())).body.status).toBe("notified");
+    expect(deps.pulseTag).toHaveBeenCalledTimes(1);
+  });
+
+  it("a partial day still refuses, even with a past job skipped", async () => {
+    await expectRefused(setup({ read: readerOf([stale, row()], { complete: false }) }).deps, "appt-1", "unsure_next");
+  });
+});
+
 describe("the page's notify view", () => {
   const ready = { state: "ready" as const, timeZone: "UTC", nextId: "a", partial: false, jobs: [{ id: "a" }, { id: "b" }] as never };
   const readOutcomes = vi.fn(async () => [{ appointmentId: "a", outcome: "notified" }, { appointmentId: "b", outcome: "pending" }]);

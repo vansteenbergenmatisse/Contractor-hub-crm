@@ -21,7 +21,9 @@ export type RouteJob = {
 };
 
 export type RoutesResult =
-  | { state: "ready"; timeZone: string; jobs: RouteJob[]; nextId: string | null; partial: boolean }
+  // nextId: first job not done. notifyId: first job neither done nor past, the only one that may notify.
+  // loadRoutes always sets notifyId; when it is left out the page derives it from jobs with the same rule.
+  | { state: "ready"; timeZone: string; jobs: RouteJob[]; nextId: string | null; notifyId?: string | null; partial: boolean }
   | { state: "empty"; timeZone: string; reason: "no-calendars" | "no-appointments" }
   | { state: "reconnect" }
   | { state: "unavailable" };

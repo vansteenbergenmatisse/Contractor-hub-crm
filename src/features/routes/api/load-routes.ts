@@ -1,6 +1,7 @@
 import { weekRange } from "@/features/calendar";
 import type { RouteEventRow, RouteJob, RoutesReader, RoutesResult } from "../types";
 import { parseCoordinates } from "./distance";
+import { pickNotifyId } from "./notify-rule";
 
 const STATUS_LABELS: Record<string, string> = {
   new: "New", confirmed: "Confirmed", showed: "Showed", noshow: "No show", active: "Active", completed: "Completed",
@@ -78,5 +79,5 @@ export async function loadRoutes(
     if (partial) return { state: "unavailable" };
     return { state: "empty", timeZone, reason: answer.calendarCount === 0 ? "no-calendars" : "no-appointments" };
   }
-  return { state: "ready", timeZone, jobs, nextId: jobs.find((job) => !job.done)?.id ?? null, partial };
+  return { state: "ready", timeZone, jobs, nextId: jobs.find((job) => !job.done)?.id ?? null, notifyId: pickNotifyId(jobs), partial };
 }

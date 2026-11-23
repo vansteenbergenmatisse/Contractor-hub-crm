@@ -1,5 +1,6 @@
 "use client";
 
+import { pickNotifyId } from "../api/notify-rule";
 import { useNotifyStart } from "../hooks/use-notify-start";
 import type { RoutesNotifyView, RoutesResult } from "../types";
 import { JobRow } from "./JobRow";
@@ -21,14 +22,17 @@ export function RoutesLivePage({ result, notify }: { result: RoutesResult; notif
       </div>
     );
   }
-  const next = result.jobs.find((job) => job.id === result.nextId) ?? null;
+  // With notifying available, the card is the job that may notify, so a past job left open cannot hold it.
+  const notifyId = result.notifyId === undefined ? pickNotifyId(result.jobs) : result.notifyId;
+  const cardId = notify ? notifyId ?? result.nextId : result.nextId;
+  const next = result.jobs.find((job) => job.id === cardId) ?? null;
   return (
     <div className="fd-cal">
       <RoutesHeader timeZone={result.timeZone} />
       {result.partial ? <p className="fd-cdl" role="status"><span>Some jobs may be missing from today, so the next job could be a different one.</span></p> : null}
       {next ? <NextJobCard job={next} notify={notify ? { on, onToggle: toggle, onStart, result: displayFor(next.id) } : null} /> : <div className="fd-none fx-none fd-in" role="status"><p>No open jobs left today.</p></div>}
       <ul className="fd-card fd-in" aria-label="Today's jobs" style={{ listStyle: "none", margin: 0, padding: 0 }}>
-        {result.jobs.map((job) => <JobRow key={job.id} job={job} isNext={job.id === result.nextId} result={notify ? displayFor(job.id) : null} />)}
+        {result.jobs.map((job) => <JobRow key={job.id} job={job} isNext={job.id === cardId} result={notify ? displayFor(job.id) : null} />)}
       </ul>
     </div>
   );
