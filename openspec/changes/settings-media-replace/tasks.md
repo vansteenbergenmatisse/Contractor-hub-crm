@@ -1,6 +1,6 @@
 # Tasks: Settings media replace
 
-Status: built-off. The same-URL gate is dropped by the user's "Upload and update" decision (2026-11-23). Nothing is live.
+Status: built-off. Change image replaces the file under the same name and folder and trashes the old one (user decision, 2026-11-23; sequence in `proposal.md`). Nothing is live.
 
 ## Approval gates (user, each separate)
 
@@ -14,7 +14,7 @@ Status: built-off. The same-URL gate is dropped by the user's "Upload and update
 ## Build, mocked only
 
 - [x] Contract tests for upload, list and every error case, mocked
-- [x] `highlevel/api/media-write.ts`, with no delete call
+- [x] `highlevel/api/media-write.ts`, with the recoverable trash route only, no permanent delete
 - [x] SVG validator; malicious SVG test set (each rejected construct)
 - [x] Server re-check of raster bytes, type and size
 - [x] Orchestration in `settings-write-back`, flags off by default

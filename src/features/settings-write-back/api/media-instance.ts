@@ -20,6 +20,8 @@ export function replaceTenantImage(input: { tenantId: string; actorId: string; k
     now: () => Date.now(),
     wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     find: media.find,
+    verify: media.verify,
+    trash: media.trash,
     upload: media.upload,
     fetchBytes: (url, maxBytes) => fetchMediaBytes(url, hosts, { maxBytes }),
     hosts,

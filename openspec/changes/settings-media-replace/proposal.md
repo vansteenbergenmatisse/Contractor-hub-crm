@@ -2,19 +2,19 @@
 
 Status: **built-off**. Built and tested against a mocked HighLevel only, off by default. No live HighLevel call, upload, Marketplace, Vercel or database change has been made.
 
-## User decision (2026-11-23): "Upload and update"
+## User decision (2026-11-23): replace, same name, same folder
 
-This replaces the earlier same-URL requirement. Settings compresses the image, uploads it as a NEW file to the client's HighLevel media library, then points the custom value at the new URL through the existing save rules. The old file is never deleted or changed.
-
-Why the same-URL route was dropped: the public API documents no way to replace an image's content in place (`apps/medias.json`, `apps/v3/medias-v3.json`), and private HighLevel endpoints are not an accepted route.
+The user's words: "it can delete it and replace it if it gives the same name and puts it in the same place / folder, and puts the new url in the custom value". This replaces the earlier "Upload and update" decision, where the old file stayed. The public API documents no way to replace an image's content in place (`apps/medias.json`, `apps/v3/medias-v3.json`), and private HighLevel endpoints are not an accepted route, so the server runs the sequence below.
 
 ## As built
 
-- `POST /api/settings/media`, owner only. Needs `SETTINGS_MEDIA_REPLACE_ENABLED` and `SETTINGS_MEDIA_REPLACE_TENANTS`, and also the write-back flags for the tenant, because the last step is a normal Settings save.
+- `POST /api/settings/media`, owner only. Needs `SETTINGS_MEDIA_REPLACE_ENABLED` and `SETTINGS_MEDIA_REPLACE_TENANTS`, and also the write-back flags for the tenant, because the value change is a normal Settings save.
 - SVG parser: `@xmldom/xmldom` 0.9.12, pinned, no dependencies and no install scripts.
-- Stricter than a typical export: the SVG allowlist has no `style` element, gradients, `use`, masks or clip paths, because each needs `url()` or a reference. Such a logo is refused with a message, never changed silently.
-- Audit: no new table and no migration. Each upload writes a `CustomValueChange` row first, with `newValue` `upload:<key>-<sha256-12>`. **That row records a file, not a value change, so it is not a rollback target.** The row of the PUT that follows holds the previous and new URL. The file id is not stored.
-- **OAuth scopes:** `medias.readonly` and `medias.write` are NOT in the default list, so an install or reconnect never requests a scope the Marketplace app may not have enabled. After the app version with those scopes is approved (gate 1), add them through `GHL_OAUTH_SCOPES`, which replaces the default list, so it must hold the full list plus the two. Until a client has the grant, a refused media call shows the "needs re-approval" message.
+- SVG allowlist now takes normal logo features: `defs`, gradients, `stop`, `clipPath`, `mask`, `pattern`, `use`, `href`/`xlink:href` and `url(#id)` to a local id that exists, and a `<style>` sheet that passes a strict CSS check. References may not loop, repeat an id, chain past 16 steps or expand past 100,000 nodes (proposals). `metadata`, comments and editor namespaces (Illustrator, Inkscape, Sketch, Figma) are removed from the upload. Script, `foreignObject`, `on*`, external references, DOCTYPE and entities are still refused, and the owner sees the specific reason.
+- Raster: the file keeps its format. The browser starts with WebP; if the current file is a PNG or JPG, the server answers with that format before any write and the browser encodes once more. The server walks PNG and JPEG structure as it does WebP. GIF and other formats the canvas cannot write are refused.
+- **Known limit:** the logo and favicon accept SVG only, so a logo whose current file is a PNG cannot be replaced from Settings: it is refused as a format mismatch.
+- Audit: no new table and no migration. A `CustomValueChange` row comes first for each external write: `upload:<key>-<sha256-12>` for the upload, the previous and new URL for the PUT, and `trash:<file id>` with the file's URL as previous value for a removal. **The `upload:` and `trash:` rows record a file, not a value change, so they are not rollback targets.**
+- **OAuth scopes:** `medias.readonly` and `medias.write` are NOT in the default list, so an install or reconnect never requests a scope the Marketplace app may not have enabled. After the app version with those scopes is approved (gate 1), add them through `GHL_OAUTH_SCOPES`, which replaces the default list, so it must hold the full list plus the two. Until a client has the grant, a refused media call shows the "needs re-approval" message. **Scope of the trash route:** `PUT /medias/delete-files` lists no scope in the docs (`Location-Access: []`); only `DELETE /medias/{id}` names `medias.write`. That `medias.write` covers the trash route is unverified. A refusal leaves the old file and tells the owner.
 - SVG limit: at most 20,000 nodes in the file, counting elements, comments, text and whitespace. Comments are left out while serializing.
 - WebP: every RIFF chunk is walked. Accepted: one `VP8 ` or `VP8L` frame, alone or as `VP8X`, optional `ICCP`, optional `ALPH`, frame, with the frame size equal to the canvas. `ANIM`, `ANMF`, `EXIF`, `XMP ` and unknown chunks are refused. Chrome's canvas output was checked and writes `VP8X` + `ICCP`; other browsers' encoders are not tested.
 - Time limits (proposals, not measured): no upload starts after 15 seconds and no PUT after 25, measured from the start of the request through the save's own read, PUT and confirming read, inside the route's 60 seconds.
@@ -24,7 +24,10 @@ Why the same-URL route was dropped: the public API documents no way to replace a
 
 - The OpenAPI example upload URL is on `storage.googleapis.com`, which is not allowlisted. If real uploads answer with that host, every change stops at `bad_host` with the old value live, until the user approves that host through `LOGO_HOST_ALLOWLIST`.
 - A browser with no canvas WebP encoder gets a clear message instead of an upload. Which phones this affects, Safari on iPhone especially, is not tested.
-- The list call's `sortBy=createdAt` and `type=file` values, the `Version` value (`v3` is sent), and whether HighLevel keeps the bytes unchanged. If it alters them, a repeat of the same image stops at `hash_mismatch`.
+- The list call's `sortBy=createdAt` and `type=file`/`type=folder` values, how `parentId`, `offset` and `limit` behave, the `Version` value (`v3` is sent), and whether HighLevel keeps the bytes unchanged. If it alters them, a repeat of the same image stops at `hash_mismatch`.
+- The documented list example shows no id field. The code reads `_id`, then `id`, and needs `altId` and `altType` on each row. If real rows lack them, every change stops at `not_found` before any write.
+- Whether the upload accepts a name that already exists in the folder, keeps it exactly, and honors `parentId`. Whether `status: "trashed"` really is recoverable, and what its answer looks like (the documented example is `[{deleted, id}]`). Any other answer is reported as unconfirmed.
+- **Only custom values are checked for other uses of the old URL.** A funnel, website, email or workflow that uses the same URL directly is not seen, and would show a broken image once the file is trashed. Whether a trashed file's URL keeps serving is unverified.
 
 ## Why
 
@@ -37,12 +40,13 @@ Source: `GoHighLevel/highlevel-api-docs@0af86a4`. No live call made.
 | Call | Scope | Request | Response |
 |---|---|---|---|
 | `POST /medias/upload-file` | `medias.write` | multipart `file`, `name`, `parentId` | `{fileId,url}` |
-| `GET /medias/files` | `medias.readonly` | requires `sortBy`, `sortOrder`, `type`, `altType`, `altId` | file list |
+| `GET /medias/files` | `medias.readonly` | requires `sortBy`, `sortOrder`, `type`, `altType`, `altId`; optional `offset`, `limit`, `parentId` | file list |
+| `PUT /medias/delete-files` | none listed | `filesToBeDeleted: [{_id}]`, `altType`, `altId`, `status: "trashed"` | `[{deleted,id}]` |
 
 - Limit: 25 MB in the API docs, 100 MB on the help page. Use the lower.
 - `Version`: `v3` in `apps/v3/medias-v3.json`; the older file lists `2021-07-28`. The sandbox settles which works.
-- The docs show no way to replace an image's content in place. "Change" means: upload new, repoint the custom value, keep the old file (user decision above).
-- `DELETE /medias/{id}` and `POST /medias/{id}` (rename) are never called.
+- The docs show no way to replace an image's content in place. "Change" means the sequence below (user decision above).
+- `DELETE /medias/{id}` (permanent) and `POST /medias/{id}` (rename) are never called.
 - Error cases: 400, 401, 403, 413, 422, 429, 5xx, timeout, malformed body, unapproved URL host.
 
 **Unverified:** upload URL host and shape, CDN content type for SVG, whether HighLevel sanitizes or alters bytes, deleted-URL behavior, cache, media rate limits, idempotency, list filtering by name, and list freshness after upload.
@@ -63,20 +67,21 @@ Source: `GoHighLevel/highlevel-api-docs@0af86a4`. No live call made.
 
 ## Sequence and idempotency
 
-1. Validate. Compute the name `<key>-<sha256-12>`.
-2. Look the name up. A name match is not proof: fetch the file through the limited fetcher and compare the hash. On a mismatch, stop.
-3. Upload only if missing. **No blind upload retry.** On no answer, re-read first. If still absent, report `unknown`, because the list may lag.
-4. Verify the URL host against the allowlist (`assets.cdn.filesafe.space` plus `LOGO_HOST_ALLOWLIST`). If it fails, stop before the PUT and never widen the list automatically.
-5. PUT the custom value through the existing save rules (lease, stale check, no PUT retry).
-6. Re-read. The read decides `saved`.
+All under the per-tenant lease.
+
+1. **Find the old file.** Read the custom value. Walk the tenant's library (`GET /medias/files`, every folder and page, at most 60 calls and 12 seconds) and match the exact URL. No match, more than one match, or a library that could not be read to the end stops here, before any write.
+2. **Validate.** The new file keeps the old file's exact name. A format that differs from the name's extension is refused; a photo is encoded to the file's format first.
+3. **Check for an earlier try.** A same-name file in that folder is fetched through the limited fetcher and its hash compared. Same bytes: reuse it, no upload. Other bytes: stop.
+4. **Upload** under that name into that `parentId`, after an audit row. **No blind upload retry.** On no answer, re-read first. If still absent, report `unknown`, because the list may lag. Verify the URL host against the allowlist (`assets.cdn.filesafe.space` plus `LOGO_HOST_ALLOWLIST`) and never widen it automatically. An answer naming the old file's id or URL stops the run.
+5. **Save** the new URL through the existing save rules (stale check, audit, no PUT retry) and read it back. If that fails, the old value and file stay live. The file this request uploaded is trashed only when the save certainly did not apply, no custom value holds its URL and its id verifies; otherwise it is reported.
+6. **Remove the old file**, only after the read-back. Re-read all custom values: if any other value contains the old URL, keep the file and say so. Otherwise verify the id, URL, name and folder once more, write an audit row, and send one `PUT /medias/delete-files` with `status: "trashed"`. No removal starts after 40 seconds.
+7. **Tell the owner** what happened: replaced, kept because in use, could not be removed, or removal unconfirmed.
 
 The sign-in background needs a URL path ending in an image extension (`docs/tenant-branding.md:36`). Check this in the sandbox.
 
-**Never delete the old file.** Partial failure leaves an unused file and the old value still live.
-
 ## Rollback and disable
 
-- Rollback: PUT the previous URL from `CustomValueChange`. The old file is still there.
+- Rollback: restore the old file from the media library trash, then PUT the previous URL from `CustomValueChange`. Whether a trashed file can be restored, and for how long, is unverified.
 - Disable: clear `SETTINGS_MEDIA_REPLACE_ENABLED` and redeploy, or remove one tenant id.
 
 ## Observability
@@ -102,9 +107,9 @@ security_baseline:
         C4_timeout:     { status: covered, mechanism: "10s calls, 20s upload, 15s and 25s step cutoffs, no blind upload retry; flag is the breaker" }
         C5_output_rate: { status: opted_out, justification: "one short JSON status" }
         C6_redaction:   { status: opted_out, justification: "no LLM; logs hold no content" }
-        C7_idempotency: { status: covered, mechanism: "hash name, lookup with byte-hash check before upload" }
+        C7_idempotency: { status: covered, mechanism: "same-name file in the same folder compared by byte hash before upload; no retry of upload, PUT or trash" }
         C8_concurrency: { status: covered, mechanism: "existing per-tenant lease held across upload and PUT, kept after no answer" }
-        C9_audit:       { status: covered, mechanism: "CustomValueChange row before the upload and before the PUT" }
+        C9_audit:       { status: covered, mechanism: "CustomValueChange row before the upload, the PUT and each trash call; no file bytes" }
         C10_abuse:      { status: covered, mechanism: "size caps, rate limits, exact tenant allowlist and kill switch" }
 ```
 

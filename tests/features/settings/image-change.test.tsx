@@ -144,6 +144,71 @@ describe("Change image: the flow", () => {
   });
 });
 
+describe("Change image: says exactly what happened", () => {
+  it.each([
+    ["trashed", /moved to the trash/i],
+    ["in_use", /another setting still uses it/i],
+    ["kept", /could not be removed/i],
+    ["unconfirmed", /could not confirm/i],
+  ] as const)("old file %s", async (oldFile, message) => {
+    show({ uploadImage: vi.fn<ImageUploader>(async () => ({ status: "saved", url: NEW_URL, oldFile })), prepareImage: prepareOk() });
+    pick(vector());
+    fireEvent.click(await within(logoGroup()).findByRole("button", { name: "Save image" }));
+    expect(await within(logoGroup()).findByText(message)).toBeTruthy();
+  });
+
+  it("names the specific SVG problem", async () => {
+    show({ uploadImage: vi.fn<ImageUploader>(async () => ({ status: "invalid", svgProblem: "outside_link" })), prepareImage: prepareOk() });
+    pick(vector());
+    fireEvent.click(await within(logoGroup()).findByRole("button", { name: "Save image" }));
+    expect((await within(logoGroup()).findByRole("alert")).textContent).toContain("This SVG links to an outside file.");
+  });
+
+  it("tells the owner when a failed change left its new file behind", async () => {
+    show({ uploadImage: vi.fn<ImageUploader>(async () => ({ status: "rejected", leftover: true })), prepareImage: prepareOk() });
+    pick(vector());
+    fireEvent.click(await within(logoGroup()).findByRole("button", { name: "Save image" }));
+    expect((await within(logoGroup()).findByRole("alert")).textContent).toMatch(/new file could not be removed/i);
+  });
+
+  it("encodes a photo again to the current file's format, once", async () => {
+    const uploadImage = vi.fn<ImageUploader>()
+      .mockResolvedValueOnce({ status: "format_mismatch", format: "png" })
+      .mockResolvedValueOnce({ status: "saved", url: NEW_URL, oldFile: "trashed" });
+    const prepareImage = prepareOk();
+    show({ uploadImage, prepareImage });
+    fireEvent.click(screen.getByRole("button", { name: /Our work/i }));
+    const work = screen.getByRole("group", { name: "Change Project 1, before" });
+    pick(photo(), work);
+    fireEvent.click(await within(work).findByRole("button", { name: "Save image" }));
+    await within(work).findByText(/moved to the trash/i);
+    expect(prepareImage).toHaveBeenLastCalledWith(expect.any(File), "photo", "png");
+    expect(uploadImage).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not loop when the second format is refused too", async () => {
+    const uploadImage = vi.fn<ImageUploader>(async () => ({ status: "format_mismatch", format: "png" }));
+    show({ uploadImage, prepareImage: prepareOk() });
+    fireEvent.click(screen.getByRole("button", { name: /Our work/i }));
+    const work = screen.getByRole("group", { name: "Change Project 1, before" });
+    pick(photo(), work);
+    fireEvent.click(await within(work).findByRole("button", { name: "Save image" }));
+    expect((await within(work).findByRole("alert")).textContent).toMatch(/PNG/);
+    expect(uploadImage).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not turn an SVG logo into another format", async () => {
+    const uploadImage = vi.fn<ImageUploader>(async () => ({ status: "format_mismatch", format: "png" }));
+    const prepareImage = prepareOk();
+    show({ uploadImage, prepareImage });
+    pick(vector());
+    fireEvent.click(await within(logoGroup()).findByRole("button", { name: "Save image" }));
+    expect((await within(logoGroup()).findByRole("alert")).textContent).toMatch(/PNG/);
+    expect(uploadImage).toHaveBeenCalledTimes(1);
+    expect(prepareImage).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("Change image: failures are named", () => {
   it.each([
     ["needs_approval", /needs re-approval/i],

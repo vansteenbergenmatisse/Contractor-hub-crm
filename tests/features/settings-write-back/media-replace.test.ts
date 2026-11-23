@@ -9,8 +9,12 @@ const OLD = "https://assets.cdn.filesafe.space/x/old.webp";
 const NEW = "https://files.leadconnectorhq.com/x/new";
 const BYTES = new Uint8Array([1, 2, 3, 4]);
 const HASH = createHash("sha256").update(BYTES).digest("hex");
-const NAME = `${KEY}-${HASH.slice(0, 12)}`;
+const NAME = "Project photo.webp";
+const FOLDER = "folder-1";
+const OLD_FILE = { id: "old-id", name: NAME, url: OLD, parentId: FOLDER };
+const SAVED = { status: "saved", url: NEW, oldFile: "trashed" };
 const FILE = { bytes: BYTES, contentType: "image/webp", extension: "webp", hash: HASH };
+const none: MediaFind = { ok: true, files: [OLD_FILE], siblings: [] };
 const row = (key: string, value: string): CustomValueDetail => ({ id: `id-${key}`, key, name: `Name ${key}`, value });
 
 type Options = {
@@ -47,8 +51,16 @@ function deps(options: Options = {}) {
     now: vi.fn<MediaDeps["now"]>(() => 0),
     find: vi.fn<MediaDeps["find"]>(async () => {
       calls.push("find");
-      if (founds) return founds.shift() ?? { ok: true, files: [] };
-      return (options.found as MediaFind | undefined) ?? { ok: true, files: [] };
+      if (founds) return founds.shift() ?? none;
+      return (options.found as MediaFind | undefined) ?? none;
+    }),
+    verify: vi.fn<MediaDeps["verify"]>(async () => {
+      calls.push("verify");
+      return true;
+    }),
+    trash: vi.fn<MediaDeps["trash"]>(async () => {
+      calls.push("trash");
+      return "trashed";
     }),
     upload: vi.fn<MediaDeps["upload"]>(async () => {
       calls.push("upload");
@@ -61,25 +73,30 @@ function deps(options: Options = {}) {
 }
 const run = (d: MediaDeps, over: Partial<{ tenantId: string; expected: string }> = {}) =>
   replaceImage({ tenantId: "T1", actorId: "U1", key: KEY, expected: OLD, file: FILE, ...over }, d);
-const hit = (url = NEW): MediaFind => ({ ok: true, files: [{ name: NAME, url }] });
+const hit = (url = NEW): MediaFind => ({ ok: true, files: [OLD_FILE], siblings: [{ id: "sibling", name: NAME, url, parentId: FOLDER }] });
 
 beforeEach(() => { vi.spyOn(console, "error").mockImplementation(() => {}); });
 
 describe("replaceImage: the good path", () => {
-  it("looks up, audits, uploads a new file, then points the value at it and confirms", async () => {
+  it("finds the old file, uploads under its name and folder, saves, then trashes the old file", async () => {
     const d = deps();
-    expect(await run(d)).toEqual({ status: "saved", url: NEW });
-    expect(d.calls).toEqual(["find", "audit", "upload", "audit", "put"]);
+    expect(await run(d)).toEqual(SAVED);
+    expect(d.calls).toEqual(["find", "audit", "upload", "audit", "put", "verify", "audit", "trash"]);
+    expect(d.find).toHaveBeenCalledWith("T1", OLD);
     expect(d.store.get(KEY)?.value).toBe(NEW);
-    expect(d.upload).toHaveBeenCalledWith("T1", expect.objectContaining({ name: NAME, fileName: `${NAME}.webp`, contentType: "image/webp" }));
-    expect(d.begin.mock.calls[0][0]).toMatchObject({ tenantId: "T1", actorId: "U1", key: KEY, previousValue: OLD, newValue: `upload:${NAME}` });
+    expect(d.upload).toHaveBeenCalledWith("T1", expect.objectContaining({ name: NAME, fileName: NAME, parentId: FOLDER, contentType: "image/webp" }));
+    expect(d.begin.mock.calls[0][0]).toMatchObject({ tenantId: "T1", actorId: "U1", key: KEY, previousValue: OLD, newValue: `upload:${KEY}-${HASH.slice(0, 12)}` });
     expect(d.begin.mock.calls[1][0]).toMatchObject({ key: KEY, previousValue: OLD, newValue: NEW });
+    expect(d.begin.mock.calls[2][0]).toMatchObject({ key: KEY, previousValue: OLD, newValue: "trash:old-id" });
+    expect(JSON.stringify(d.begin.mock.calls)).not.toContain("[1,2,3,4]");
+    expect(d.verify).toHaveBeenCalledWith("T1", OLD_FILE);
+    expect(d.trash).toHaveBeenCalledExactlyOnceWith("T1", "old-id");
     expect(d.release).toHaveBeenCalledWith("T1", "holder");
   });
 
   it("reuses a file already there after checking its real bytes, with no second upload", async () => {
     const d = deps({ found: hit() });
-    expect(await run(d)).toEqual({ status: "saved", url: NEW });
+    expect(await run(d)).toEqual(SAVED);
     expect(d.fetchBytes).toHaveBeenCalledWith(NEW, 2 * 1024 * 1024);
     expect(d.upload).not.toHaveBeenCalled();
   });
@@ -223,8 +240,8 @@ describe("replaceImage: upload errors leave the old value live", () => {
 
 describe("replaceImage: no answer on upload", () => {
   it("re-reads, never uploads again, and continues when the verified file is there", async () => {
-    const d = deps({ uploaded: { kind: "no_answer" }, found: [{ ok: true, files: [] }, hit()] });
-    expect(await run(d)).toEqual({ status: "saved", url: NEW });
+    const d = deps({ uploaded: { kind: "no_answer" }, found: [none, hit()] });
+    expect(await run(d)).toEqual(SAVED);
     expect(d.upload).toHaveBeenCalledTimes(1);
     expect(d.find).toHaveBeenCalledTimes(2);
     expect(d.finish).toHaveBeenCalledWith("audit-1", "saved");
@@ -241,13 +258,13 @@ describe("replaceImage: no answer on upload", () => {
   });
 
   it("reports unknown when the re-read fails", async () => {
-    const d = deps({ uploaded: { kind: "no_answer" }, found: [{ ok: true, files: [] }, { ok: false, reason: "retry" }] });
+    const d = deps({ uploaded: { kind: "no_answer" }, found: [none, { ok: false, reason: "retry" }] });
     expect(await run(d)).toEqual({ status: "unknown" });
     expect(d.upload).toHaveBeenCalledTimes(1);
   });
 
   it("stops on a hash mismatch found by the re-read", async () => {
-    const d = deps({ uploaded: { kind: "no_answer" }, found: [{ ok: true, files: [] }, hit()], fetched: new Uint8Array([7, 7, 7, 7]) });
+    const d = deps({ uploaded: { kind: "no_answer" }, found: [none, hit()], fetched: new Uint8Array([7, 7, 7, 7]) });
     expect(await run(d)).toEqual({ status: "hash_mismatch" });
     expect(d.update).not.toHaveBeenCalled();
   });
@@ -264,7 +281,7 @@ describe("replaceImage: partial failure at the PUT", () => {
 
   it("PUT without an answer that did land is confirmed by the read", async () => {
     const d = deps({ putFails: "no_answer" });
-    expect(await run(d)).toEqual({ status: "saved", url: NEW });
+    expect(await run(d)).toEqual(SAVED);
     expect(d.update).toHaveBeenCalledTimes(1);
   });
 
@@ -297,7 +314,7 @@ describe("replaceImage: the time budget covers the whole request", () => {
   it("still PUTs at exactly 25 seconds", async () => {
     const d = deps();
     d.now.mockReturnValueOnce(0).mockReturnValueOnce(1_000).mockReturnValue(25_000);
-    expect(await run(d)).toEqual({ status: "saved", url: NEW });
+    expect(await run(d)).toEqual(SAVED);
   });
 
   it("measures the confirming reads from the start of the replace, so the audit row is closed in time", async () => {
@@ -311,11 +328,209 @@ describe("replaceImage: the time budget covers the whole request", () => {
   });
 });
 
+describe("replaceImage: finding the old file", () => {
+  it.each([
+    ["no file holds the URL", { ok: true, files: [], siblings: [] } as MediaFind, "not_found"],
+    ["two files hold the URL", { ok: true, files: [OLD_FILE, { ...OLD_FILE, id: "copy" }], siblings: [] } as MediaFind, "ambiguous"],
+    ["the library could not be read to the end", { ok: false, reason: "incomplete" } as MediaFind, "library_limit"],
+  ])("stops before any write when %s", async (_name, found, status) => {
+    const d = deps({ found });
+    expect(await run(d)).toEqual({ status });
+    expect(d.begin).not.toHaveBeenCalled();
+    expect(d.upload).not.toHaveBeenCalled();
+    expect(d.update).not.toHaveBeenCalled();
+    expect(d.trash).not.toHaveBeenCalled();
+    expect(d.store.get(KEY)?.value).toBe(OLD);
+  });
+
+  it("keeps a file at the top of the library at the top", async () => {
+    const top = { ...OLD_FILE, parentId: null };
+    const d = deps({ found: { ok: true, files: [top], siblings: [] } });
+    await run(d);
+    expect(d.upload).toHaveBeenCalledWith("T1", expect.objectContaining({ name: NAME, parentId: null }));
+  });
+});
+
+describe("replaceImage: the file keeps its name, so the format must match", () => {
+  const named = (name: string): MediaFind => ({ ok: true, files: [{ ...OLD_FILE, name }], siblings: [] });
+
+  it.each([["logo.png", "png"], ["logo.PNG", "png"], ["a.jpg", "jpeg"], ["a.JPEG", "jpeg"], ["a.svg", "svg"]])("refuses a WebP for %s and names the format", async (name, format) => {
+    const d = deps({ found: named(name) });
+    expect(await run(d)).toEqual({ status: "format_mismatch", format });
+    expect(d.begin).not.toHaveBeenCalled();
+    expect(d.upload).not.toHaveBeenCalled();
+  });
+
+  it("refuses a format the browser cannot write, without naming one", async () => {
+    const d = deps({ found: named("banner.gif") });
+    expect(await run(d)).toEqual({ status: "format_mismatch" });
+    expect(d.upload).not.toHaveBeenCalled();
+  });
+
+  it("uploads a PNG under a .png name, unchanged", async () => {
+    const d = deps({ found: named("logo.png") });
+    const answer = await replaceImage({ tenantId: "T1", actorId: "U1", key: KEY, expected: OLD, file: { ...FILE, contentType: "image/png", extension: "png" } }, d);
+    expect(answer.status).toBe("saved");
+    expect(d.upload).toHaveBeenCalledWith("T1", expect.objectContaining({ name: "logo.png", fileName: "logo.png", contentType: "image/png" }));
+  });
+
+  it("uses the URL's extension when the name has none", async () => {
+    const d = deps({ found: { ok: true, files: [{ ...OLD_FILE, name: "Team photo", url: OLD.replace(".webp", ".png") }], siblings: [] } });
+    d.store.get(KEY)!.value = OLD.replace(".webp", ".png");
+    const answer = await run(d, { expected: OLD.replace(".webp", ".png") });
+    expect(answer).toEqual({ status: "format_mismatch", format: "png" });
+  });
+
+  it("does not read a dot in a name as a format", async () => {
+    const d = deps({ found: { ok: true, files: [{ ...OLD_FILE, name: "Logo v1.2", url: "https://assets.cdn.filesafe.space/x/abc" }], siblings: [] } });
+    d.store.get(KEY)!.value = "https://assets.cdn.filesafe.space/x/abc";
+    expect((await run(d, { expected: "https://assets.cdn.filesafe.space/x/abc" })).status).toBe("saved");
+    expect(d.upload).toHaveBeenCalledWith("T1", expect.objectContaining({ name: "Logo v1.2" }));
+  });
+});
+
+describe("replaceImage: removing the old file", () => {
+  it("keeps the old file when another custom value still uses it", async () => {
+    const d = deps();
+    d.store.set("other_key", row("other_key", OLD));
+    expect(await run(d)).toEqual({ ...SAVED, oldFile: "in_use" });
+    expect(d.trash).not.toHaveBeenCalled();
+  });
+
+  it("keeps the old file when another value holds its URL inside longer text", async () => {
+    const d = deps();
+    d.store.set("other_key", row("other_key", `<img src="${OLD}">`));
+    expect((await run(d)).oldFile).toBe("in_use");
+    expect(d.trash).not.toHaveBeenCalled();
+  });
+
+  it("keeps the old file when a value listed twice still uses it", async () => {
+    const d = deps();
+    const read = d.read.getMockImplementation() as MediaDeps["read"];
+    d.read.mockImplementation(async (tenant) => ({ ...(await read(tenant)), duplicates: [{ key: "twice", value: OLD }] }) as Awaited<ReturnType<MediaDeps["read"]>>);
+    expect((await run(d)).oldFile).toBe("in_use");
+    expect(d.trash).not.toHaveBeenCalled();
+  });
+
+  it("keeps the old file when the values cannot be read again", async () => {
+    const d = deps();
+    const read = d.read.getMockImplementation() as MediaDeps["read"];
+    let count = 0;
+    d.read.mockImplementation(async (tenant) => ((count += 1) >= 4 ? { ok: false, reason: "retry" } : read(tenant)));
+    expect(await run(d)).toEqual({ ...SAVED, oldFile: "kept" });
+    expect(d.trash).not.toHaveBeenCalled();
+  });
+
+  it("keeps the old file when its id no longer verifies", async () => {
+    const d = deps();
+    d.verify.mockResolvedValue(false);
+    expect(await run(d)).toEqual({ ...SAVED, oldFile: "kept" });
+    expect(d.trash).not.toHaveBeenCalled();
+  });
+
+  it("does not remove without an audit row, and the image stays changed", async () => {
+    const d = deps();
+    d.begin.mockResolvedValueOnce("a1").mockResolvedValueOnce("a2").mockRejectedValueOnce(new Error("db"));
+    expect(await run(d)).toEqual({ ...SAVED, oldFile: "kept" });
+    expect(d.trash).not.toHaveBeenCalled();
+    expect(d.store.get(KEY)?.value).toBe(NEW);
+  });
+
+  it.each([["failed", "kept"], ["permission", "kept"], ["unconfirmed", "unconfirmed"]] as const)("reports a trash answer %s as %s, in one attempt", async (outcome, oldFile) => {
+    const d = deps();
+    d.trash.mockResolvedValue(outcome);
+    expect(await run(d)).toEqual({ ...SAVED, oldFile });
+    expect(d.trash).toHaveBeenCalledTimes(1);
+    expect(d.store.get(KEY)?.value).toBe(NEW);
+  });
+
+  it("does not start a removal after the time limit", async () => {
+    const d = deps();
+    d.now.mockReturnValueOnce(0).mockReturnValueOnce(1_000).mockReturnValueOnce(20_000).mockReturnValue(40_001);
+    expect((await run(d)).oldFile).toBe("kept");
+    expect(d.trash).not.toHaveBeenCalled();
+  });
+
+  it("never removes the old file when HighLevel answers with the old file itself", async () => {
+    for (const uploaded of [{ kind: "uploaded", fileId: "old-id", url: NEW }, { kind: "uploaded", fileId: "other", url: OLD }] as MediaUploadOutcome[]) {
+      const d = deps({ uploaded });
+      expect(await run(d)).toEqual({ status: "unknown" });
+      expect(d.update).not.toHaveBeenCalled();
+      expect(d.trash).not.toHaveBeenCalled();
+    }
+  });
+
+  it("never removes anything when the save did not confirm", async () => {
+    const d = deps({ putFails: "rejected" });
+    await run(d);
+    expect(d.trash).not.toHaveBeenCalledWith("T1", "old-id");
+  });
+});
+
+describe("replaceImage: a failed save cleans up only its own upload", () => {
+  it("trashes the file it just uploaded and keeps the old one", async () => {
+    const d = deps({ putFails: "rejected" });
+    expect(await run(d)).toEqual({ status: "rejected" });
+    expect(d.trash).toHaveBeenCalledExactlyOnceWith("T1", "f1");
+    expect(d.verify).toHaveBeenCalledWith("T1", { id: "f1", name: NAME, url: NEW, parentId: FOLDER });
+    expect(d.store.get(KEY)?.value).toBe(OLD);
+  });
+
+  it("reports the new file when it cannot be removed", async () => {
+    const d = deps({ putFails: "rejected" });
+    d.trash.mockResolvedValue("failed");
+    expect(await run(d)).toEqual({ status: "rejected", leftover: true });
+  });
+
+  it("leaves the new file alone when a custom value already points at it", async () => {
+    const d = deps({ putFails: "rejected" });
+    d.store.set("other_key", row("other_key", NEW));
+    expect(await run(d)).toEqual({ status: "rejected", leftover: true });
+    expect(d.trash).not.toHaveBeenCalled();
+  });
+
+  it("never removes after a PUT without a clear answer, because it may have landed", async () => {
+    const d = deps();
+    d.update.mockResolvedValue("no_answer");
+    expect(await run(d)).toEqual({ status: "unknown" });
+    expect(d.trash).not.toHaveBeenCalled();
+  });
+
+  it("never removes a same-name file from an earlier try", async () => {
+    const d = deps({ found: hit(), putFails: "rejected" });
+    expect(await run(d)).toEqual({ status: "rejected" });
+    expect(d.trash).not.toHaveBeenCalled();
+  });
+
+  it("removes an upload whose host is refused", async () => {
+    const d = deps({ uploaded: { kind: "uploaded", fileId: "f1", url: "https://storage.googleapis.com/b/x" } });
+    expect(await run(d)).toEqual({ status: "bad_host" });
+    expect(d.trash).toHaveBeenCalledExactlyOnceWith("T1", "f1");
+  });
+});
+
+describe("replaceImage: a retry after a partial failure", () => {
+  it("reuses the same-name file with the same bytes and creates no second copy", async () => {
+    const d = deps({ found: hit() });
+    expect(await run(d)).toEqual(SAVED);
+    expect(d.upload).not.toHaveBeenCalled();
+    expect(d.store.get(KEY)?.value).toBe(NEW);
+    expect(d.trash).toHaveBeenCalledExactlyOnceWith("T1", "old-id");
+  });
+
+  it("stops on a same-name file with other content instead of adding another", async () => {
+    const d = deps({ found: hit(), fetched: new Uint8Array([9]) });
+    expect(await run(d)).toEqual({ status: "hash_mismatch" });
+    expect(d.upload).not.toHaveBeenCalled();
+    expect(d.trash).not.toHaveBeenCalled();
+  });
+});
+
 describe("replaceImage: tenant isolation", () => {
   it("uses only the given tenant for every call", async () => {
     const d = deps();
     await run(d, { tenantId: "T2" });
-    for (const mock of [d.claim, d.read, d.find, d.upload, d.update]) {
+    for (const mock of [d.claim, d.read, d.find, d.upload, d.update, d.verify, d.trash]) {
       for (const call of mock.mock.calls as unknown[][]) expect(call[0]).toBe("T2");
     }
     expect(d.begin.mock.calls.every(([audit]) => audit.tenantId === "T2")).toBe(true);

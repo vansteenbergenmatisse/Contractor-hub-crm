@@ -35,6 +35,24 @@ describe("prepareImageFile", () => {
     expect(canvas.width).toBe(2400);
   });
 
+  it.each([["png", "image/png"], ["jpeg", "image/jpeg"]] as const)("encodes to the current file's format: %s", async (format, type) => {
+    const asked: string[] = [];
+    const canvas = { width: 0, height: 0, getContext: () => ({ drawImage: vi.fn() }), toBlob: (done: (b: Blob | null) => void, wanted: string) => {
+      asked.push(wanted);
+      done(new Blob([new Uint8Array(10)], { type: wanted }));
+    } };
+    vi.spyOn(document, "createElement").mockReturnValue(canvas as unknown as HTMLElement);
+    const result = await prepareImageFile(photo(), "photo", format);
+    expect(result.ok && result.blob.type).toBe(type);
+    expect(asked).toEqual([type]);
+  });
+
+  it("never sends another format when the browser cannot write the one asked for", async () => {
+    fakeCanvas(() => new Blob(["x"], { type: "image/png" }));
+    const result = await prepareImageFile(photo(), "photo", "jpeg");
+    expect(result.ok).toBe(false);
+  });
+
   it("lowers the quality until it fits 2 MB", async () => {
     const qualities: number[] = [];
     fakeCanvas((quality) => {

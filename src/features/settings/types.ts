@@ -46,8 +46,14 @@ export type SaveValues = (changes: ValueChange[]) => Promise<SaveAnswer>;
 export type ImageKind = "svg" | "photo";
 export type ImageStatus =
   | "saved" | "conflict" | "missing" | "duplicate" | "busy" | "needs_approval" | "connection"
-  | "rejected" | "bad_host" | "hash_mismatch" | "unknown" | "retry" | "limited" | "invalid" | "failed";
-export type ImageAnswer = { status: ImageStatus; url?: string; current?: string };
+  | "rejected" | "bad_host" | "hash_mismatch" | "unknown" | "retry" | "limited" | "invalid" | "failed"
+  | "not_found" | "ambiguous" | "library_limit" | "format_mismatch";
+export type ImageFormat = "webp" | "png" | "jpeg" | "svg";
+// What happened to the old file after the image changed.
+export type ImageOldFile = "trashed" | "in_use" | "kept" | "unconfirmed";
+export type SvgProblemCode = "script" | "outside_link" | "embedded" | "animation" | "doctype" | "style" | "reference" | "too_complex" | "unsupported" | "broken";
+// `leftover`: the change failed and the file it uploaded could not be removed.
+export type ImageAnswer = { status: ImageStatus; url?: string; current?: string; format?: ImageFormat; oldFile?: ImageOldFile; leftover?: boolean; svgProblem?: SvgProblemCode };
 export type ImageUploader = (input: { key: string; expected: string; blob: Blob }) => Promise<ImageAnswer>;
 export type PreparedImage = { ok: true; blob: Blob; previewUrl: string; summary: string } | { ok: false; message: string };
-export type PrepareImage = (file: File, kind: ImageKind) => Promise<PreparedImage>;
+export type PrepareImage = (file: File, kind: ImageKind, format?: Exclude<ImageFormat, "svg">) => Promise<PreparedImage>;
