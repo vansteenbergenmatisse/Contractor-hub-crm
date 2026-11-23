@@ -1,6 +1,6 @@
 # PROGRESS
 
-> **QUESTIONS FOR THE USER (2026-11-23), in order:** (1) Approve fast-forwarding `develop` to `feat/settings-structure` and pushing it (bug sweep plus Settings layout; not on the dev site yet). (2) Which links are required? (3) Test HighLevel's Replace on a throwaway sub-account: does an image keep its URL? (`openspec/changes/settings-media-replace/`). (4) Decide A2, the A4 role winner, B1, B3, B4 and L7 (`docs/bug-sweep-2026-11-23.md`). (5) Remove the dev test owner and turn off dev write-back, or keep them?
+> **QUESTIONS FOR THE USER (2026-11-23), in order:** (1) DONE: `develop` is pushed and deployed to dev. Name one harmless key and value for the JCR retest save. (2) Which links are required, and where do the social links live? (3) Test HighLevel's Replace on a throwaway sub-account: does an image keep its URL? (`openspec/changes/settings-media-replace/`). (4) Decide A2, the A4 role winner, B1, B3, B4 and L7 (`docs/bug-sweep-2026-11-23.md`). (5) Remove the dev test owner and turn off dev write-back, or keep them?
 
 Single source of truth for where the project stands. Read it at the start of every session and before every ticket. Plan work under "In progress" before starting, move it to the Log when done (see "Recording work" in `CLAUDE.md`). Newest log entries first.
 
@@ -40,8 +40,7 @@ Single source of truth for where the project stands. Read it at the start of eve
 
 ## In progress
 
-- 2026-11-23 USER DECISION (chat): fast-forward `develop` to `feat/settings-structure` and push it; keep the dev write-back flags on. Plan: record this on the branch, run `pnpm check`, fast-forward local `develop`, push `develop` (no force), wait for CI and Vercel, check dev `/sign-in` and `/api/health/db`, then log the result. Touches git `develop`, GitHub and the Vercel dev deployment. No migration, dependency, env var or HighLevel write. The one-write JCR exception in `loop-constraints.md` rule 12 is used, so a retest save needs the user's OK on one key and value.
-- 2026-11-23 RESUME HERE. Newest work is on local branch `feat/settings-structure` (worktree `.claude/worktrees/overnight`), which contains the save-refresh fix, the combined bug sweep and the Settings layout. NOT merged, NOT pushed. `origin/develop` is ca87830, and local `develop` has 3 extra docs commits, all contained in this branch. The dev site runs ca87830, so it has NONE of the fixes after the first live write.
+- 2026-11-23 RESUME HERE. The save-refresh fix, the combined bug sweep and the Settings layout are merged into `develop`, pushed, and deployed to the dev site (see the newest Log entry). They are not yet checked signed in, in a real browser, or on live HighLevel. The one-write JCR exception in `loop-constraints.md` rule 12 is used, so a retest save needs the user's OK on one key and value.
   - LIVE STATE, dev only (Vercel Preview `develop`, none on Production): `QUOTES_PAGE_LIVE`, `INVOICES_PAGE_LIVE`, `PAYMENTS_PAGE_LIVE`, `AUTOMATIONS_PAGE_LIVE` are on (user: keep them); `SETTINGS_WRITE_BACK_ENABLED` and `SETTINGS_WRITE_BACK_TENANTS` (JCR only) are on. Vercel requires the user's direct approval to remove a variable.
   - Neon `develop` holds one test owner for JCR, using the user's work email as login, with no HighLevel link. Its password is in a session scratchpad file that can vanish; it needs removal after testing, or a reset. JCR's `business_owner_name` is back to `Jon` (user confirmed).
   - After a merge and deploy, retest: save one value as the test owner, see the frame update, and read the `CustomValueChange` outcome. Check Settings in a real browser at 320px, including the native color picker.
@@ -109,6 +108,13 @@ Single source of truth for where the project stands. Read it at the start of eve
 - `develop` lacks the two merge commits GitHub created on `staging` and `main`. Harmless; merge `staging` into `develop` if it ever matters.
 
 ## Log
+
+### 2026-11-23 - Bug sweep and Settings layout pushed to the dev site
+- User approved (chat): fast-forward `develop` to `feat/settings-structure`, push, keep the dev write-back flags on.
+- `pnpm check` exit 0 before the push: 3541 passed, 9 skipped, build compiled, lint 0 errors and 3 warnings. `develop` moved from ca87830 to d9398a1 with no force.
+- CI run 45228132032 success. Vercel success, and `dev.crm.forgeforward.io` serves that deployment. Signed out: `/sign-in` 200, `/api/health/db` 200, `/settings` 307.
+- No migration, dependency, env var or HighLevel change.
+- NOT VERIFIED: the signed-in Settings page, a real browser at 320px, the color picker, a save on the new code, the frame update, the `CustomValueChange` outcome.
 
 ### 2026-11-23 - Settings structured by group, color palette, image previews, media plan
 - Built on `feat/settings-structure`: `settings/api/field-groups.ts` (key-to-group map: Business, Location, Hours, Images, Links, Offers), `image-preview.ts`, `BusinessGroups`, `ColorSwatch`, `ImagePreview`, `OtherValues`, CSS. HighLevel's API exposes no folders, so the map is in code. Removed keys hide after a good read. New keys appear by name only under "Other values", with values never sent to the browser. All links are optional until the user names the required ones; no social keys are known yet.
