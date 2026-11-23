@@ -78,3 +78,50 @@ describe("ClientsTable personal link", () => {
     expect(screen.getByText("Not available yet")).toBeInTheDocument();
   });
 });
+
+describe("ClientsTable row actions", () => {
+  const two = [row(), row({ tenantId: "t2", name: "Birch", signInPath: "/sign-in?client=birch" })];
+  const inviteButtons = () => screen.getAllByRole("button", { name: "Invite owner" });
+
+  it("does not carry one client's owner email to another client's invite", () => {
+    render(<ClientsTable clients={two} />);
+    fireEvent.click(inviteButtons()[0]);
+    fireEvent.change(screen.getByLabelText("Owner email for Acme"), { target: { value: "owner@acme.test" } });
+    fireEvent.click(screen.getByRole("button", { name: "Invite owner" }));
+    expect(screen.getByLabelText("Owner email for Birch")).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Create invite" })).toBeDisabled();
+  });
+
+  it("clears the owner email on cancel", () => {
+    render(<ClientsTable clients={two} />);
+    fireEvent.click(inviteButtons()[0]);
+    fireEvent.change(screen.getByLabelText("Owner email for Acme"), { target: { value: "owner@acme.test" } });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    fireEvent.click(inviteButtons()[0]);
+    expect(screen.getByLabelText("Owner email for Acme")).toHaveValue("");
+  });
+
+  it("shows a result directly under the client it belongs to", async () => {
+    Object.defineProperty(navigator, "clipboard", { value: { writeText: vi.fn(async () => {}) }, configurable: true });
+    render(<ClientsTable clients={two} />);
+    fireEvent.click(screen.getByRole("button", { name: "Copy sign-in link for Birch" }));
+    const status = await screen.findByRole("status");
+    const birchRow = screen.getByText("Birch").closest("tr") as HTMLTableRowElement;
+    expect(birchRow.nextElementSibling).toBe(status.closest("tr"));
+    expect(status.closest("td")).toHaveAttribute("colspan", "6");
+  });
+
+  it("shows the invite link under the invited client", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ link: "https://app.test/invite/x" }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ClientsTable clients={two} />);
+    fireEvent.click(inviteButtons()[1]);
+    fireEvent.change(screen.getByLabelText("Owner email for Birch"), { target: { value: "owner@birch.test" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create invite" }));
+    const status = await screen.findByRole("status");
+    expect(status).toHaveTextContent("https://app.test/invite/x");
+    const birchRow = screen.getByText("Birch").closest("tr") as HTMLTableRowElement;
+    expect(birchRow.nextElementSibling).toBe(status.closest("tr"));
+    vi.unstubAllGlobals();
+  });
+});

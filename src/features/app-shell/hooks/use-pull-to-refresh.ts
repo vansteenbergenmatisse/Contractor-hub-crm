@@ -10,18 +10,24 @@ export type PullToRefreshOptions = {
   slide?: RefObject<HTMLElement | null>;
   // The top bar; the spinner sits 6px under its bottom edge while it shows.
   bar?: RefObject<HTMLElement | null>;
+  // Runs the real refresh; true means it finished. Without it a pull just springs back.
+  onRefresh?: () => Promise<boolean>;
 };
+
+// How long a refresh may take before the pull says it could not update, and how long that line stays.
+const REFRESH_LIMIT_MS = 10_000;
+const FAILED_MS = 2_000;
+const FAILED_TEXT = "Could not update. Try again.";
 
 // Touches that start here never pull the page (design `uxPull`): open sheets, a stop's detail, the
 // timeline, form fields, and an open Inbox conversation.
 const NO_PULL = ".fd-cf:not(.is-off), .fd-cdet.is-on, .fd-tm, input, textarea, .fd-view.is-thru";
 
-// usePullToRefresh(ref, { enabled?, slide?, bar? }): pull the page down at its top on a phone (design
-// logic `uxPull`). `ref` is the scrolling element (`.fd-main`). The page follows at half the finger's
-// speed up to 96px with the design's spinner and "Updated N min ago"; from 60px letting go shows
-// "Updating" for 0.8s, then "Updated just now" for 0.9s, and slides back.
-// PHASE 2: this only replays the design's visual. Nothing is fetched and no data changes. Phase 3 asks
-// the backend for new leads, messages and payments here (and on the 60-second refresh below).
+// usePullToRefresh(ref, { enabled?, slide?, bar?, onRefresh? }): pull the page down at its top on a phone
+// (design logic `uxPull`). `ref` is the scrolling element (`.fd-main`). The page follows at half the
+// finger's speed up to 96px with the design's spinner. From 60px letting go shows "Updating" and awaits
+// `onRefresh`. "Refreshed" appears only when it resolves true; on false, an error or after 10s the
+// line says it could not update. The "Refreshed N min ago" time only ever comes from a real refresh.
 export function usePullToRefresh(ref: RefObject<HTMLElement | null>, options: PullToRefreshOptions = {}): void {
   const fx = useGestures();
   const latest = useRef(options);
@@ -33,16 +39,16 @@ export function usePullToRefresh(ref: RefObject<HTMLElement | null>, options: Pu
   useEffect(() => {
     const main = ref.current;
     if (!main || !enabled) return;
-    let updated = Date.now();
+    let updated: number | null = null;
+    let gone = false;
     let busy = false;
     let st: { y: number; x: number; d: number; on: boolean } | null = null;
     const timers = new Set<ReturnType<typeof setTimeout>>();
     const later = (fn: () => void, ms: number) => {
       const id = setTimeout(() => { timers.delete(id); fn(); }, ms);
       timers.add(id);
+      return id;
     };
-    // The design's refresh every 60 seconds; in Phase 2 it only moves the "Updated" time.
-    const auto = setInterval(() => { updated = Date.now(); }, PULL.autoMs);
 
     const slideTo = (d: number, animate: boolean) => {
       const v = latest.current.slide?.current;
@@ -80,14 +86,17 @@ export function usePullToRefresh(ref: RefObject<HTMLElement | null>, options: Pu
       if (event.cancelable) event.preventDefault();
       const d = pullDistance(dy);
       st.d = d;
-      fx.showPull({ phase: d >= PULL.ready ? "ready" : "pull", top: top(), progress: Math.min(1, d / PULL.ready), text: updatedAgo(updated, Date.now()) });
+      const ready = d >= PULL.ready;
+      const text = updated === null ? (ready ? "Release to refresh" : "Pull to refresh") : updatedAgo(updated, Date.now());
+      fx.showPull({ phase: ready ? "ready" : "pull", top: top(), progress: Math.min(1, d / PULL.ready), text });
       slideTo(d, false);
     };
     const end = () => {
       const a = st;
       st = null;
       if (!a?.on) return;
-      if (a.d < PULL.ready) {
+      const refresh = latest.current.onRefresh;
+      if (a.d < PULL.ready || !refresh) {
         fx.showPull(null);
         slideTo(0, true);
         return;
@@ -96,16 +105,31 @@ export function usePullToRefresh(ref: RefObject<HTMLElement | null>, options: Pu
       const at = top();
       fx.showPull({ phase: "busy", top: at, progress: 1, text: "Updating" });
       slideTo(PULL.busySlide, true);
-      later(() => {
-        updated = Date.now();
-        fx.showPull({ phase: "busy", top: at, progress: 1, text: "Updated just now" });
-        fx.say("Updated just now");
+      let settled = false;
+      const finish = (ok: boolean) => {
+        if (settled || gone) return;
+        settled = true;
+        clearTimeout(limit);
+        timers.delete(limit);
+        if (ok) updated = Date.now();
+        const text = ok ? "Refreshed" : FAILED_TEXT;
+        // A failed refresh stops the spinner, so nothing on screen suggests it is still working.
+        fx.showPull({ phase: ok ? "busy" : "ready", top: at, progress: 1, text });
+        fx.say(text);
         later(() => {
           fx.showPull(null);
           slideTo(0, true);
           busy = false;
-        }, PULL.doneMs);
-      }, PULL.busyMs);
+        }, ok ? PULL.doneMs : FAILED_MS);
+      };
+      const limit = later(() => finish(false), REFRESH_LIMIT_MS);
+      let run: Promise<boolean>;
+      try {
+        run = refresh();
+      } catch {
+        run = Promise.resolve(false);
+      }
+      run.then((ok) => finish(ok === true), () => finish(false));
     };
 
     main.addEventListener("touchstart", start, { passive: true });
@@ -113,7 +137,7 @@ export function usePullToRefresh(ref: RefObject<HTMLElement | null>, options: Pu
     main.addEventListener("touchend", end, { passive: true });
     main.addEventListener("touchcancel", end, { passive: true });
     return () => {
-      clearInterval(auto);
+      gone = true;
       for (const id of timers) clearTimeout(id);
       if (busy || st?.on) fx.showPull(null);
       main.removeEventListener("touchstart", start);

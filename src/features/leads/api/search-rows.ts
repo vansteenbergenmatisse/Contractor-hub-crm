@@ -9,7 +9,7 @@ export function leadSearchRows(leads: readonly Lead[]): SearchRow[] {
     id: l.id,
     page: "leads",
     name: l.name,
-    sub: joinParts([l.source ? SOURCE_LABEL[l.source] : "", l.need, rowWhen(l)]),
+    sub: joinParts([l.source ? SOURCE_LABEL[l.source] : "", l.need, l.address, rowWhen(l)]),
     href: "/leads",
   }));
 }

@@ -14,7 +14,8 @@ const SCOPES: ReadonlyArray<readonly [Scope, string]> = [
   ["all", "All"], ["leads", "Leads"], ["pipeline", "Pipeline"], ["quotes", "Quotes"],
   ["invoices", "Invoices"], ["payments", "Payments"], ["inbox", "Messages"],
 ];
-const SCOPE_KEYS = SCOPES.map(([key]) => key);
+
+const NO_ROWS_HINT = "No leads to search yet.";
 
 // The top Search field's box, when it is on screen (computer layout).
 function anchorBox(): { top: number; right: number } | null {
@@ -43,7 +44,7 @@ export function SearchSheet({ rows, onClose, onOpen, viewportWidth, isMac, recen
   onRecentChange?: (recent: string[]) => void;
 }) {
   const [term, setTerm] = useState("");
-  const [scope, setScope] = useState<Scope>("all");
+  const [pickedScope, setScope] = useState<Scope>("all");
   const [active, setActive] = useState(0);
   const [ownRecent, setOwnRecent] = useState<string[]>([]);
   const recent = heldRecent ?? ownRecent;
@@ -87,6 +88,9 @@ export function SearchSheet({ rows, onClose, onOpen, viewportWidth, isMac, recen
     };
   }, [phone, layer]);
 
+  // Scopes follow the rows: All plus each page that has one. A scope no longer shown counts as All.
+  const shownScopes = useMemo(() => SCOPES.filter(([key]) => key === "all" || rows.some((row) => row.page === key)), [rows]);
+  const scope: Scope = shownScopes.some(([key]) => key === pickedScope) ? pickedScope : "all";
   const groups = useMemo(() => searchRows(rows, term, scope), [rows, term, scope]);
   const typed = term.trim() !== "";
   const hits = groups.flatMap((g) => g.hits);
@@ -139,7 +143,7 @@ export function SearchSheet({ rows, onClose, onOpen, viewportWidth, isMac, recen
   };
 
   const onScopeKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    const next = nextScope(SCOPE_KEYS, scope, e.key);
+    const next = nextScope(shownScopes.map(([key]) => key), scope, e.key);
     if (!next) return;
     e.preventDefault();
     pickScope(next);
@@ -151,11 +155,11 @@ export function SearchSheet({ rows, onClose, onOpen, viewportWidth, isMac, recen
     <div className="fx-sbar">
       <span className="fx-sfield">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
-        <label className="fx-vh" htmlFor="fx-sq">Search customers, quotes and invoices</label>
+        <label className="fx-vh" htmlFor="fx-sq">Search customers</label>
         <input
           id="fx-sq" ref={input} className="fx-sin" type="search" role="combobox" aria-expanded="true"
           aria-controls="fx-sres" aria-autocomplete="list" autoComplete="off" spellCheck={false}
-          placeholder="Customers, quotes, invoices" value={term}
+          placeholder="Search customers" value={term}
           aria-activedescendant={count ? optionId(current) : undefined}
           onChange={(e) => { setTerm(e.target.value); setActive(0); }}
           onKeyDown={(e) => {
@@ -189,11 +193,13 @@ export function SearchSheet({ rows, onClose, onOpen, viewportWidth, isMac, recen
         onKeyDown={onDialogKey}
       >
         {sbar}
-        <div className="fx-scope" role="radiogroup" aria-label="Search in" onKeyDown={onScopeKey}>
-          {SCOPES.map(([key, label]) => (
-            <button key={key} type="button" role="radio" data-k={key} aria-checked={scope === key} tabIndex={scope === key ? 0 : -1} className={`fx-sc${scope === key ? " is-on" : ""}`} onClick={() => pickScope(key)}>{label}</button>
-          ))}
-        </div>
+        {shownScopes.length > 2 ? (
+          <div className="fx-scope" role="radiogroup" aria-label="Search in" onKeyDown={onScopeKey}>
+            {shownScopes.map(([key, label]) => (
+              <button key={key} type="button" role="radio" data-k={key} aria-checked={scope === key} tabIndex={scope === key ? 0 : -1} className={`fx-sc${scope === key ? " is-on" : ""}`} onClick={() => pickScope(key)}>{label}</button>
+            ))}
+          </div>
+        ) : null}
         <div className="fx-sres" id="fx-sres" role="listbox" aria-label="Results">
           {!typed ? (
             recent.length ? (
@@ -206,9 +212,9 @@ export function SearchSheet({ rows, onClose, onOpen, viewportWidth, isMac, recen
                   </div>
                 ))}
               </div>
-            ) : <p className="fx-sempty">Type a name, a job, a street or an invoice number.</p>
+            ) : <p className="fx-sempty">{rows.length ? "Type a name, a job or a street." : NO_ROWS_HINT}</p>
           ) : groups.length === 0 ? (
-            <p className="fx-sempty">{`No results for “${term.trim()}”. Check the spelling or try a street name.`}</p>
+            <p className="fx-sempty">{rows.length ? `No results for “${term.trim()}”. Check the spelling or try a street name.` : NO_ROWS_HINT}</p>
           ) : (
             groups.map((group, g) => (
               <div key={group.key} className="fx-sg" role="group" aria-labelledby={`fx-g${g}`}>

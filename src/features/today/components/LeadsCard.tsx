@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import type { CSSProperties } from "react";
+import { PAGE_PATH } from "@/features/app-shell";
 import { joinParts } from "@/shared/lib/join-parts";
 import type { LeadsResult } from "@/features/leads";
 import { initials, leadPanes } from "../api/lead-panes";
@@ -21,7 +23,7 @@ export function LeadsCard({ result, range, onRange, timeZone }: {
 }) {
   const panes = result?.state === "ready" ? leadPanes(result, timeZone) : null;
   return (
-    <section className="fd-card fd-in" style={{ "--i": 7 } as CSSProperties} aria-labelledby="fd-lead-h">
+    <section className="fd-card fd-in" style={{ "--i": 5 } as CSSProperties} aria-labelledby="fd-lead-h">
       <div className="fd-ch">
         <h2 className="fd-ct" id="fd-lead-h">New leads</h2>
         {panes ? (
@@ -49,9 +51,11 @@ export function LeadsCard({ result, range, onRange, timeZone }: {
                   : rows.length === 0 ? <p className="fd-big"><NotAvailableChip /></p> : null}
                 <ul className="fd-leads">
                   {rows.map((lead) => (
-                    <li key={lead.id} className="fd-lead">
-                      <span className="fd-av" aria-hidden="true">{initials(lead.name)}</span>
-                      <div className="fd-lx"><p className="fd-lt"><b>{lead.name}</b></p><p className="fd-ls">{joinParts([lead.need, lead.received])}</p></div>
+                    <li key={lead.id}>
+                      <Link className="fd-lead" href={`${PAGE_PATH.leads}?row=${encodeURIComponent(lead.id)}`} prefetch={false}>
+                        <span className="fd-av" aria-hidden="true">{initials(lead.name)}</span>
+                        <div className="fd-lx"><p className="fd-lt"><b>{lead.name}</b></p><p className="fd-ls">{joinParts([lead.need, lead.received])}</p></div>
+                      </Link>
                     </li>
                   ))}
                 </ul>

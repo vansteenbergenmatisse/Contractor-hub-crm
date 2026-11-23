@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useOptimistic, useRef, useState, useSyncExternalStore, useTransition, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { BrandLogo } from "@/shared/ui/brand-logo";
 import { MENU_GROUPS, PAGE_PATH, PAGE_TITLE, TAB_PAGES, pageFromPath } from "../nav";
@@ -43,6 +43,12 @@ export function ShellFrame({ business: serverBusiness, searchRows, initialInboxC
   const router = useRouter();
   const gestures = useGestures();
   const page: PageKey = pageFromPath(usePathname() ?? "/");
+  // The tab or menu item lights up on tap while the page loads. Only the highlight uses it:
+  // aria-current and the view stay on the page that is really open.
+  const [shownPage, setShownPage] = useOptimistic(page);
+  const [, startNav] = useTransition();
+  const [refreshing, startRefresh] = useTransition();
+  const refreshDone = useRef<((ok: boolean) => void) | null>(null);
   const [drawer, setDrawer] = useState(false);
   const [feedback, setFeedback] = useState(false);
   const [search, setSearch] = useState(false);
@@ -55,9 +61,15 @@ export function ShellFrame({ business: serverBusiness, searchRows, initialInboxC
   // Phone top bar (design `uxTtl`): glass once the page scrolls (`sc`), the page title in it once the
   // page's large title has passed under the bar (`ttl`).
   const [bar, setBar] = useState({ sc: false, ttl: false });
-  // Search rows a page handed in (useSearchRows), by page; they replace the layout's rows for it.
-  const [pageRows, setPageRows] = useState<Partial<Record<SearchRow["page"], readonly SearchRow[]>>>({});
-  const liveRows = useMemo(() => mergeSearchRows(searchRows, pageRows), [searchRows, pageRows]);
+  // Search rows handed in (useSearchRows), by page; they replace the layout's rows for it. The newest
+  // hand-in wins. `seed` remembers the last seed, so coming back to Today with the same one keeps what the
+  // page itself handed in since. This state dies with the frame, which is keyed by user and tenant.
+  const [handedRows, setHandedRows] = useState<Partial<Record<SearchRow["page"], { rows: readonly SearchRow[]; seed?: readonly SearchRow[] }>>>({});
+  const liveRows = useMemo(() => {
+    const byPage: Partial<Record<SearchRow["page"], readonly SearchRow[]>> = {};
+    for (const key of Object.keys(handedRows) as SearchRow["page"][]) byPage[key] = handedRows[key]?.rows;
+    return mergeSearchRows(searchRows, byPage);
+  }, [searchRows, handedRows]);
   const [entered, setEntered] = useState(false);
   // Settings edits for this browser session only (no persistence, nothing sent).
   const [override, setOverride] = useState<BusinessPatch>({});
@@ -184,8 +196,22 @@ export function ShellFrame({ business: serverBusiness, searchRows, initialInboxC
       if (back) press(back);
     },
   });
-  // Phase 2: replays the design's refresh visual only; nothing is fetched (see the hook).
-  usePullToRefresh(mainRef, { slide: viewRef, bar: barRef });
+  // Pull to refresh re-renders the page from the server (read-only; client state such as drafts stays).
+  // It counts as done when the transition settles, which says nothing about the data, so the line stays
+  // a neutral "Refreshed". Offline it fails at once. Settings keeps its fields, so a pull would change nothing.
+  useEffect(() => {
+    if (refreshing || !refreshDone.current) return;
+    refreshDone.current(true);
+    refreshDone.current = null;
+  }, [refreshing]);
+  const onRefresh = useCallback(() => {
+    if (navigator.onLine === false) return Promise.resolve(false);
+    return new Promise<boolean>((resolve) => {
+      refreshDone.current = resolve;
+      startRefresh(() => router.refresh());
+    });
+  }, [router]);
+  usePullToRefresh(mainRef, { enabled: page !== "settings", slide: viewRef, bar: barRef, onRefresh });
   const onBackdrop = (event: ReactMouseEvent<HTMLDivElement>) => {
     const t = event.target;
     if (!isPhone() || !(t instanceof HTMLElement) || !t.classList.contains("fd-cf") || t.classList.contains("is-off")) return;
@@ -207,7 +233,13 @@ export function ShellFrame({ business: serverBusiness, searchRows, initialInboxC
       setInboxCount,
       updateBusiness: (patch) => setOverride((o) => ({ ...o, ...pickPatch(patch) })),
       signOut,
-      setSearchRows: (key, rows) => setPageRows((all) => (sameRows(all[key], rows) ? all : { ...all, [key]: rows })),
+      setSearchRows: (key, rows, options) => setHandedRows((all) => {
+        const now = all[key];
+        if (!options?.seed) return sameRows(now?.rows, rows) ? all : { ...all, [key]: { ...now, rows } };
+        // An empty seed can mean the leads were unavailable, so it never clears rows search already has.
+        if (sameRows(now?.seed, rows) || (rows.length === 0 && now?.rows.length)) return all;
+        return { ...all, [key]: { rows, seed: rows } };
+      }),
     }),
     [business, drawerBack, feedbackBack],
   );
@@ -218,8 +250,13 @@ export function ShellFrame({ business: serverBusiness, searchRows, initialInboxC
     // Choosing the page already open still closes the feedback sheet (design `nav`).
     setFeedback(false);
     feedbackBack.forget();
-    if (key !== page) router.push(PAGE_PATH[key]);
-  }, [page, router, drawerBack, feedbackBack]);
+    // Compared with the page the tabs show, so a tap back during a load cancels that load (last tap wins).
+    if (key === shownPage) return;
+    startNav(() => {
+      setShownPage(key);
+      router.push(PAGE_PATH[key]);
+    });
+  }, [shownPage, router, drawerBack, feedbackBack, setShownPage]);
 
   // When the frame goes away, Settings' hand-set colors go with it (api/brand-cleanup.ts).
   useEffect(() => {
@@ -240,8 +277,8 @@ export function ShellFrame({ business: serverBusiness, searchRows, initialInboxC
   const isPushed = Object.keys(pushed).length > 0;
   const actionList = Object.entries(actions);
   const hasAction = actionList.some(([, a]) => !a.hidden) && !isPushed;
-  const navClass = (key: PageKey) => `fd-nav${page === key ? " is-on" : ""}`;
-  const tabClass = (key: PageKey) => `fd-tab${page === key ? " is-on" : ""}`;
+  const navClass = (key: PageKey) => `fd-nav${shownPage === key ? " is-on" : ""}`;
+  const tabClass = (key: PageKey) => `fd-tab${shownPage === key ? " is-on" : ""}`;
   const badge = (
     <span className={`fd-badge${inboxCount ? "" : " is-off"}`} aria-label={`${inboxCount} need a reply`}>{inboxCount}</span>
   );
@@ -268,7 +305,7 @@ export function ShellFrame({ business: serverBusiness, searchRows, initialInboxC
             <span className="fd-bt"><span className="fd-bname"><span className="fd-h">{business.name}</span></span><span className="fd-bsub"><span className="fd-h">{business.tag}</span></span></span>
             <button type="button" ref={drawerClose} className="fd-x" aria-label="Close menu" onClick={closeDrawer}><Icon name="close" size={20} strokeWidth={2} /></button>
           </div>
-          <button type="button" className="fd-dsearch" aria-label="Search customers, quotes and invoices" onClick={api.openSearch}><Icon name="search" size={18} /><span>Search</span></button>
+          <button type="button" className="fd-dsearch" aria-label="Search customers" onClick={api.openSearch}><Icon name="search" size={18} /><span>Search</span></button>
           {MENU_GROUPS.map((group) => (
             <div key={group.title} style={{ display: "contents" }}>
               <p className="fd-grp">{group.title}</p>
@@ -297,12 +334,12 @@ export function ShellFrame({ business: serverBusiness, searchRows, initialInboxC
             <button type="button" className="fd-ibtn fd-menub" aria-label="Open menu" aria-expanded={drawer} onClick={openDrawer}><Icon name="menu" size={21} strokeWidth={2} /><span>Menu</span></button>
             <span className="fd-bname">{business.name}</span>
             <span className="fx-mttl" aria-hidden="true">{PAGE_TITLE[page]}</span>
-            <span className="fd-tools"><button type="button" className="fd-ibtn fd-callb" aria-label="Call a customer" data-fx-noact="1"><Icon name="call" size={20} /><span>Call</span></button></span>
+            <span className="fd-tools"><button type="button" className="fd-ibtn fd-callb" aria-label="Call a customer, not available yet" title="Not available yet" disabled data-fx-noact="1"><Icon name="call" size={20} /><span>Call</span></button></span>
           </header>
           <header className="fd-top">
-            <button type="button" className="fd-search" aria-label="Search customers, quotes and invoices" aria-keyshortcuts="Meta+F" onClick={api.openSearch}><Icon name="search" size={18} /><span className="fx-sph">Search</span><kbd className="fx-kbd" aria-hidden="true">{mac ? "⌘F" : "Ctrl F"}</kbd></button>
+            <button type="button" className="fd-search" aria-label="Search customers" aria-keyshortcuts="Meta+F" onClick={api.openSearch}><Icon name="search" size={18} /><span className="fx-sph">Search</span><kbd className="fx-kbd" aria-hidden="true">{mac ? "⌘F" : "Ctrl F"}</kbd></button>
             <span className="fd-tools">
-              <button type="button" className="fd-btn is-plain fd-callb" aria-label="Call a customer" data-fx-noact="1"><Icon name="call" size={16} strokeWidth={2} />Call</button>
+              <button type="button" className="fd-btn is-plain fd-callb" aria-label="Call a customer, not available yet" title="Not available yet" disabled data-fx-noact="1"><Icon name="call" size={16} strokeWidth={2} />Call</button>
               <button type="button" className="fd-btn is-plain" onClick={() => router.push(`${PAGE_PATH.leads}?add=1`)}><Icon name="plus" size={16} strokeWidth={2.2} />New lead</button>
             </span>
           </header>
@@ -322,7 +359,7 @@ export function ShellFrame({ business: serverBusiness, searchRows, initialInboxC
                 {key === "inbox" ? badge : null}
               </button>
             ))}
-            <button type="button" className={`fd-tab fx-tmore${TAB_PAGES.includes(page) ? "" : " is-on"}`} aria-haspopup="dialog" aria-expanded={drawer} onClick={openDrawer}>
+            <button type="button" className={`fd-tab fx-tmore${TAB_PAGES.includes(shownPage) ? "" : " is-on"}`} aria-haspopup="dialog" aria-expanded={drawer} onClick={openDrawer}>
               <Icon name="more" size={22} /><span className="fd-tn">More</span>
             </button>
           </nav>

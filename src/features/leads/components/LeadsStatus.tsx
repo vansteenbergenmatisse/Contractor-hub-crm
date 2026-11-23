@@ -22,7 +22,7 @@ export function LeadsStatus({ state }: { state: keyof typeof COPY }) {
   return (
     <>
       <LeadsHeader />
-      <div className="fd-none fx-none fd-in" role={state === "empty" ? "status" : "alert"}>
+      <div className={`fd-none fx-none fd-in${state !== "empty" ? " is-bad" : ""}`} role={state === "empty" ? "status" : "alert"}>
         <ChannelIcon name={copy.icon} size={20} />
         <p>{copy.title}</p>
         <span>{copy.body}</span>

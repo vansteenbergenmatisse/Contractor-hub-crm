@@ -17,6 +17,6 @@ describe("nav", () => {
   });
 
   it("has four page tabs", () => {
-    expect(TAB_PAGES).toEqual(["today", "pipeline", "inbox", "calendar"]);
+    expect(TAB_PAGES).toEqual(["today", "leads", "inbox", "calendar"]);
   });
 });

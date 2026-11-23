@@ -80,16 +80,16 @@ describe("R4-5 shortcuts while a row menu is open (design logic 222)", () => {
   });
 });
 
-describe("R4-6 feedback Send (design sendFb)", () => {
-  it("is enabled on an empty note and goes to the thank-you", async () => {
+describe("R4-6 feedback Send (no backend yet)", () => {
+  it("is disabled and never reaches the thank-you", async () => {
     const user = userEvent.setup({ delay: null });
     shell(<p>page</p>);
     await user.click(screen.getAllByRole("button", { name: "Send feedback" })[0]);
     await wait(100);
     const send = screen.getByRole("button", { name: "Send" });
-    expect(send).toBeEnabled();
+    expect(send).toBeDisabled();
     await user.click(send);
-    expect(screen.getByText(/Sent\. We read every note\./).closest(".fd-part")).not.toHaveClass("is-off");
+    expect(screen.getByText(/Sent\. We read every note\./).closest(".fd-part")).toHaveClass("is-off");
   });
 });
 

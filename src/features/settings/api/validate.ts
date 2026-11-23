@@ -1,5 +1,5 @@
 import type { CustomValues, Problem } from "../types";
-import { COLOR_KEYS, LINK_KEYS, sectionOfKey } from "./fields";
+import { COLOR_KEYS, LINK_KEYS, labelOfKey, sectionOfKey } from "./fields";
 
 const HEX6 = /^#[0-9a-fA-F]{6}$/;
 const HTTPS = /^https:\/\/\S+$/i;
@@ -26,9 +26,8 @@ function problem(key: string, message: string): Problem {
 }
 
 // Returns the first value that must stop a save, or null. Order as in the design: color format,
-// business name, links, then the contrast rule (build prompt section 3, rule 6). Messages use the
-// design's own wording, which names the custom value key (the design has no link check; its message
-// follows the color message's form).
+// business name, links, then the contrast rule (build prompt section 3, rule 6). Messages name the
+// field by the label the owner sees, never by its custom value key.
 //
 // With `saved` (what Save stored last), only what the owner changed is checked, so a new client whose
 // custom values are empty can save one color, and an old value HighLevel holds never blocks a save.
@@ -41,12 +40,12 @@ export function validateValues(values: CustomValues, saved?: CustomValues): Prob
 
   for (const key of COLOR_KEYS) {
     if (!changed(key) || (mayBeEmpty && v(key) === "")) continue;
-    if (!HEX6.test(v(key))) return problem(key, `custom_values.${key} needs a color like #2E7D32.`);
+    if (!HEX6.test(v(key))) return problem(key, `${labelOfKey(key)} needs a color like #2E7D32.`);
   }
   if (changed("business_name") && v("business_name") === "") return problem("business_name", "Enter the business name.");
   for (const key of LINK_KEYS) {
     if (changed(key) && v(key) !== "" && !HTTPS.test(v(key))) {
-      return problem(key, `custom_values.${key} needs a link that starts with https://.`);
+      return problem(key, `${labelOfKey(key)} needs a link that starts with https://.`);
     }
   }
   const main = v("main_color");
@@ -56,7 +55,7 @@ export function validateValues(values: CustomValues, saved?: CustomValues): Prob
     HEX6.test(main) && HEX6.test(onMain) &&
     contrast(main, onMain) < MIN_CONTRAST
   ) {
-    return problem("main_color", "The text on your main color is hard to read. Make main_color darker.");
+    return problem("main_color", "The text on your main color is hard to read. Make Main color darker.");
   }
   return null;
 }

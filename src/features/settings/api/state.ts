@@ -1,5 +1,6 @@
 import { MOCK_CUSTOM_VALUES, MOCK_SWITCHES } from "../mock";
 import type { CustomValues, Problem, SectionKey } from "../types";
+import { COLOR_KEYS, LINK_KEYS } from "./fields";
 import { validateValues } from "./validate";
 
 // Local state. In Phase 3 Save writes values back to the sub-account's custom values behind an
@@ -54,6 +55,34 @@ export function initialState(values?: CustomValues, section?: SectionKey): Setti
   };
 }
 
+const BARE_HEX6 = /^[0-9a-f]{6}$/i;
+const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:/i;
+// Starts like a host name, with a dot, no spaces and no @ (an email address is not a link).
+const BARE_LINK = /^[a-z0-9][^\s@]*\.[^\s@]+$/i;
+
+const fixColor = (v: string) => (BARE_HEX6.test(v) ? `#${v}` : v);
+// A host ending in one of these is a file name ("logo.png"), not a domain. Extensions that are also
+// widely used country domains (such as .md or .ai) are left out on purpose.
+const FILE_ENDING = /\.(png|jpe?g|gif|webp|svg|bmp|ico|tiff?|heic|avif|pdf|docx?|xlsx?|pptx?|csv|txt|zip)$/i;
+const hostOf = (v: string) => v.split(/[/?#]/, 1)[0];
+const fixLink = (v: string) =>
+  !HAS_SCHEME.test(v) && BARE_LINK.test(v) && !FILE_ENDING.test(hostOf(v)) ? `https://${v}` : v;
+
+// Fills in what is unambiguous in the values the owner changed. Anything else, http:// included, is
+// left as typed for the validator to refuse. A value he did not touch is never rewritten.
+function withFixedInput(trimmed: CustomValues, saved: CustomValues): CustomValues {
+  const out = { ...trimmed };
+  const apply = (keys: readonly string[], fix: (v: string) => string) => {
+    for (const k of keys) {
+      const v = out[k];
+      if (v !== undefined && v !== (saved[k] ?? "").trim()) out[k] = fix(v);
+    }
+  };
+  apply(COLOR_KEYS, fixColor);
+  apply(LINK_KEYS, fixLink);
+  return out;
+}
+
 export function settingsReducer(s: SettingsState, a: SettingsAction): SettingsState {
   switch (a.type) {
     case "go":
@@ -63,8 +92,8 @@ export function settingsReducer(s: SettingsState, a: SettingsAction): SettingsSt
     case "search":
       return { ...s, q: a.q };
     case "edit":
-      // As in the design, typing leaves the "Saved" line and the error as they are; only Save changes them.
-      return { ...s, draft: { ...s.draft, [a.key]: a.value } };
+      // Typing leaves the applied line as it is. Editing the field with the error clears that error.
+      return { ...s, draft: { ...s.draft, [a.key]: a.value }, err: s.err?.key === a.key ? null : s.err };
     case "toggleCols":
       return { ...s, cols: !s.cols };
     case "switch": {
@@ -77,8 +106,9 @@ export function settingsReducer(s: SettingsState, a: SettingsAction): SettingsSt
     case "ask":
       return { ...s, asked: { ...s.asked, [a.index]: true } };
     case "save": {
-      const trimmed: CustomValues = {};
-      for (const k of Object.keys(s.draft)) trimmed[k] = String(s.draft[k]).trim();
+      const typed: CustomValues = {};
+      for (const k of Object.keys(s.draft)) typed[k] = String(s.draft[k]).trim();
+      const trimmed = withFixedInput(typed, s.values);
       // Only what the owner changed since the last save is checked (see validateValues).
       const bad = validateValues(trimmed, s.values);
       if (bad) {
@@ -92,6 +122,9 @@ export function settingsReducer(s: SettingsState, a: SettingsAction): SettingsSt
           focus: { key: bad.key, n: (s.focus?.n ?? 0) + 1 },
         };
       }
+      // Nothing really changed: keep the stored values and make no claim that something was applied.
+      const changed = Object.keys(trimmed).some((k) => trimmed[k] !== (s.values[k] ?? "").trim());
+      if (!changed) return { ...s, draft: s.values, err: null };
       return { ...s, values: trimmed, draft: trimmed, ok: true, err: null };
     }
   }

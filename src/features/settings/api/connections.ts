@@ -21,8 +21,6 @@ export function connectionChip(st: ConnectionStatus): { text: string; ok: boolea
 export const ASK_LABEL = "Ask Forge Forward to connect";
 export const ASKED_NOTE = "Noted on this screen. The request is not sent to Forge Forward yet.";
 export const DONE_WHEN = "Done when this row says Connected.";
-// A row with no status promises nothing: it shows this line instead of steps and actions.
-export const NO_STATUS_NOTE = "This status cannot be shown yet.";
 const INTRO = "What is linked to your dashboard. A row that is not connected shows its steps.";
 const INTRO_NO_STATUS = "Your dashboard's connections. The status of each connection cannot be shown yet.";
 
@@ -34,7 +32,7 @@ export function connectionsIntro(statuses: readonly ConnectionStatus[]): string 
 // The whole text of a connection row, as the design's search reads it (the row's textContent):
 // name, phone number, line under the name, chip, the How it works button, the A2P line, what you
 // need, the steps, the done-when line and the ask button. A row whose status is unknown reads only
-// its name, line under the name, chip and note. Without `live` only the fixed text.
+// its name, line under the name and chip. Without `live` only the fixed text.
 export function connectionRowText(
   c: Connection,
   live?: { status: ConnectionStatus; phone?: string; how?: boolean; asked?: boolean; a2p?: boolean },
@@ -44,7 +42,7 @@ export function connectionRowText(
   parts.push(c.sub);
   if (live) {
     if (live.status.state === "unknown") {
-      parts.push(connectionChip(live.status).text, NO_STATUS_NOTE);
+      parts.push(connectionChip(live.status).text);
       return parts.join(" ");
     }
     const on = live.status.state === "connected";

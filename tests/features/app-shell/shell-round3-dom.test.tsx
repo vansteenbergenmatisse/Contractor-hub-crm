@@ -82,14 +82,13 @@ describe("phone top bar title (SH1)", () => {
 });
 
 describe("feedback sheet (SH2, SH3)", () => {
-  it("opens on a fresh form every time, also after a page change closed it on the thank-you", async () => {
+  it("opens on the form every time and Send cannot reach the thank-you", async () => {
     const user = setupUser();
     shell(<p>page</p>);
     await user.click(screen.getAllByRole("button", { name: "Send feedback" })[0]);
     await wait(100);
-    await user.keyboard("More colors");
     await user.click(screen.getByRole("button", { name: "Send" }));
-    expect(screen.getByRole("heading", { name: "Thanks, Pat." })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Thanks, Pat." }).closest(".fd-part")).toHaveClass("is-off");
     // closed some other way than its own buttons (here: the menu opening closes it)
     await user.click(screen.getByRole("button", { name: "Open menu" }));
     await user.click(screen.getAllByRole("button", { name: "Send feedback" })[0]);
@@ -97,19 +96,19 @@ describe("feedback sheet (SH2, SH3)", () => {
     const field = screen.getByRole("textbox", { name: "Your feedback" });
     expect(field.closest(".fd-part")).not.toHaveClass("is-off");
     expect(field).toHaveValue("");
+    expect(field).toBeDisabled();
     expect(screen.getByRole("heading", { name: "Thanks, Pat." }).closest(".fd-part")).toHaveClass("is-off");
   });
 
-  it("thanks without a name when the owner is unknown", async () => {
+  it("keeps the thank-you without a name when the owner is unknown", async () => {
     const user = setupUser();
     shell(<p>page</p>, buildBusiness({}));
     await user.click(screen.getAllByRole("button", { name: "Send feedback" })[0]);
     await wait(100);
-    await user.keyboard("Hi");
-    await user.click(screen.getByRole("button", { name: "Send" }));
-    expect(screen.getByRole("heading", { name: "Thanks." })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Thanks." }).closest(".fd-part")).toHaveClass("is-off");
     const html = document.body.innerHTML;
     for (const bad of ["Your business", "Thanks, .", "Thanks, Owner", ">Owner<span", "undefined", "null"]) expect(html).not.toContain(bad);
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
   });
 });
 

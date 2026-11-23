@@ -33,6 +33,16 @@ describe("AppShell markup", () => {
     expect(html).toContain('aria-label="Search"');
   });
 
+  it("shows Call as not available, with no action", () => {
+    const calls = html.match(/<button[^>]*fd-callb[^>]*>/g) ?? [];
+    expect(calls).toHaveLength(2);
+    for (const call of calls) {
+      expect(call).toContain("disabled");
+      expect(call).toContain('title="Not available yet"');
+      expect(call).toContain('aria-label="Call a customer, not available yet"');
+    }
+  });
+
   it("starts with the menu, feedback and search closed and the action bar hidden", () => {
     expect(html).not.toContain("fd-scrim is-open");
     expect(html).toContain('class="fd-fb"');
@@ -75,8 +85,25 @@ describe("SearchSheet markup", () => {
   });
 
   it("gives the scope chips a roving tab stop", () => {
-    const desk = renderToStaticMarkup(<SearchSheet rows={rows} onClose={noop} onOpen={noop} viewportWidth={1440} isMac />);
+    const twoPages = [...rows, { id: "q1", page: "quotes" as const, name: "Sam Reed", sub: "Gutters", href: "/quotes" }];
+    const desk = renderToStaticMarkup(<SearchSheet rows={twoPages} onClose={noop} onOpen={noop} viewportWidth={1440} isMac />);
     expect((desk.match(/role="radio"[^>]*tabindex="0"/g) ?? []).length).toBe(1);
-    expect((desk.match(/role="radio"[^>]*tabindex="-1"/g) ?? []).length).toBe(6);
+    expect((desk.match(/role="radio"[^>]*tabindex="-1"/g) ?? []).length).toBe(2);
+    expect(desk).toContain(">Leads</button>");
+    expect(desk).toContain(">Quotes</button>");
+    expect(desk).not.toContain(">Invoices</button>");
+  });
+
+  it("hides the scope bar when only one page has rows", () => {
+    const desk = renderToStaticMarkup(<SearchSheet rows={rows} onClose={noop} onOpen={noop} viewportWidth={1440} isMac />);
+    expect(desk).not.toContain('role="radiogroup"');
+    expect(desk).toContain("Type a name, a job or a street.");
+    expect(desk).toContain('placeholder="Search customers"');
+  });
+
+  it("says where search gets its rows when it has none", () => {
+    const desk = renderToStaticMarkup(<SearchSheet rows={[]} onClose={noop} onOpen={noop} viewportWidth={1440} isMac />);
+    expect(desk).toContain("No leads to search yet.");
+    expect(desk).not.toContain("Check the spelling");
   });
 });

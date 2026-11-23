@@ -20,7 +20,7 @@ export const MENU_GROUPS: ReadonlyArray<{ title: string; pages: readonly PageKey
 ];
 
 // The phone tab bar; the fifth tab is More, which opens the menu.
-export const TAB_PAGES: readonly PageKey[] = ["today", "pipeline", "inbox", "calendar"];
+export const TAB_PAGES: readonly PageKey[] = ["today", "leads", "inbox", "calendar"];
 
 export function pageFromPath(path: string): PageKey {
   const hit = (Object.keys(PAGE_PATH) as PageKey[]).find((k) => k !== "today" && (path === PAGE_PATH[k] || path.startsWith(`${PAGE_PATH[k]}/`)));

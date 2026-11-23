@@ -58,7 +58,7 @@ describe("validateValues", () => {
     for (const key of COLOR_KEYS) {
       const p = validateValues({ ...base(), [key]: "green" });
       expect(p?.key).toBe(key);
-      expect(p?.message).toBe(`custom_values.${key} needs a color like #2E7D32.`);
+      expect(p?.message).toBe(`${labelOfKey(key)} needs a color like #2E7D32.`);
       expect(p?.section).toBe("colors");
     }
     expect(validateValues({ ...base(), sub_color: "#abc" })?.key).toBe("sub_color");
@@ -75,7 +75,7 @@ describe("validateValues", () => {
     for (const key of ["business_logo", "business_favicon_url", "business_main_background_video_or_image"]) {
       const p = validateValues({ ...base(), [key]: "http://example.com/a.png" });
       expect(p?.key).toBe(key);
-      expect(p?.message).toBe(`custom_values.${key} needs a link that starts with https://.`);
+      expect(p?.message).toBe(`${labelOfKey(key)} needs a link that starts with https://.`);
     }
   });
 
@@ -84,7 +84,7 @@ describe("validateValues", () => {
     expect(validateValues({ ...base(), main_color: "#767676", text_on_main_color: "#FFFFFF" })).toBeNull();
     const p = validateValues({ ...base(), main_color: "#777777", text_on_main_color: "#FFFFFF" });
     expect(p?.key).toBe("main_color");
-    expect(p?.message).toBe("The text on your main color is hard to read. Make main_color darker.");
+    expect(p?.message).toBe("The text on your main color is hard to read. Make Main color darker.");
     expect(p?.section).toBe("colors");
   });
 
@@ -95,7 +95,7 @@ describe("validateValues", () => {
     expect(validateValues({ ...base(), main_color: "#a16b33", text_on_main_color: "#FFFFFF" })).toBeNull();
     const p = validateValues({ ...base(), main_color: "#816f99", text_on_main_color: "#FFFFFF" });
     expect(p?.key).toBe("main_color");
-    expect(p?.message).toContain("main_color");
+    expect(p?.message).toContain("Main color");
   });
 
   it("checks the main color against text_on_main_color, not against background_color", () => {
@@ -130,7 +130,7 @@ describe("validateValues against the saved values (only what the owner changed)"
 
   it("refuses a changed color that is not a 6 digit hex, naming its key", () => {
     const p = validateValues({ ...empty, main_hover_color: "blue" }, empty);
-    expect(p).toMatchObject({ key: "main_hover_color", section: "colors", message: "custom_values.main_hover_color needs a color like #2E7D32." });
+    expect(p).toMatchObject({ key: "main_hover_color", section: "colors", message: "Main, pressed needs a color like #2E7D32." });
     expect(validateValues({ ...empty, sub_color: "#abc" }, empty)?.key).toBe("sub_color");
   });
 
@@ -154,7 +154,7 @@ describe("validateValues against the saved values (only what the owner changed)"
 
   it("refuses a changed link that is not https", () => {
     expect(validateValues({ ...empty, business_logo: "http://x.example/a.png" }, empty)).toMatchObject({
-      key: "business_logo", message: "custom_values.business_logo needs a link that starts with https://.",
+      key: "business_logo", message: "Logo (link to the image) needs a link that starts with https://.",
     });
   });
 
@@ -208,18 +208,41 @@ describe("bad value on save", () => {
     expect(s.focus).toEqual({ key: "border_color", n: 2 });
   });
 
-  it("typing leaves the Saved line and the error as they are; only Save changes them (as in the design)", () => {
-    let s = settingsReducer(initialState(base()), { type: "save" });
+  it("typing keeps the applied line; editing the field with the error clears only that error", () => {
+    let s = settingsReducer(initialState(base()), { type: "edit", key: "business_name", value: "Other Co" });
+    s = settingsReducer(s, { type: "save" });
     expect(s.ok).toBe(true);
     s = settingsReducer(s, { type: "edit", key: "business_email", value: "a@b.example" });
     expect(s.ok).toBe(true);
     let bad = settingsReducer(initialState(base()), { type: "edit", key: "border_color", value: "nope" });
     bad = settingsReducer(bad, { type: "save" });
-    bad = settingsReducer(bad, { type: "edit", key: "border_color", value: "#D0DAE2" });
+    bad = settingsReducer(bad, { type: "edit", key: "business_email", value: "c@d.example" });
     expect(bad.err?.key).toBe("border_color");
+    bad = settingsReducer(bad, { type: "edit", key: "border_color", value: "#D0DAE1" });
+    expect(bad.err).toBeNull();
     bad = settingsReducer(bad, { type: "save" });
     expect(bad.err).toBeNull();
     expect(bad.ok).toBe(true);
+  });
+
+  it("applying with no real change does not claim a change", () => {
+    const untouched = settingsReducer(initialState(base()), { type: "save" });
+    expect(untouched.ok).toBe(false);
+    expect(untouched.values).toEqual(base());
+    const spaces = settingsReducer(
+      settingsReducer(initialState(base()), { type: "edit", key: "business_name", value: ` ${base().business_name} ` }),
+      { type: "save" },
+    );
+    expect(spaces.ok).toBe(false);
+    expect(spaces.draft.business_name).toBe(base().business_name);
+  });
+
+  it("keeps the applied line when applying again after a real change", () => {
+    let s = settingsReducer(initialState(base()), { type: "edit", key: "business_name", value: "Other Co" });
+    s = settingsReducer(s, { type: "save" });
+    s = settingsReducer(s, { type: "save" });
+    expect(s.ok).toBe(true);
+    expect(s.values.business_name).toBe("Other Co");
   });
 
   it("a good save stores the values and clears the error", () => {
@@ -228,6 +251,69 @@ describe("bad value on save", () => {
     expect(s.ok).toBe(true);
     expect(s.err).toBeNull();
     expect(s.values.main_color).toBe("#1B5E20");
+  });
+});
+
+describe("save fixes input that is unambiguous", () => {
+  const saveWith = (key: string, value: string, start: Record<string, string> = { business_name: "Test Co" }) =>
+    settingsReducer(settingsReducer(initialState(start), { type: "edit", key, value }), { type: "save" });
+
+  it("adds the # to a color of exactly 6 hex digits", () => {
+    const s = saveWith("main_color", "1565c0");
+    expect(s.err).toBeNull();
+    expect(s.values.main_color).toBe("#1565c0");
+    expect(s.draft.main_color).toBe("#1565c0");
+  });
+
+  it("leaves any other color to the existing error", () => {
+    for (const v of ["abc", "12345", "1234567", "green"]) expect(saveWith("sub_color", v).err?.key, v).toBe("sub_color");
+  });
+
+  it("adds https:// to a link with a dot and no scheme", () => {
+    const s = saveWith("business_logo", "cdn.example.com/logo.png");
+    expect(s.err).toBeNull();
+    expect(s.values.business_logo).toBe("https://cdn.example.com/logo.png");
+  });
+
+  it("adds https:// to real domains", () => {
+    for (const v of ["example.com", "www.example.com/page", "EXAMPLE.COM/logo.png", "example.co.uk/a.pdf"]) {
+      const s = saveWith("business_logo", v);
+      expect(s.err, v).toBeNull();
+      expect(s.values.business_logo, v).toBe(`https://${v}`);
+    }
+  });
+
+  it("does not turn a bare file name into a link", () => {
+    for (const v of ["logo.png", "LOGO.PNG", "my.logo.jpeg", "logo.svg?v=2", "brochure.pdf", "logo.png/extra"]) {
+      const s = saveWith("business_logo", v);
+      expect(s.err?.key, v).toBe("business_logo");
+      expect(s.values.business_logo, v).toBeUndefined();
+      expect(s.draft.business_logo, v).toBe(v);
+    }
+  });
+
+  it("keeps refusing javascript: and data: links", () => {
+    for (const v of ["javascript:alert(1)", "JavaScript:alert(1)", "data:text/html,x", "data:image/png;base64,AAAA"]) {
+      const s = saveWith("business_logo", v);
+      expect(s.err?.key, v).toBe("business_logo");
+      expect(s.values.business_logo, v).toBeUndefined();
+    }
+  });
+
+  it("never upgrades http or guesses at anything else", () => {
+    for (const v of ["http://x.example/a.png", "nope", "two words.example", "javascript:alert(1)", "//x.example/a.png", "../a.png", "me@x.example"]) {
+      const s = saveWith("business_logo", v);
+      expect(s.err?.key, v).toBe("business_logo");
+      expect(s.values.business_logo, v).toBeUndefined();
+    }
+  });
+
+  it("does not rewrite a value the owner did not change", () => {
+    const start = { business_name: "Test Co", border_color: "D0DAE2", business_logo: "old.example/logo.png" };
+    const s = saveWith("business_email", "a@b.example", start);
+    expect(s.ok).toBe(true);
+    expect(s.values.border_color).toBe("D0DAE2");
+    expect(s.values.business_logo).toBe("old.example/logo.png");
   });
 });
 

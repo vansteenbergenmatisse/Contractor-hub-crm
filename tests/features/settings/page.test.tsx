@@ -18,7 +18,7 @@ vi.mock("@/features/app-shell", async () => {
   };
 });
 
-import { COLOR_KEYS, ESSENTIAL_KEYS, MOCK_CUSTOM_VALUES, SettingsPage, initialState, settingsValuesFrom } from "@/features/settings";
+import { COLOR_KEYS, ESSENTIAL_KEYS, MOCK_CUSTOM_VALUES, SettingsPage, initialState, labelOfKey, settingsValuesFrom } from "@/features/settings";
 import type { ConnectionStatus } from "@/features/settings";
 
 describe("SettingsPage markup", () => {
@@ -26,15 +26,16 @@ describe("SettingsPage markup", () => {
   vi.stubGlobal("fetch", fetchSpy);
   const html = renderToStaticMarkup(<SettingsPage />);
 
-  it("shows the title, five sections and one field per key under its key name", () => {
+  it("shows the title, five sections and one field per key, under its plain label only", () => {
     expect(html).toContain("Settings</h1>");
     for (const t of ["Business details", "Brand colors", "Connections", "Your choices", "Not available yet"]) {
       expect(html).toContain(t);
     }
     for (const k of [...ESSENTIAL_KEYS, ...COLOR_KEYS]) {
-      expect(html).toContain(`custom_values.${k}`);
+      expect(html).toContain(`for="cv-${k}">${labelOfKey(k)}</label>`);
       expect(html).toContain(`id="cv-${k}"`);
     }
+    expect(html).not.toContain("custom_values.");
   });
 
   it("does not render the page wrapper's data-pg and starts on Business details", () => {
@@ -126,23 +127,42 @@ describe("SettingsPage markup", () => {
     expect(none).toContain("No settings match your search.");
   });
 
-  it("shows the error once, at the top as in the design, and flags the field that points to it", () => {
-    const msg = "custom_values.main_hover_color needs a color like #2E7D32.";
-    const s = { ...initialState(), err: { key: "main_hover_color", message: msg, section: "colors" as const } };
+  it("shows the error once, next to its field, and the field points to it", () => {
+    const msg = "Main, pressed needs a color like #2E7D32.";
+    const s = { ...initialState(), sec: "colors" as const, err: { key: "main_hover_color", message: msg, section: "colors" as const } };
     const out = renderToStaticMarkup(<SettingsPage initial={s} />);
-    expect(out).toMatch(/class="fd-lerr fd-ste" id="fd-st-err" role="alert">(?:(?!<\/p>).)*custom_values\.main_hover_color needs a color like #2E7D32\./s);
+    expect(out).toContain(`<p class="fd-lerr" id="cv-main_hover_color-err" role="alert">${msg}</p>`);
+    expect(out).toMatch(/class="fd-lin is-bad" id="cv-main_hover_color"/);
     expect(out).toMatch(/id="cv-main_hover_color"[^>]*aria-invalid="true"|aria-invalid="true"[^>]*id="cv-main_hover_color"/);
-    expect(out).toMatch(/aria-describedby="fd-st-err"/);
+    expect(out).toMatch(/aria-describedby="cv-main_hover_color-err"/);
     expect(out.split(msg).length - 1).toBe(1);
-    expect((out.match(/class="fd-lerr"/g) ?? []).length).toBe(0);
+    expect(out).toContain('class="fd-lerr fd-ste is-off"');
   });
 
-  it("keeps the save bar, the color group headings and the five section frames while searching, as the design does", () => {
+  it("keeps the error in the top alert when its field cannot be seen", () => {
+    const msg = "Main, pressed needs a color like #2E7D32.";
+    const err = { key: "main_hover_color", message: msg, section: "colors" as const };
+    for (const s of [
+      { ...initialState(), sec: "colors" as const, q: "county", err }, // hidden by the search
+      { ...initialState(), sec: "biz" as const, err }, // in another section
+      { ...initialState(), sec: "colors" as const, cols: false, err }, // color fields closed
+    ]) {
+      const out = renderToStaticMarkup(<SettingsPage initial={s} />);
+      expect(out).toMatch(/class="fd-lerr fd-ste" id="fd-st-err" role="alert">(?:(?!<\/p>).)*Main, pressed needs a color/s);
+      expect(out.split(msg).length - 1).toBe(1);
+      expect(out).not.toContain('id="cv-main_hover_color-err"');
+    }
+  });
+
+  it("shows the save bar while searching only when a field is in the results", () => {
     const out = renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), q: "a2p" }} connections={[{ state: "connected" }]} />);
-    expect(out).toContain("Save changes");
+    expect(out).not.toContain("Apply for this visit");
     expect(out).toContain('class="fd-cols fd-st2 fd-in"');
     expect(out).not.toContain('id="cv-business_name"');
     expect(out).toContain("A2P status: Not available yet.");
+    expect(renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), q: "zzzz" }} />)).not.toContain("Apply for this visit");
+    expect(renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), q: "county" }} />)).toContain("Apply for this visit");
+    expect(renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), q: "pressed" }} />)).toContain("Apply for this visit");
   });
 
   it("finds a connection by its status, as the design's search reads the whole row", () => {
@@ -174,7 +194,7 @@ describe("SettingsPage markup", () => {
     expect(out).not.toContain("Get A Free Quote");
     // Extra keys: listed under their key, with their value.
     for (const k of ["business_address_city", "request_a_job_booking_link", "business_latitude"]) {
-      expect(out).toContain(`custom_values.${k}`);
+      expect(out).toContain(`for="cv-${k}">${labelOfKey(k)}</label>`);
       expect(out).toContain(`id="cv-${k}"`);
     }
     expect(out).toContain('value="Testville"');
@@ -229,10 +249,17 @@ describe("SettingsPage markup", () => {
     expect(swatches.every((t) => /style="background:(#[0-9a-f]{3,6}|var\(--[a-z-]+\))"/i.test(t))).toBe(true);
   });
 
-  it("uses the design's Saved line and Brand colors subtitle", () => {
-    expect(html).toContain("<span>Saved. Every page uses the new values.</span>");
-    expect(html).toContain("Folder 02_Branding. Four groups. Type a color like #2E7D32 and press Save changes. Every page takes the color of each key.");
-    expect(html).not.toContain("Saved on this screen. It is not written to HighLevel yet.");
+  it("says what Save really does, in plain words", () => {
+    expect(html).toContain("<span>Changed for this visit only. Not saved to your account yet.</span>");
+    expect(html).toContain("Your business name, contact details and links. Changes here do not reach your website or texts yet.");
+    expect(html).toContain("Type a color like #2E7D32, then press Apply for this visit.");
+    expect(html).toContain("Changes last until you close or reload this page.");
+    expect(html).toContain("The details and colors come from your account.");
+    expect(html).not.toContain("GoHighLevel");
+    expect(html).not.toContain("custom values");
+    for (const untrue of ["Every page uses", "A change here changes them too", "Every page takes", "Folder 0", "names of the keys"]) {
+      expect(html).not.toContain(untrue);
+    }
   });
 
   it("keeps the color toggle's aria-expanded equal to what shows, also while searching", () => {

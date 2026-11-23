@@ -6,13 +6,14 @@ import { AuthCard } from "./AuthCard";
 import { Field } from "./Field";
 import { clientHref } from "./client-href";
 import type { SignInBrand } from "@/features/brand";
-import { MIN_PASSWORD_LENGTH } from "../types";
+import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from "../types";
 
 export function ResetPasswordForm({ token, brand }: { token: string | null; brand?: SignInBrand | null }) {
   const [password, setPassword] = useState("");
   const [again, setAgain] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [expired, setExpired] = useState(false);
   const [busy, setBusy] = useState(false);
 
   if (!token) {
@@ -32,8 +33,10 @@ export function ResetPasswordForm({ token, brand }: { token: string | null; bran
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (busy) return;
+    if (busy || expired) return;
     if (password.length < MIN_PASSWORD_LENGTH) return setError(`Use at least ${MIN_PASSWORD_LENGTH} characters.`);
+    // The server also answers 400 for a long password. Stop it here so 400 below means a dead link.
+    if (password.length > MAX_PASSWORD_LENGTH) return setError(`Use at most ${MAX_PASSWORD_LENGTH} characters.`);
     if (password !== again) return setError("The two passwords are not the same.");
     setBusy(true);
     setError(null);
@@ -44,6 +47,7 @@ export function ResetPasswordForm({ token, brand }: { token: string | null; bran
         body: JSON.stringify({ newPassword: password, token }),
       });
       if (response.ok) return setDone(true);
+      if (response.status === 400) setExpired(true);
       setError(response.status === 400 ? "This link has expired. Ask for a new one." : "Something went wrong. Try again.");
     } catch {
       setError("No connection. Check your internet and try again.");
@@ -57,7 +61,11 @@ export function ResetPasswordForm({ token, brand }: { token: string | null; bran
         <Field label="New password" name="new-password" type="password" autoComplete="new-password" value={password} onChange={setPassword} />
         <Field label="New password again" name="new-password-again" type="password" autoComplete="new-password" value={again} onChange={setAgain} />
         {error ? <p className="fd-lerr" role="alert">{error}</p> : null}
-        <button type="submit" className="fd-btn is-fill fd-lgo" disabled={busy}>{busy ? "Saving" : "Save password"}</button>
+        {expired ? (
+          <Link className="fd-btn is-fill fd-lgo" href={clientHref("/forgot-password", brand)}>Ask for a new link</Link>
+        ) : (
+          <button type="submit" className="fd-btn is-fill fd-lgo" disabled={busy}>{busy ? "Saving" : "Save password"}</button>
+        )}
       </form>
     </AuthCard>
   );

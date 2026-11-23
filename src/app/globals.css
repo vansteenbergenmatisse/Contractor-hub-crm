@@ -293,6 +293,8 @@ body{margin:0;background:var(--section-background-color)}
 .fd-big b{font-size:1.75rem;font-weight:var(--weight-black);font-variant-numeric:tabular-nums;line-height:2.125rem;letter-spacing:0.014em;--apl-lh:2.125rem;--apl-lh-loose:2.25rem;--apl-lh-tight:2rem;--weight-regular:400;--weight-medium:400;--weight-semibold:700;--weight-bold:700;--weight-black:700}
 .fd-app .fd-leads{padding:0 24px 10px}
 .fd-lead{display:grid;grid-template-columns:36px minmax(0,1fr) auto;align-items:center;column-gap:12px;min-height:60px;padding:8px 0;border-top:1px solid var(--fd-hair)}
+a.fd-lead{color:inherit;text-decoration:none}
+a.fd-lead:focus-visible{outline:3px solid var(--main-color);outline-offset:-3px}
 .fd-lead .fd-av{background:var(--fd-page)}
 .fd-lt{font-size:1.0625rem;line-height:1.375rem;letter-spacing:-0.026em;--apl-lh:1.375rem;--apl-lh-loose:1.5rem;--apl-lh-tight:1.25rem;--weight-regular:400;--weight-medium:400;--weight-semibold:600;--weight-bold:600;--weight-black:600}
 .fd-ls{font-size:0.8125rem;color:var(--fd-muted);line-height:1.125rem;letter-spacing:-0.006em;--apl-lh:1.125rem;--apl-lh-loose:1.25rem;--apl-lh-tight:1rem;--weight-regular:400;--weight-medium:400;--weight-semibold:600;--weight-bold:600;--weight-black:600}
@@ -1278,6 +1280,7 @@ select.fd-lin{padding:0 10px}
 .fd-cvt{margin-top:12px}
 .fd-cvsv{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin-top:16px}
 .fd-cvsv .fd-lgo{margin-top:0}
+.fd-app .fd-cvsv .fd-okl{flex:1 1 100%;margin:0}
 .fd-app .fd-sts{margin:2px 0 10px}
 .fd-app .fd-dct{margin:0 0 10px}
 .fd-app .fd-tst2{margin:14px 0 0}
@@ -1727,6 +1730,8 @@ select.fd-lin{padding:0 10px}
 .fd-app div.fd-none{flex-direction:column;gap:8px;margin:28px 12px;padding:16px}
 .fd-app div.fd-none > p{max-width:none;font-size:1.0625rem;line-height:1.375rem;letter-spacing:-0.026em;font-weight:600;color:var(--fd-ink)}
 .fd-app div.fd-none.is-off{display:none}
+.fd-app div.fd-none.is-bad{border-radius:12px;background:var(--fd-bad-bg);color:var(--fd-bad-tx)}
+.fd-app div.fd-none.is-bad > span{color:var(--fd-ink)}
 .fd-app div.fd-cempty{flex-direction:column;gap:8px;padding:16px}
 .fd-app div.fd-cempty > p{max-width:none;font-size:1.0625rem;line-height:1.375rem;letter-spacing:-0.026em;font-weight:600;color:var(--fd-muted)}
 .fd-app div.fd-cempty.is-off{display:none}
@@ -1786,7 +1791,8 @@ select.fd-lin{padding:0 10px}
   .fx-stl > li + li .fx-stni{box-shadow:inset 54px .5px 0 -54px var(--fd-card),inset 0 .5px 0 var(--fd-hair)}
   .fd-app .fx-stni.is-on{background:none;font-weight:400}
   .fd-app .fx-stch{display:block}
-  .fd-view[data-open="0"][data-q="0"] .fx-stbody,.fd-view[data-open="0"][data-q="0"] > .fd-stout{display:none}
+  .fd-view[data-open="0"][data-q="0"] .fx-stbody{display:none}
+  .fd-view[data-open="1"][data-q="0"] > .fd-stout{display:none}
   .fd-view[data-open="1"][data-q="0"] > .fx-stnav,.fd-view[data-open="1"][data-q="0"] > .fd-phd{display:none}
   .fd-app .fd-view[data-open="1"][data-q="0"] > .fx-stback{display:inline-flex;align-items:center;gap:4px;min-height:44px;margin:4px 0 4px -6px}
   .fd-view[data-q="1"] .fx-stl{display:none}
@@ -1871,6 +1877,8 @@ select.fd-lin{padding:0 10px}
 .fd-app .fd-kn,.fd-app .fd-ks,.fd-app .fd-kad span,.fd-app .fd-ka span,.fd-app .fd-stt,.fd-app .fd-sta span,.fd-app .fd-km > span,.fd-app .fd-khn,.fd-app .fd-lsub,.fd-app .fd-dcs{overflow-wrap:break-word;word-break:normal}
 /* chips: short status words stay on one line when there is room, and wrap at word gaps when there is not */
 .fd-app .fd-chip{overflow-wrap:break-word}
+.fd-app .fd-tile .fd-chip{white-space:normal;border-radius:10px}
+.fd-app .fd-tile .fd-tl{padding-right:20px}
 /* the inbox: the list and the open conversation share the width; neither drops under its minimum */
 @media (min-width: 1024px){
   .fd-ixg{grid-template-columns:minmax(300px,456px) minmax(360px,1fr)}
@@ -1956,7 +1964,7 @@ select.fd-lin{padding:0 10px}
   /* the top bar holds no buttons: Menu is the More tab, Call lives on each customer */
   .fd-app .fd-mtop .fd-menub,.fd-app .fd-mtop .fd-tools{display:none}
   .fd-app .fd-mtop{min-height:64px}
-  /* five tabs: Today, Pipeline, Inbox, Calendar, More */
+  /* five tabs: Today, Leads, Inbox, Calendar, More */
   .fd-app .fx-tcap .fd-tabs{flex:1 1 0;min-width:0;grid-template-columns:repeat(5,minmax(0,1fr))}
   .fd-app .fx-tmore{display:flex}
   .fd-app .fx-tcap .fd-tab{padding:4px 2px}

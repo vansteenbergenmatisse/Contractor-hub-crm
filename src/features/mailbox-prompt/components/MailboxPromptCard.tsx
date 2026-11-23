@@ -19,7 +19,7 @@ export function MailboxPromptCard({ token }: { token: string }) {
   };
 
   return (
-    <section className="fd-card" aria-labelledby={titleId} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, padding: 16 }}>
+    <section className="fd-card" aria-labelledby={titleId} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, padding: 16, marginBottom: 16 }}>
       <div style={{ flex: "1 1 200px", minWidth: 0 }}>
         <h2 id={titleId} className="fd-ct" style={{ margin: 0 }}>{COPY.title}</h2>
         <p className="fd-cm" style={{ margin: "4px 0 0" }}>{COPY.body}</p>

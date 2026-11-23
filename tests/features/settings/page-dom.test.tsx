@@ -49,10 +49,10 @@ describe("Settings in the browser", () => {
     render(<SettingsPage initialValues={{}} initialSection="colors" />);
     const field = screen.getByLabelText(/^Main color/);
     await user.type(field, "#1565C0");
-    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await user.click(screen.getByRole("button", { name: "Apply for this visit" }));
     expect(screen.getByRole("alert")).toHaveClass("is-off");
     expect(field).not.toHaveAttribute("aria-invalid");
-    expect(screen.getByText("Saved. Every page uses the new values.").closest("p")).not.toHaveClass("is-off");
+    expect(screen.getByText("Changed for this visit only. Not saved to your account yet.").closest("p")).not.toHaveClass("is-off");
     expect(document.documentElement.style.getPropertyValue("--main-color")).toBe("#1565C0");
     // The app frame (`.fd-app.brand-scope`) re-declares the default colors, so the new color must
     // reach it too: a style rule that beats `:root:root,.brand-scope` holds the saved colors.
@@ -74,21 +74,22 @@ describe("Settings in the browser", () => {
       </div>,
     );
     await user.type(screen.getByLabelText(/^Main color/), "#1565C0");
-    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await user.click(screen.getByRole("button", { name: "Apply for this visit" }));
     const frame = screen.getByTestId("frame");
     expect(getComputedStyle(frame).getPropertyValue("--main-color").trim()).toBe("#1565C0");
     css.remove();
   });
 
-  it("names a bad field by its key, once, marks it and puts the cursor in it", async () => {
+  it("names a bad field by its label, once, next to the field, marks it and puts the cursor in it", async () => {
     const user = userEvent.setup();
     render(<SettingsPage initialValues={{}} initialSection="colors" />);
     const field = screen.getByLabelText(/^Main, pressed/);
     await user.type(field, "blue");
-    await user.click(screen.getByRole("button", { name: "Save changes" }));
-    const msg = "custom_values.main_hover_color needs a color like #2E7D32.";
-    expect(screen.getByRole("alert")).toHaveTextContent(msg);
+    await user.click(screen.getByRole("button", { name: "Apply for this visit" }));
+    const msg = "Main, pressed needs a color like #2E7D32.";
     expect(screen.getAllByText(msg)).toHaveLength(1);
+    expect(screen.getByText(msg)).toHaveAttribute("role", "alert");
+    expect(screen.getByText(msg)).toHaveAttribute("id", "cv-main_hover_color-err");
     expect(field).toHaveAttribute("aria-invalid", "true");
     expect(field).toHaveAccessibleDescription(msg);
     expect(field).toHaveFocus();
@@ -103,14 +104,55 @@ describe("Settings in the browser", () => {
     expect(updateBusiness).not.toHaveBeenCalled();
   });
 
-  it("keeps the Saved line while the owner types again (as in the design)", async () => {
+  it("hides the result line on a new edit and says the changes are not saved", async () => {
     const user = userEvent.setup();
     render(<SettingsPage initialValues={{ business_name: "Test Co" }} initialSection="biz" />);
-    await user.click(screen.getByRole("button", { name: "Save changes" }));
-    const ok = screen.getByText("Saved. Every page uses the new values.").closest("p");
+    await user.type(screen.getByLabelText(/^Business name/), " Two");
+    await user.click(screen.getByRole("button", { name: "Apply for this visit" }));
+    const ok = screen.getByText("Changed for this visit only. Not saved to your account yet.").closest("p");
     expect(ok).not.toHaveClass("is-off");
+    expect(ok?.closest(".fd-cvsv")).not.toBeNull();
+    expect(screen.getByText("Changes last until you close or reload this page.")).toBeInTheDocument();
     await user.type(screen.getByLabelText(/^Email/), "a@b.example");
+    expect(ok).toHaveClass("is-off");
+    expect(screen.getByText("You have changes that are not applied yet.")).toHaveAttribute("role", "status");
+    await user.click(screen.getByRole("button", { name: "Apply for this visit" }));
     expect(ok).not.toHaveClass("is-off");
+    expect(screen.queryByText("You have changes that are not applied yet.")).toBeNull();
+  });
+
+  it("does not say anything changed when applying with no edits", async () => {
+    const user = userEvent.setup();
+    render(<SettingsPage initialValues={{ business_name: "Test Co" }} initialSection="biz" />);
+    await user.click(screen.getByRole("button", { name: "Apply for this visit" }));
+    expect(screen.getByText("Changed for this visit only. Not saved to your account yet.").closest("p")).toHaveClass("is-off");
+    expect(updateBusiness).not.toHaveBeenCalled();
+  });
+
+  it("removes the inline error as soon as its field is edited", async () => {
+    const user = userEvent.setup();
+    render(<SettingsPage initialValues={{}} initialSection="colors" />);
+    const field = screen.getByLabelText(/^Main, pressed/);
+    await user.type(field, "blue");
+    await user.click(screen.getByRole("button", { name: "Apply for this visit" }));
+    expect(field).toHaveAttribute("aria-invalid", "true");
+    await user.clear(field);
+    expect(field).not.toHaveAttribute("aria-invalid");
+    expect(screen.queryByText("Main, pressed needs a color like #2E7D32.")).toBeNull();
+  });
+
+  it("marks only the sections that hold unsaved changes", async () => {
+    const user = userEvent.setup();
+    render(<SettingsPage initialValues={{ business_name: "Test Co", business_latitude: "1" }} initialSection="colors" />);
+    expect(screen.queryByText("Not applied yet")).toBeNull();
+    await user.type(screen.getByLabelText(/^Main color/), "#123456");
+    expect(screen.getByRole("button", { name: /Brand colors/ })).toHaveTextContent("Not applied yet");
+    expect(screen.getByRole("button", { name: /Business details/ })).not.toHaveTextContent("Not applied yet");
+    // A key outside the design's list belongs to Business details.
+    await user.type(screen.getByLabelText(/^Business latitude/), "2");
+    expect(screen.getByRole("button", { name: /Business details/ })).toHaveTextContent("Not applied yet");
+    await user.clear(screen.getByLabelText(/^Main color/));
+    expect(screen.getByRole("button", { name: /Brand colors/ })).not.toHaveTextContent("Not applied yet");
   });
 
   it("never adds a second live style, also after two saves", () => {
@@ -137,6 +179,11 @@ describe("Settings in the browser", () => {
     await user.click(screen.getByRole("button", { name: "Sign out" }));
     expect(signOut).toHaveBeenCalledTimes(1);
     expect(assign).not.toHaveBeenCalled();
+    expect(await screen.findByText("Could not sign out. Try again.")).toHaveAttribute("role", "alert");
+    // The next attempt clears the message.
+    await user.click(screen.getByRole("button", { name: "Sign out" }));
+    await waitFor(() => expect(assign).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText("Could not sign out. Try again.")).toBeNull();
   });
 
   it("a ?section= link opens its section even when the kept state has it, and again after Back", async () => {
@@ -184,7 +231,7 @@ describe("Settings in the browser", () => {
     }
     render(<Host />);
     await user.type(screen.getByLabelText(/^Main, pressed/), "blue");
-    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await user.click(screen.getByRole("button", { name: "Apply for this visit" }));
     expect(screen.getByLabelText(/^Main, pressed/)).toHaveFocus();
     await user.click(screen.getByRole("button", { name: "toggle" }));
     screen.getByLabelText("other").focus();

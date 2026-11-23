@@ -1,7 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { COLOR_GROUPS, CONNECTIONS, ESSENTIAL_FIELDS, SECTIONS, SOON_ITEMS, SWITCHES, labelOfKey } from "../api/fields";
+import { useState, type ReactNode } from "react";
+import { COLOR_GROUPS, CONNECTIONS, ESSENTIAL_FIELDS, SECTIONS, SOON_ITEMS, SWITCHES, labelOfKey, sectionOfKey } from "../api/fields";
 import type { SettingsState } from "../api/state";
 import { UNKNOWN_CONNECTIONS, connectionsIntro } from "../api/connections";
 import { useSettings } from "../hooks/use-settings";
@@ -38,10 +38,19 @@ type Props = {
 export function SettingsPage({ initial, initialValues, initialSection, connections = UNKNOWN_CONNECTIONS }: Props) {
   const { state, dispatch, filter, extras, phone, choicesAvailable } = useSettings(initial, initialValues, initialSection, connections);
   const signOut = useSignOut();
+  const [signOutFailed, setSignOutFailed] = useState(false);
   const { values, draft, err } = state;
   const show = (id: string) => filter.items[id];
+  const dirtyKeys = Object.keys({ ...values, ...draft }).filter((k) => (draft[k] ?? "") !== (values[k] ?? ""));
+  const dirty = dirtyKeys.length > 0;
+  const dirtySections = new Set<SectionKey>(dirtyKeys.map((k) => sectionOfKey(k) ?? "biz"));
+  // An error shows next to its field when that field can be seen. A search shows the color fields
+  // even when they are closed. Otherwise the top alert carries the message.
+  const errFieldSeen = !!err && !!show(`cv-${err.key}`) &&
+    (filter.active || (state.sec === err.section && (err.section !== "colors" || state.cols)));
+  const topErr = errFieldSeen ? null : err;
   const edit = (key: string, value: string) => dispatch({ type: "edit", key, value });
-  const fieldProps = (f: Field) => ({ field: f, value: draft[f.key] ?? "", saved: values[f.key] ?? "", invalid: err?.key === f.key, onChange: edit });
+  const fieldProps = (f: Field) => ({ field: f, value: draft[f.key] ?? "", saved: values[f.key] ?? "", invalid: err?.key === f.key, error: errFieldSeen && err?.key === f.key ? err.message : undefined, onChange: edit });
 
   const bizFields = [...ESSENTIAL_FIELDS, ...extras.map((key) => ({ key, label: labelOfKey(key) }))].filter((f) => show(`cv-${f.key}`));
   
@@ -55,7 +64,7 @@ export function SettingsPage({ initial, initialValues, initialSection, connectio
       <section className="fd-phd fd-in" style={{ "--i": 0 } as React.CSSProperties}>
         <h1 className="fd-pt">Settings</h1>
         <p className="fd-pw">
-          <span className="fd-wd">Your business details, brand colors and connections in one place. The details and colors come from your GoHighLevel custom values.</span>
+          <span className="fd-wd">Your business details, brand colors and connections in one place. The details and colors come from your account.</span>
           <span className="fd-wm">Your business details, brand colors and connections.</span>
         </p>
       </section>
@@ -82,10 +91,16 @@ export function SettingsPage({ initial, initialValues, initialSection, connectio
                 type="button"
                 className={`fx-stni${state.sec === s.key ? " is-on" : ""}`}
                 aria-current={state.sec === s.key ? "page" : "false"}
-                onClick={() => dispatch({ type: "go", section: s.key })}
+                onClick={() => {
+                  setSignOutFailed(false);
+                  dispatch({ type: "go", section: s.key });
+                }}
               >
                 <span className="fx-sti"><svg width="17" height="17" {...svgProps}>{NAV_ICONS[s.key]}</svg></span>
-                <span className="fx-stt">{s.title}</span>
+                <span className="fx-stt">
+                  {s.title}
+                  {dirtySections.has(s.key) ? <span className="fd-hint" style={{ display: "block" }}>Not applied yet</span> : null}
+                </span>
                 <svg className="fx-stch" width="16" height="16" {...svgProps}><path d="m9 6 6 6-6 6" /></svg>
               </button>
             </li>
@@ -103,19 +118,15 @@ export function SettingsPage({ initial, initialValues, initialSection, connectio
       </p>
 
       <div className="fx-stbody">
-        <p className={`fd-okl${state.ok ? "" : " is-off"}`} role="status">
-          <svg width="16" height="16" {...svgProps} strokeWidth={2.2}><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
-          <span>Saved. Every page uses the new values.</span>
-        </p>
-        <p className={`fd-lerr fd-ste${err ? "" : " is-off"}`} id="fd-st-err" role="alert">
+        <p className={`fd-lerr fd-ste${topErr ? "" : " is-off"}`} id="fd-st-err" role="alert">
           <svg width="16" height="16" {...svgProps}><circle cx="12" cy="12" r="9" /><path d="M12 7.5v5M12 16.2v.3" /></svg>
-          <span><span className="fd-h">{err?.message ?? ""}</span></span>
+          <span><span className="fd-h">{topErr?.message ?? ""}</span></span>
         </p>
 
         {filter.sections.biz ? (
           <section className="fd-pnl fd-in" style={{ "--i": 1 } as React.CSSProperties} aria-labelledby="fd-st-1">
             <h2 className="fd-pnh" id="fd-st-1">Business details</h2>
-            <p className="fd-pns">Folder 01_Business_essentials. Your website and your texts read the same values. A change here changes them too.</p>
+            <p className="fd-pns">Your business name, contact details and links. Changes here do not reach your website or texts yet.</p>
             <div className="fd-cvg">{bizFields.map((f) => <ValueField key={f.key} {...fieldProps(f)} />)}</div>
           </section>
         ) : null}
@@ -123,7 +134,7 @@ export function SettingsPage({ initial, initialValues, initialSection, connectio
         {filter.sections.colors ? (
           <section className="fd-pnl fd-in" style={{ "--i": 2 } as React.CSSProperties} aria-labelledby="fd-st-2">
             <h2 className="fd-pnh" id="fd-st-2">Brand colors</h2>
-            <p className="fd-pns">Folder 02_Branding. Four groups. Type a color like #2E7D32 and press Save changes. Every page takes the color of each key.</p>
+            <p className="fd-pns">Type a color like #2E7D32, then press Apply for this visit.</p>
             <button
               type="button"
               className="fd-btn is-plain fd-cvt"
@@ -146,11 +157,17 @@ export function SettingsPage({ initial, initialValues, initialSection, connectio
           </section>
         ) : null}
 
-        {/* Always there, as in the design: CSS hides it on the sections without fields. */}
-        <div className="fd-cvsv fd-in" style={{ "--i": 3 } as React.CSSProperties}>
-          <button type="button" className="fd-btn is-fill fd-lgo fd-cvs" onClick={() => dispatch({ type: "save" })}>Save changes</button>
-          <p className="fd-pns fd-hint">The names of the keys never change. Only their values do.</p>
-        </div>
+        {/* CSS hides it on the sections without fields. While searching it shows only with a field. */}
+        {filter.sections.biz || filter.sections.colors ? (
+          <div className="fd-cvsv fd-in" style={{ "--i": 3 } as React.CSSProperties}>
+            <p className={`fd-okl${state.ok && !dirty ? "" : " is-off"}`} role="status" style={{ flexBasis: "100%", marginBottom: 0 }}>
+              <svg width="16" height="16" {...svgProps} strokeWidth={2.2}><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
+              <span>Changed for this visit only. Not saved to your account yet.</span>
+            </p>
+            <button type="button" className="fd-btn is-fill fd-lgo fd-cvs" onClick={() => dispatch({ type: "save" })}>Apply for this visit</button>
+            <p className="fd-pns fd-hint" role="status">{dirty ? "You have changes that are not applied yet." : "Changes last until you close or reload this page."}</p>
+          </div>
+        ) : null}
 
         {filter.sections.conn ? (
           <section className="fd-stsec fd-in" style={{ "--i": 4 } as React.CSSProperties} aria-labelledby="fd-st-4">
@@ -224,7 +241,15 @@ export function SettingsPage({ initial, initialValues, initialSection, connectio
         </div>
       </div>
 
-      <button type="button" className="fd-btn is-plain fd-lgo fd-stout" onClick={() => void signOut()}>Sign out</button>
+      <button
+        type="button"
+        className="fd-btn is-plain fd-lgo fd-stout"
+        onClick={() => {
+          setSignOutFailed(false);
+          void signOut().then((ok) => setSignOutFailed(!ok));
+        }}
+      >Sign out</button>
+      {signOutFailed ? <p className="fd-lerr" role="alert" style={{ gridColumn: "1 / -1" }}>Could not sign out. Try again.</p> : null}
     </div>
   );
 }

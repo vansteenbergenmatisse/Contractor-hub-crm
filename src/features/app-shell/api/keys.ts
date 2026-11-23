@@ -40,7 +40,7 @@ export function helpRows(mac: boolean): ReadonlyArray<readonly [string, string]>
   const c = mac ? "⌘" : "Ctrl ";
   const o = mac ? "⌥" : "Alt ";
   return [
-    [`${c}F`, "Search customers, quotes and invoices"],
+    [`${c}F`, "Search leads"],
     [`${c}Z`, "Undo the last change on this page"],
     [`${c},`, "Open Settings"],
     [`${o}${c}N`, "Add a new lead"],

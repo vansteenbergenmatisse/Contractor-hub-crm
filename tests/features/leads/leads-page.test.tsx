@@ -118,7 +118,10 @@ describe("LeadsPage markup", () => {
     expect(html).not.toContain("fx-addscrim is-on");
     expect(html).toContain("Add a lead by hand");
     expect(html).toContain('for="fd-ld-name">Name</label>');
-    expect(html).toContain('for="fd-ld-addr">Full address (if you have it)</label>');
+    expect(html).toContain('for="fd-ld-email">Email (optional)</label>');
+    expect(html).toContain('for="fd-ld-addr">Address (optional)</label>');
+    expect(html).toContain('for="fd-ld-need">What they need (optional)</label>');
+    expect(html).toContain("For a lead you met in person. It stays on this screen and is not saved.");
     expect((html.match(/class="fd-lerr is-off"/g) ?? []).length).toBe(3);
     expect(html).not.toContain("fd-lin is-bad");
   });

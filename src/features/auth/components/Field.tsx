@@ -30,7 +30,7 @@ export function Field({ label, name, type = "text", autoComplete, value, onChang
       value={value}
       readOnly={readOnly}
       autoFocus={autoFocus}
-      autoCapitalize="none"
+      autoCapitalize={type === "text" ? "words" : "none"}
       spellCheck={false}
       aria-invalid={error ? true : undefined}
       aria-describedby={error ? `${id}-err` : undefined}

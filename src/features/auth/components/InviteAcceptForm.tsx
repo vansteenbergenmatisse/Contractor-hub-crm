@@ -19,13 +19,13 @@ export function InviteAcceptForm({ code, email }: { code: string; email: string 
   if (email === null) {
     return (
       <AuthCard title="This invite does not work" subtitle="The link has expired or was already used. Ask Forge Forward for a new one.">
-        <Link className="fd-btn is-plain fd-lgo" href="/sign-in">Go to sign in</Link>
+        <Link className="fd-btn is-fill fd-lgo" href="/sign-in">Go to sign in</Link>
       </AuthCard>
     );
   }
   if (done) {
     return (
-      <AuthCard title="You are in" subtitle="Your account is ready. Sign in with your email and the password you just chose.">
+      <AuthCard title="Account created" subtitle="Last step: sign in with your email and the password you just chose.">
         <Link className="fd-btn is-fill fd-lgo" href="/sign-in">Sign in</Link>
       </AuthCard>
     );
@@ -55,7 +55,7 @@ export function InviteAcceptForm({ code, email }: { code: string; email: string 
   }
 
   return (
-    <AuthCard title="Welcome" subtitle="Choose a password to finish your account.">
+    <AuthCard title="Welcome" subtitle={`Add your name and a password of at least ${MIN_PASSWORD_LENGTH} characters. Then sign in.`}>
       <form className="fd-lf" onSubmit={submit} noValidate>
         <Field label="Email" name="email" type="email" autoComplete="username" value={email} onChange={() => {}} readOnly />
         <Field label="Your name" name="name" autoComplete="name" value={name} onChange={setName} error={nameError} />

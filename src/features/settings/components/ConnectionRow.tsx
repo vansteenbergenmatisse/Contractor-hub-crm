@@ -1,4 +1,4 @@
-import { A2P_UNKNOWN, A2P_VERIFIED, ASKED_NOTE, ASK_LABEL, DONE_WHEN, NO_STATUS_NOTE, connectionChip } from "../api/connections";
+import { A2P_UNKNOWN, A2P_VERIFIED, ASKED_NOTE, ASK_LABEL, DONE_WHEN, connectionChip } from "../api/connections";
 import type { Connection, ConnectionStatus } from "../types";
 import { ChipIcons } from "./ChipIcons";
 import { svgProps } from "./svg-props";
@@ -18,7 +18,7 @@ type Props = {
 
 // One connection row. A row known to be not connected shows what you need, the steps, the done-when
 // line and the ask button (build prompt section 8, Settings 3). A connected row is collapsed with
-// "How it works". A row with no known status shows one line and offers no steps or actions.
+// "How it works". A row with no known status shows only its chip: no steps and no actions.
 export function ConnectionRow({ connection: c, status, phone, a2p, how, asked, onHow, onAsk }: Props) {
   const unknown = status.state === "unknown";
   const on = status.state === "connected";
@@ -59,11 +59,7 @@ export function ConnectionRow({ connection: c, status, phone, a2p, how, asked, o
           )}
         </div>
       ) : null}
-      {unknown ? (
-        <div className="fd-rex">
-          <p className="fd-pns fd-hint">{NO_STATUS_NOTE}</p>
-        </div>
-      ) : (
+      {unknown ? null : (
         <div className={`fd-rex fd-how${open ? "" : " is-off"}`}>
           <p className="fd-hneed"><b>You need:</b> {c.need}</p>
           <ol className="fd-steps">{c.steps.map((s) => <li key={s}>{s}</li>)}</ol>

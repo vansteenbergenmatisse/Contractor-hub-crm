@@ -74,24 +74,26 @@ export function AddLeadPanel({ sheet, phone, focusTick, form, errors, focus, onF
       <button type="button" className={`fx-addscrim${sheet ? " is-on" : ""}`} aria-label="Close" tabIndex={sheet ? 0 : -1} onClick={onClose} />
       <section ref={panelRef} className={`fd-pnl fx-addp${sheet ? " is-sheet" : ""}`} aria-labelledby="fd-ld-h" role={dialog ? "dialog" : undefined} aria-modal={dialog ? true : undefined} onKeyDown={onKey}>
         <h2 className="fd-pnh" id="fd-ld-h">Add a lead by hand</h2>
-        <p className="fd-pns">For a lead you met in person. Leads from calls, forms and messages add themselves. A lead added here stays on this screen for now and is not saved.</p>
-        <label className="fd-ll" htmlFor="fd-ld-name">Name</label>
-        <input className={`fd-lin${bad(errors.name)}`} id="fd-ld-name" type="text" autoComplete="off" ref={nameRef} value={form.name} aria-invalid={errors.name ? true : undefined} aria-describedby="fd-ld-name-e" onChange={(e) => onField("name", e.target.value)} />
-        <FieldError id="fd-ld-name-e" message={errors.name} />
-        <label className="fd-ll" htmlFor="fd-ld-phone">Phone</label>
-        <input className={`fd-lin${bad(errors.phone)}`} id="fd-ld-phone" type="tel" inputMode="tel" autoComplete="off" ref={phoneRef} value={form.phone} aria-invalid={errors.phone ? true : undefined} aria-describedby="fd-ld-phone-e" onChange={(e) => onField("phone", e.target.value)} />
-        <FieldError id="fd-ld-phone-e" message={errors.phone} />
-        <label className="fd-ll" htmlFor="fd-ld-email">Email (if they have one)</label>
-        <input className={`fd-lin${bad(errors.email)}`} id="fd-ld-email" type="email" inputMode="email" autoComplete="off" ref={emailRef} value={form.email} aria-invalid={errors.email ? true : undefined} aria-describedby="fd-ld-email-e" onChange={(e) => onField("email", e.target.value)} />
-        <FieldError id="fd-ld-email-e" message={errors.email} />
-        <label className="fd-ll" htmlFor="fd-ld-addr">Full address (if you have it)</label>
-        <input className="fd-lin" id="fd-ld-addr" type="text" autoComplete="off" value={form.addr} onChange={(e) => onField("addr", e.target.value)} />
-        <label className="fd-ll" htmlFor="fd-ld-need">What they need (optional)</label>
-        <input className="fd-lin" id="fd-ld-need" type="text" autoComplete="off" value={form.need} onChange={(e) => onField("need", e.target.value)} />
-        <div className="fx-addact">
-          <button type="button" className="fd-btn fd-lgo" onClick={onSubmit}>Add lead</button>
-          <button type="button" className="fd-btn is-plain fd-lgo fx-addx" onClick={onClose}>Cancel</button>
-        </div>
+        <p className="fd-pns">For a lead you met in person. It stays on this screen and is not saved.</p>
+        <form noValidate style={{ display: "contents" }} onSubmit={(e) => { e.preventDefault(); onSubmit(); }}>
+          <label className="fd-ll" htmlFor="fd-ld-name">Name</label>
+          <input className={`fd-lin${bad(errors.name)}`} id="fd-ld-name" type="text" autoCapitalize="words" autoComplete="off" ref={nameRef} value={form.name} aria-invalid={errors.name ? true : undefined} aria-describedby="fd-ld-name-e" onChange={(e) => onField("name", e.target.value)} />
+          <FieldError id="fd-ld-name-e" message={errors.name} />
+          <label className="fd-ll" htmlFor="fd-ld-phone">Phone</label>
+          <input className={`fd-lin${bad(errors.phone)}`} id="fd-ld-phone" type="tel" inputMode="tel" autoComplete="off" ref={phoneRef} value={form.phone} aria-invalid={errors.phone ? true : undefined} aria-describedby="fd-ld-phone-e" onChange={(e) => onField("phone", e.target.value)} />
+          <FieldError id="fd-ld-phone-e" message={errors.phone} />
+          <label className="fd-ll" htmlFor="fd-ld-email">Email (optional)</label>
+          <input className={`fd-lin${bad(errors.email)}`} id="fd-ld-email" type="email" inputMode="email" autoComplete="off" ref={emailRef} value={form.email} aria-invalid={errors.email ? true : undefined} aria-describedby="fd-ld-email-e" onChange={(e) => onField("email", e.target.value)} />
+          <FieldError id="fd-ld-email-e" message={errors.email} />
+          <label className="fd-ll" htmlFor="fd-ld-addr">Address (optional)</label>
+          <input className="fd-lin" id="fd-ld-addr" type="text" autoCapitalize="words" autoComplete="off" value={form.addr} onChange={(e) => onField("addr", e.target.value)} />
+          <label className="fd-ll" htmlFor="fd-ld-need">What they need (optional)</label>
+          <input className="fd-lin" id="fd-ld-need" type="text" enterKeyHint="done" autoComplete="off" value={form.need} onChange={(e) => onField("need", e.target.value)} />
+          <div className="fx-addact">
+            <button type="submit" className={`fd-btn fd-lgo${sheet ? " is-fill" : ""}`}>Add lead</button>
+            <button type="button" className="fd-btn is-plain fd-lgo fx-addx" onClick={onClose}>Cancel</button>
+          </div>
+        </form>
       </section>
     </>
   );

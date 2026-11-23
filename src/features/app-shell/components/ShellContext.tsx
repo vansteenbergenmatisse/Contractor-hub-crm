@@ -24,7 +24,8 @@ export type ShellApi = {
   // Ends the session, then loads /sign-in in full (the menu card's Sign out; Settings' Sign out).
   signOut: () => Promise<void>;
   // A page's current search rows (see useSearchRows); they replace the layout's rows for that page.
-  setSearchRows: (page: SearchRow["page"], rows: readonly SearchRow[]) => void;
+  // With `{ seed: true }` they fill in for that page, and a changed seed replaces its older rows.
+  setSearchRows: (page: SearchRow["page"], rows: readonly SearchRow[], options?: { seed?: boolean }) => void;
 };
 
 export const ShellContext = createContext<ShellApi | null>(null);

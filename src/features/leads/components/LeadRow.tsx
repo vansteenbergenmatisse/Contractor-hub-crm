@@ -45,7 +45,7 @@ export function LeadRow({ lead, status: stored, main, onCall, onReply, onBook }:
   ];
   const gestures = useRowGestures<HTMLDivElement>({ label: lead.name, actions });
   return (
-    <div {...gestures} className="fd-rw" data-row-id={lead.id}>
+    <div {...gestures} tabIndex={-1} className="fd-rw" data-row-id={lead.id}>
       <div className="fd-rm">
         <span className={lead.source ? `fd-cht is-${lead.source}` : "fd-cht"} aria-hidden="true"><ChannelIcon name={lead.source ?? "clock"} /></span>
         <div className="fd-rbx">

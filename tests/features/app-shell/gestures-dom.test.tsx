@@ -1,16 +1,17 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { useRef } from "react";
+import { Suspense, use, useEffect, useRef, useState } from "react";
 
 const push = vi.fn();
+const refresh = vi.fn();
 vi.mock("next/navigation", () => ({
   usePathname: () => "/today",
-  useRouter: () => ({ push, refresh: vi.fn() }),
+  useRouter: () => ({ push, refresh }),
   useSearchParams: () => new URLSearchParams(),
 }));
 
-import { AppShell, GestureLayer, buildBusiness, useHorizontalSwipe, useRowGestures, useSheetSwipe, useShell, type RowAction } from "@/features/app-shell";
+import { AppShell, GestureLayer, buildBusiness, useHorizontalSwipe, usePullToRefresh, useRowGestures, useSearchRows, useSheetSwipe, useShell, type RowAction } from "@/features/app-shell";
 
 const business = buildBusiness({ name: "Sample Roofing", owner: "Pat Lee" });
 
@@ -301,6 +302,35 @@ describe("stage list and day strip swipe", () => {
   });
 });
 
+// Stays suspended until `release`, which keeps a refresh transition pending like a slow server.
+function SlowPage({ slow }: { slow: Promise<void> }) {
+  const [hang, setHang] = useState(false);
+  useEffect(() => {
+    refresh.mockImplementation(() => setHang(true));
+    return () => { refresh.mockReset(); };
+  }, []);
+  if (hang) use(slow);
+  return <p data-testid="body">Page body</p>;
+}
+
+function PullBox({ onRefresh }: { onRefresh?: () => Promise<boolean> }) {
+  const ref = useRef<HTMLDivElement>(null);
+  usePullToRefresh(ref, { onRefresh });
+  return <div ref={ref} data-testid="pull-box">list</div>;
+}
+
+const leadRow = (id: string, name: string) => ({ id, page: "leads" as const, name, sub: "", href: "/leads" });
+const SEED = [leadRow("s1", "Seeded Person")];
+const OWN = [leadRow("o1", "Handed Person")];
+function SeedAndOwn({ own }: { own: boolean }) {
+  useSearchRows("leads", SEED, { seed: true });
+  return own ? <OwnRows /> : null;
+}
+function OwnRows() {
+  useSearchRows("leads", OWN);
+  return null;
+}
+
 function Detail() {
   const { askReason } = useShell();
   return (
@@ -346,7 +376,8 @@ describe("shell gestures (phone)", () => {
     expect(screen.queryByRole("alertdialog")).toBeNull();
   });
 
-  it("pull to refresh replays the design's indicator (no fetch in Phase 2)", () => {
+  it("pull to refresh runs a real refresh and says Refreshed only after it finishes", async () => {
+    refresh.mockClear();
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     shell(<Detail />);
     const body = screen.getByTestId("body");
@@ -354,17 +385,89 @@ describe("shell gestures (phone)", () => {
     const pull = document.querySelector(".fx-pull");
     expect(pull).toHaveClass("is-on", "is-ready");
     expect(pull).toHaveAttribute("role", "status");
-    expect(pull).toHaveTextContent("Updated just now");
+    expect(pull).toHaveTextContent("Release to refresh");
     expect(document.querySelector("[data-pg]")).toHaveStyle({ transform: "translateY(75px)" });
     touch(body, "touchEnd", 200, 250);
-    expect(document.querySelector(".fx-pull")).toHaveClass("is-busy");
-    expect(document.querySelector(".fx-pull")).toHaveTextContent("Updating");
-    wait(800);
-    expect(document.querySelector(".fx-pull")).toHaveTextContent("Updated just now");
+    expect(refresh).toHaveBeenCalledOnce();
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(document.querySelector(".fx-pull")).toHaveTextContent("Refreshed");
     wait(900);
     expect(document.querySelector(".fx-pull.is-on")).toBeNull();
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
+  });
+
+  it("pull to refresh claims nothing when the phone is offline", async () => {
+    refresh.mockClear();
+    const online = vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    shell(<Detail />);
+    const body = screen.getByTestId("body");
+    drag(body, [200, 100], [200, 250]);
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(refresh).not.toHaveBeenCalled();
+    expect(document.querySelector(".fx-pull")).toHaveTextContent("Could not update. Try again.");
+    expect(document.querySelector(".fx-pull")).not.toHaveTextContent("Updated");
+    online.mockRestore();
+  });
+
+  it("pull to refresh gives up after 10 seconds and ignores a late answer", async () => {
+    let release: () => void = () => {};
+    const slow = new Promise<void>((resolve) => { release = resolve; });
+    shell(<Suspense fallback={<p>loading</p>}><SlowPage slow={slow} /></Suspense>);
+    const body = screen.getByTestId("body");
+    drag(body, [200, 100], [200, 250], false);
+    const list = [{ clientX: 200, clientY: 250 }];
+    await act(async () => { fireEvent.touchEnd(body, { touches: [], changedTouches: list }); await vi.advanceTimersByTimeAsync(0); });
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(document.querySelector(".fx-pull")).toHaveTextContent("Updating");
+    await act(async () => { await vi.advanceTimersByTimeAsync(9_000); });
+    expect(document.querySelector(".fx-pull")).toHaveTextContent("Updating");
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+    expect(document.querySelector(".fx-pull")).toHaveTextContent("Could not update. Try again.");
+    await act(async () => { release(); await vi.advanceTimersByTimeAsync(0); });
+    expect(document.querySelector(".fx-pull")).not.toHaveTextContent("Updated");
+  });
+
+  it("a pull before any refresh says Pull to refresh, then Release to refresh", () => {
+    shell(<Detail />);
+    const body = screen.getByTestId("body");
+    drag(body, [200, 100], [200, 130], false);
+    expect(document.querySelector(".fx-pull")).toHaveTextContent("Pull to refresh");
+    touch(body, "touchMove", 200, 250);
+    expect(document.querySelector(".fx-pull")).toHaveTextContent("Release to refresh");
+  });
+
+  it("pull to refresh with no refresh function shows no Updated text", () => {
+    render(<GestureLayer><PullBox /></GestureLayer>);
+    const box = screen.getByTestId("pull-box");
+    drag(box, [200, 100], [200, 250], false);
+    expect(document.querySelector(".fx-pull")).toHaveTextContent("Release to refresh");
+    touch(box, "touchEnd", 200, 250);
+    expect(document.querySelector(".fx-pull.is-on")).toBeNull();
+  });
+
+  it("pull to refresh reports a refresh that answers false", async () => {
+    render(<GestureLayer><PullBox onRefresh={() => Promise.resolve(false)} /></GestureLayer>);
+    drag(screen.getByTestId("pull-box"), [200, 100], [200, 250]);
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(document.querySelector(".fx-pull")).toHaveTextContent("Could not update. Try again.");
+  });
+
+  it("search finds seeded rows, and the page's own rows win over a seed", async () => {
+    const find = async (term: string) => {
+      fireEvent.click(screen.getByRole("button", { name: "Search" }));
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      fireEvent.change(screen.getByRole("combobox"), { target: { value: term } });
+      const hit = screen.queryAllByRole("option").length;
+      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      return hit;
+    };
+    const view = render(<AppShell business={business} searchRows={[]}><SeedAndOwn own={false} /></AppShell>);
+    expect(await find("Seeded")).toBe(1);
+    view.rerender(<AppShell business={business} searchRows={[]}><SeedAndOwn own /></AppShell>);
+    expect(await find("Seeded")).toBe(0);
+    expect(await find("Handed")).toBe(1);
   });
 
   it("a short pull springs back without refreshing", () => {

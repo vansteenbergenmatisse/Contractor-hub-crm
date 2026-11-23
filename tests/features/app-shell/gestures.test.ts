@@ -57,7 +57,7 @@ describe("swipes and pull", () => {
     expect(pullDistance(-20)).toBe(0);
   });
   it("says when the page was last updated", () => {
-    expect(updatedAgo(0, 59_000)).toBe("Updated just now");
-    expect(updatedAgo(0, 180_000)).toBe("Updated 3 min ago");
+    expect(updatedAgo(0, 59_000)).toBe("Refreshed just now");
+    expect(updatedAgo(0, 180_000)).toBe("Refreshed 3 min ago");
   });
 });

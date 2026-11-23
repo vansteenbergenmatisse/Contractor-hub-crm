@@ -14,20 +14,22 @@ export type MoneyData = {
   owed: { total: string; foot: string; rowsAt: (now: Date | null) => MiniRow[] };
 };
 
-const CARDS = [["fd-m1", "Booked this week", 8], ["fd-m2", "Quotes out", 9], ["fd-m3", "Money owed", 10]] as const;
+const TITLES = ["Booked this week", "Quotes out", "Money owed"] as const;
 const rise = (i: number) => ({ "--i": i }) as CSSProperties;
 
-// No `data` (no real source yet): the three cards keep their place and title and show no value.
+// No `data` (no real source yet): one compact list keeps the three titles and shows no value.
 export function MoneyCards({ data, now }: { data?: MoneyData; now?: Date } = {}) {
   if (!data) {
     return (
-      <div className="fd-money">
-        {CARDS.map(([id, title, i]) => (
-          <section key={id} className="fd-card fd-in" style={rise(i)} aria-labelledby={id}>
-            <MoneyHead id={id} title={title} />
-            <p className="fd-mf"><NotAvailableChip /></p>
-          </section>
-        ))}
+      <div className="fd-money" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
+        <section className="fd-lst fd-in" style={rise(8)} aria-label="Money">
+          {TITLES.map((title) => (
+            <div key={title} className="fd-rw">
+              <div className="fd-rm"><div className="fd-rbx"><h2 className="fd-rn">{title}</h2></div></div>
+              <div className="fd-rac"><NotAvailableChip /></div>
+            </div>
+          ))}
+        </section>
       </div>
     );
   }

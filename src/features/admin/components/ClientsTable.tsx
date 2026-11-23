@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import type { ClientRow } from "../types";
 
 // Plain styling on purpose (build prompt section 4.8). All text states are words, not colors.
 export function ClientsTable({ clients }: { clients: ClientRow[] }) {
   const [rows, setRows] = useState(clients);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ tenantId: string; text: string } | null>(null);
   const [inviteFor, setInviteFor] = useState<string | null>(null);
   const [email, setEmail] = useState("");
 
@@ -17,7 +17,7 @@ export function ClientsTable({ clients }: { clients: ClientRow[] }) {
   async function setLogin(tenantId: string, disabled: boolean) {
     setMessage(null);
     const response = await post(`/api/admin/clients/${encodeURIComponent(tenantId)}/login`, { disabled });
-    if (!response.ok) return setMessage("Could not change login. Try again.");
+    if (!response.ok) return setMessage({ tenantId, text: "Could not change login. Try again." });
     setRows((current) =>
       current.map((row) => (row.tenantId === tenantId && row.login !== "no users" ? { ...row, login: disabled ? "off" : "on" } : row)),
     );
@@ -26,19 +26,19 @@ export function ClientsTable({ clients }: { clients: ClientRow[] }) {
   async function invite(tenantId: string) {
     setMessage(null);
     const response = await post("/api/admin/invites", { tenantId, email, role: "owner" });
-    if (!response.ok) return setMessage("The invite was not created. Check the email and that the client is connected.");
+    if (!response.ok) return setMessage({ tenantId, text: "The invite was not created. Check the email and that the client is connected." });
     const { link } = (await response.json()) as { link: string };
-    setMessage(`Invite link (send it to the owner, it works once for 72 hours): ${link}`);
+    setMessage({ tenantId, text: `Invite link (send it to the owner, it works once for 72 hours): ${link}` });
     setInviteFor(null);
     setEmail("");
   }
 
-  async function copyLink(path: string) {
+  async function copyLink(tenantId: string, path: string) {
     try {
       await navigator.clipboard.writeText(`${window.location.origin}${path}`);
-      setMessage("Link copied.");
+      setMessage({ tenantId, text: "Link copied." });
     } catch {
-      setMessage("Could not copy. Select the link and copy it by hand.");
+      setMessage({ tenantId, text: "Could not copy. Select the link and copy it by hand." });
     }
   }
 
@@ -52,10 +52,10 @@ export function ClientsTable({ clients }: { clients: ClientRow[] }) {
         </a>{" "}
         <span>In production, select all sub-accounts so new clients connect automatically.</span>
       </p>
-      {message ? <p role="status">{message}</p> : null}
+      {message && !rows.some((row) => row.tenantId === message.tenantId) ? <p role="status">{message.text}</p> : null}
       {rows.length === 0 ? <p>No clients yet. A client appears here after the app is installed on their sub-account.</p> : null}
       {rows.length > 0 ? (
-        <table>
+        <table style={{ borderSpacing: "16px 8px" }}>
           <thead>
             <tr>
               <th align="left">Client</th>
@@ -68,51 +68,76 @@ export function ClientsTable({ clients }: { clients: ClientRow[] }) {
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.tenantId}>
-                <td>{row.name}</td>
-                <td>{row.status}</td>
-                <td>{row.users}</td>
-                <td>{row.login}</td>
-                <td>
-                  {row.signInPath ? (
-                    <>
-                      <code>{row.signInPath}</code>{" "}
-                      <button type="button" aria-label={`Copy sign-in link for ${row.name}`} onClick={() => copyLink(row.signInPath as string)}>
-                        Copy
-                      </button>
-                    </>
-                  ) : (
-                    "Not available yet"
-                  )}
-                </td>
-                <td>
-                  {inviteFor === row.tenantId ? (
-                    <>
-                      <input
-                        type="email"
-                        aria-label={`Owner email for ${row.name}`}
-                        value={email}
-                        onChange={(event) => setEmail(event.target.value)}
-                      />{" "}
-                      <button type="button" onClick={() => invite(row.tenantId)} disabled={email.trim() === ""}>
-                        Create invite
-                      </button>{" "}
-                      <button type="button" onClick={() => setInviteFor(null)}>Cancel</button>
-                    </>
-                  ) : (
-                    <>
-                      <button type="button" onClick={() => setInviteFor(row.tenantId)}>Invite owner</button>{" "}
-                      {row.login === "off" ? (
-                        <button type="button" onClick={() => setLogin(row.tenantId, false)}>Turn on login</button>
-                      ) : (
-                        <button type="button" onClick={() => setLogin(row.tenantId, true)} disabled={row.login === "no users"}>
-                          Turn off login
+              <Fragment key={row.tenantId}>
+                <tr>
+                  <td>{row.name}</td>
+                  <td>{row.status}</td>
+                  <td>{row.users}</td>
+                  <td>{row.login}</td>
+                  <td>
+                    {row.signInPath ? (
+                      <>
+                        <code>{row.signInPath}</code>{" "}
+                        <button type="button" aria-label={`Copy sign-in link for ${row.name}`} onClick={() => copyLink(row.tenantId, row.signInPath as string)}>
+                          Copy
                         </button>
-                      )}
-                    </>
-                  )}
-                </td>
-              </tr>
+                      </>
+                    ) : (
+                      "Not available yet"
+                    )}
+                  </td>
+                  <td>
+                    {inviteFor === row.tenantId ? (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+                        <input
+                          type="email"
+                          aria-label={`Owner email for ${row.name}`}
+                          value={email}
+                          onChange={(event) => setEmail(event.target.value)}
+                        />
+                        <button type="button" onClick={() => invite(row.tenantId)} disabled={email.trim() === ""}>
+                          Create invite
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEmail("");
+                            setInviteFor(null);
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEmail("");
+                            setInviteFor(row.tenantId);
+                          }}
+                        >
+                          Invite owner
+                        </button>
+                        {row.login === "off" ? (
+                          <button type="button" onClick={() => setLogin(row.tenantId, false)}>Turn on login</button>
+                        ) : (
+                          <button type="button" onClick={() => setLogin(row.tenantId, true)} disabled={row.login === "no users"}>
+                            Turn off login
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </td>
+                </tr>
+                {message?.tenantId === row.tenantId ? (
+                  <tr>
+                    <td colSpan={6}>
+                      <p role="status" style={{ margin: 0, overflowWrap: "anywhere" }}>{message.text}</p>
+                    </td>
+                  </tr>
+                ) : null}
+              </Fragment>
             ))}
           </tbody>
         </table>

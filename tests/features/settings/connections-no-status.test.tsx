@@ -74,7 +74,8 @@ describe("Settings copy while a status is unknown", () => {
   it("does not promise a status in an expanded row", () => {
     expect(html).not.toContain("Done when this row says Connected.");
     expect(html).not.toContain("Ask Forge Forward to connect it.");
-    expect((html.match(/This status cannot be shown yet\./g) ?? []).length).toBe(6);
+    expect(html).not.toContain("This status cannot be shown yet.");
+    expect(html).not.toContain("fd-rex");
   });
 
   it("shows no steps and nothing the owner would need to do", () => {
@@ -104,7 +105,7 @@ describe("Settings copy while a status is unknown", () => {
     const out = renderToStaticMarkup(<SettingsPage connections={st} initial={{ ...initialState(), how: allOpen }} />);
     expect((out.match(/Done when this row says Connected\./g) ?? []).length).toBe(4);
     expect((out.match(/Ask Forge Forward to connect it\./g) ?? []).length).toBe(3);
-    expect((out.match(/This status cannot be shown yet\./g) ?? []).length).toBe(2);
+    expect(out).not.toContain("This status cannot be shown yet.");
     expect(out).toContain("What is linked to your dashboard. A row that is not connected shows its steps.");
   });
 });

@@ -9,7 +9,7 @@ import { ChannelIcon } from "./ChannelIcon";
 export function AddedLeadRow({ lead }: { lead: AddedLead }) {
   const gestures = useRowGestures<HTMLDivElement>({ label: lead.name, actions: [] });
   return (
-    <div {...gestures} className="fd-rw is-new" data-row-id={lead.id}>
+    <div {...gestures} tabIndex={-1} className="fd-rw is-new" data-row-id={lead.id}>
       <div className="fd-rm">
         <span className="fd-cht is-you" aria-hidden="true"><ChannelIcon name="you" /></span>
         <div className="fd-rbx">
@@ -17,7 +17,7 @@ export function AddedLeadRow({ lead }: { lead: AddedLead }) {
             <span className="fd-rn">{lead.name}</span>
             <span className="fd-chip is-warn"><ChannelIcon name="clock" size={13} strokeWidth={2.2} />Call back · just now</span>
           </p>
-          <p className="fd-rsb"><b className="fd-srw">Added by you</b><span>{lead.sub}</span></p>
+          <p className="fd-rsb"><b className="fd-srw">Added by you, not saved</b><span>{lead.sub}</span></p>
         </div>
       </div>
     </div>

@@ -19,7 +19,7 @@ vi.mock("@/features/app-shell", async (original) => ({
   PageAction: () => null,
 }));
 
-import { LeadsCard, LeadsTile, TodayPage } from "@/features/today";
+import { LeadsCard, LeadsTile, MoneyCards, TodayPage } from "@/features/today";
 
 const LOADED_AT = "2026-03-04T12:00:00.000Z";
 const lead = (id: string, name: string, receivedAt: string): Lead => ({
@@ -74,6 +74,41 @@ describe("Today shows no sample data", () => {
   });
 });
 
+describe("Today puts the card with real records first", () => {
+  const html = renderToStaticMarkup(<TodayPage ownerFirst="Pat" />);
+  const at = (needle: string) => {
+    const index = html.indexOf(needle);
+    expect(index, needle).toBeGreaterThanOrEqual(0);
+    return index;
+  };
+  const delay = (id: string) => {
+    const open = html.lastIndexOf("<section", at(`id="${id}"`));
+    return html.slice(open).match(/--i:\s*(\d+)/)?.[1];
+  };
+
+  it("orders leads, calendar, Needs you, then money", () => {
+    const order = [at('id="fd-lead-h"'), at('id="fd-cal-h"'), at('id="fd-need-h"'), at('aria-label="Money"')];
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+  });
+
+  it("runs the entrance from top to bottom", () => {
+    expect([delay("fd-lead-h"), delay("fd-cal-h"), delay("fd-need-h")]).toEqual(["5", "6", "7"]);
+  });
+});
+
+describe("Money with no data", () => {
+  it("is one list of three rows, each with its own chip and no chevron", () => {
+    render(<MoneyCards />);
+    const list = screen.getByRole("region", { name: "Money" });
+    expect(list).toHaveClass("fd-lst");
+    const rows = Array.from(list.querySelectorAll<HTMLElement>(":scope > .fd-rw"));
+    expect(rows.map((row) => row.querySelector(".fd-rn")?.textContent)).toEqual(["Booked this week", "Quotes out", "Money owed"]);
+    for (const row of rows) expect(row.querySelector(".fd-rac .fd-chip")).toHaveTextContent("Not available yet");
+    expect(document.querySelector(".fd-mh")).toBeNull();
+    expect(screen.getAllByRole("heading", { level: 2 })).toHaveLength(3);
+  });
+});
+
 describe("Today lead rows are the tenant's real leads", () => {
   it("shows both contacts that share a name, keyed by id, with no key warning", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -90,6 +125,26 @@ describe("Today lead rows are the tenant's real leads", () => {
     expect(row.textContent).not.toMatch(/waiting/i);
     expect(row.querySelector(".fd-chip")).toBeNull();
     expect(within(row).queryByRole("button")).toBeNull();
+  });
+
+  it("opens the lead on the Leads page from its row", () => {
+    const withOddId = [lead("a b/c", "Odd Id", "2026-03-04T11:30:00.000Z"), ...LEADS];
+    render(<LeadsCard result={ready(true, withOddId)} range="today" onRange={() => {}} timeZone="UTC" />);
+    const pane = document.querySelector<HTMLElement>(".fd-pane:not(.is-off)") as HTMLElement;
+    const links = Array.from(pane.querySelectorAll<HTMLAnchorElement>("li > a.fd-lead"));
+    expect(links.map((link) => link.getAttribute("href"))).toEqual(["/leads?row=a%20b%2Fc", "/leads?row=c1", "/leads?row=c2"]);
+  });
+
+  it("keeps the loading rows as plain rows with no link", () => {
+    expect(card(null)).not.toContain("<a ");
+  });
+
+  it.each(["reconnect", "unavailable"] as const)("marks the %s state as a failure", (state) => {
+    expect(card({ state })).toMatch(/class="fd-none fx-none is-bad"/);
+  });
+
+  it("keeps the empty state calm", () => {
+    expect(card({ state: "empty" })).not.toContain("is-bad");
   });
 
   it("splits today from the last seven days in the viewer's time zone", () => {

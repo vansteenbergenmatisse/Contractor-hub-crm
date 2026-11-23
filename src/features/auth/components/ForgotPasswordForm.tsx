@@ -36,7 +36,7 @@ export function ForgotPasswordForm({ brand }: { brand?: SignInBrand | null }) {
   if (sent) {
     return (
       <AuthCard title="Check your email" subtitle="If that email has an account, a link to choose a new password is on its way. The link works for one hour." brand={brand}>
-        <Link className="fd-btn is-plain fd-lgo" href={clientHref("/sign-in", brand)}>Back to sign in</Link>
+        <Link className="fd-btn is-fill fd-lgo" href={clientHref("/sign-in", brand)}>Back to sign in</Link>
       </AuthCard>
     );
   }

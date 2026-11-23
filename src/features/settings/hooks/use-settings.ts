@@ -64,14 +64,15 @@ export function useSettings(
   usePushed(state.open && !filter.active);
 
   useEffect(() => {
-    if (!state.focus || state.focus === arrivedFocus.current) return;
-    document.getElementById(`cv-${state.focus.key}`)?.focus();
-  }, [state.focus]);
-
-  useEffect(() => {
     const main = document.querySelector(".fd-main");
     if (main) main.scrollTop = 0;
   }, [state.sec, state.open]);
+
+  // After the scroll above: when an error switches section, the field and its message stay in view.
+  useEffect(() => {
+    if (!state.focus || state.focus === arrivedFocus.current) return;
+    document.getElementById(`cv-${state.focus.key}`)?.focus();
+  }, [state.focus]);
 
   useEffect(() => {
     if (!state.ok) return;

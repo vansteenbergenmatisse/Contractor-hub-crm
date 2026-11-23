@@ -36,7 +36,9 @@ Mock data sits in marked mock modules (`MOCK DATA` header, one `mock.ts` per fea
 
 ## Phase 3: wire each page to HighLevel
 
-Start here (2026-11-22). The goal the user stated: once signed in, each person sees THEIR sub-account's real leads, conversations and so on. Today every working page is marked MOCK data, so a client sees sample roofing customers.
+Status (2026-11-22): Leads and Today's lead rows read real contacts, read-only, but have not been seen with real data yet. All other data sections show "Not available yet". JCR is connected on dev. New sub-accounts are built to connect automatically after a "Select all" install (not proven). UX laws are applied and documented in `docs/ux-laws.md`; follow them when wiring each page. Install and new-client steps: `docs/sop-highlevel-install.md`. Adapter plan: `docs/greenlane/phase-3-adapter-plan.md`. **Next: prove real leads on dev, then Inbox.**
+
+The goal the user stated: once signed in, each person sees THEIR sub-account's real leads, conversations and so on.
 
 Before the first ticket:
 - Verify each HighLevel endpoint, scope and response shape in the official docs and record it in `docs/greenlane/hl-api-notes.md`. Nothing is confirmed on a real response yet, including `GET /users/?locationId=`, which appears only in HighLevel's legacy API file.

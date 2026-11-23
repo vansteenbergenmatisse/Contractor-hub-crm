@@ -41,6 +41,22 @@ describe.each(ROUTES)("the %s route", (feature, title, Route) => {
     expect(html).toContain('<span class="fd-chip is-plain">Not available yet</span>');
   });
 
+  it("offers a way out to the leads page", () => {
+    const link = html.match(/<a\b[^>]*>See your leads<\/a>/)?.[0];
+    expect(link).toBeDefined();
+    expect(link).toContain('href="/leads"');
+    expect(link).toContain('class="fd-btn is-plain"');
+  });
+
+  it("shows no row that could pass for a real record", () => {
+    expect(html).not.toContain("fd-lst");
+    expect(html).not.toContain("fd-rw");
+  });
+
+  it("makes no claim about when the page will arrive", () => {
+    expect(html).not.toMatch(/\b(soon|coming|shortly|later)\b/i);
+  });
+
   it("renders no sample name or amount", () => {
     for (const sample of samples(feature)) expect(html).not.toContain(sample);
     expect(html).not.toMatch(/\$\d/);

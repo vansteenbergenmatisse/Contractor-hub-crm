@@ -14,7 +14,7 @@ export function LeadsCardStatus({ state }: { state: keyof typeof COPY }) {
   const router = useRouter();
   const copy = COPY[state];
   return (
-    <div className="fd-none fx-none" role={state === "empty" ? "status" : "alert"}>
+    <div className={`fd-none fx-none${state === "empty" ? "" : " is-bad"}`} role={state === "empty" ? "status" : "alert"}>
       <Glyph name={copy.icon} size={20} />
       <p>{copy.title}</p>
       <span>{copy.body}</span>

@@ -35,7 +35,8 @@ TypeScript is pinned to 6.0.x because `typescript-eslint` does not support 7.x y
 
 ## Rules
 
-- Keep the frontend design as it is. Only wire it up.
+- Keep the frontend design as it is. Only wire it up. Exception (user, 2026-11-22): small changes that apply the UX laws in `docs/ux-laws.md` are allowed. Follow that file when wiring a page.
+- Add a client or install the HighLevel app only by following `docs/sop-highlevel-install.md`.
 - Fix the code when a test fails. Leave the test file alone.
 - After each ticket run all tests and update PROGRESS.md. Then commit.
 - If two rounds in a row make no progress stop and write why in PROGRESS.md.

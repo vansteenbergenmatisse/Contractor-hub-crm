@@ -30,7 +30,7 @@ export const LONG_PRESS = { ms: 500, slop: 8, reopenGuardMs: 900 } as const;
 export const SHEET_SWIPE = { grabZone: 44, start: 8, close: 90, grow: -60, maxShare: 0.92 } as const;
 export const EDGE_SWIPE = { cancelY: 12, start: 10, go: 80, maxSlide: 160, slideRatio: 0.5, snapMs: 180 } as const;
 export const H_SWIPE = { minX: 70, maxY: 40 } as const;
-export const PULL = { cancelUp: -4, cancelX: 12, start: 10, ratio: 0.5, max: 96, ready: 60, busySlide: 56, busyMs: 800, doneMs: 900, slideMs: 260, autoMs: 60_000 } as const;
+export const PULL = { cancelUp: -4, cancelX: 12, start: 10, ratio: 0.5, max: 96, ready: 60, busySlide: 56, doneMs: 900, slideMs: 260 } as const;
 export const NO_CLICK_MS = 450;
 export const SNAP_EASE = "cubic-bezier(.4,0,.2,1)";
 export const SLIDE_EASE = "cubic-bezier(0,0,.2,1)";
@@ -114,7 +114,7 @@ export function pullDistance(dy: number): number {
 
 export function updatedAgo(since: number, now: number): string {
   const m = Math.floor((now - since) / 60000);
-  return m < 1 ? "Updated just now" : `Updated ${m} min ago`;
+  return m < 1 ? "Refreshed just now" : `Refreshed ${m} min ago`;
 }
 
 // --- sheets

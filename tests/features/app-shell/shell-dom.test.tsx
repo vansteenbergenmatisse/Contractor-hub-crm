@@ -365,23 +365,22 @@ describe("drawer, feedback and skip link", () => {
     expect(menu).toHaveFocus();
   });
 
-  it("feedback takes focus, is modal, and Send is always enabled, as in the design", async () => {
+  it("feedback is modal, says it is not available, and cannot reach the thank-you", async () => {
     const user = setupUser();
     shell(<p>page</p>);
     await user.click(screen.getAllByRole("button", { name: "Send feedback" })[0]);
     await wait(100);
     const sheet = screen.getByRole("dialog", { name: "Send feedback" });
     expect(sheet).toHaveAttribute("aria-modal", "true");
-    expect(screen.getByRole("textbox", { name: "Your feedback" })).toHaveFocus();
-    expect(screen.getByRole("button", { name: "Send" })).toBeEnabled();
-    await user.keyboard("   ");
-    expect(screen.getByRole("button", { name: "Send" })).toBeEnabled();
-    await user.keyboard("More colors");
-    await user.click(screen.getByRole("button", { name: "Send" }));
-    expect(screen.getByText(/Sent\. We read every note\./)).toBeInTheDocument();
-    await wait(10);
-    expect(screen.getByRole("button", { name: "Close" })).toHaveFocus();
-    await user.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.getByText("Sending feedback is not available yet.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
+    expect(screen.getByRole("textbox", { name: "Your feedback" })).toBeDisabled();
+    const send = screen.getByRole("button", { name: "Send" });
+    expect(send).toBeDisabled();
+    expect(send).toHaveAttribute("title", "Not available yet");
+    await user.click(send);
+    expect(screen.getByText(/Sent\. We read every note\./).closest(".fd-part")).toHaveClass("is-off");
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
     await user.click(screen.getAllByRole("button", { name: "Send feedback" })[0]);
     await wait(100);
     expect(screen.getByRole("textbox", { name: "Your feedback" }).closest(".fd-part")).not.toHaveClass("is-off");

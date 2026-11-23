@@ -31,11 +31,13 @@ export function TodayPage({ ownerFirst, leadsTile, leadsCard }: { ownerFirst?: s
         tiles={NOT_WIRED}
         onOpen={(page: PageKey) => router.push(PAGE_PATH[page])}
       />
-      <NotAvailableCard id="fd-need-h" title="Needs you" index={5} className="fd-need" />
+      {/* Leads come first because they are the only real records here. When Needs you has real data,
+          restore the design order: Needs you, then .fd-two with the calendar before leads. */}
       <div className="fd-two">
-        <NotAvailableCard id="fd-cal-h" title="Today’s calendar" index={6} />
         <Suspense fallback={<TodayLeadsCard result={null} />}>{leadsCard ?? <TodayLeadsCard result={{ state: "unavailable" }} />}</Suspense>
+        <NotAvailableCard id="fd-cal-h" title="Today’s calendar" index={6} />
       </div>
+      <NotAvailableCard id="fd-need-h" title="Needs you" index={7} className="fd-need" />
       <MoneyCards />
     </>
   );

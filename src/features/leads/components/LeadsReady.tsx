@@ -76,6 +76,8 @@ export function LeadsReady({ leads: loaded, loadedAt, complete, dropped }: Props
   const added = visibleAdded(state);
   const mainId = firstNeedId(leads, state);
   const openInbox = () => router.push(PAGE_PATH.inbox);
+  // Closing the sheet keeps what was typed, so the button says a lead is waiting to be finished.
+  const hasDraft = Object.values(state.form).some((v) => v.trim() !== "");
   // A search result opens /leads?row=<lead id>: show all leads when the filter hides that lead,
   // then the shell's useRowFocus brings the row into view (it only gets the rows on screen).
   const shownIds = [...added.map((a) => a.id), ...rows.map((l) => l.id)];
@@ -96,7 +98,7 @@ export function LeadsReady({ leads: loaded, loadedAt, complete, dropped }: Props
       {!state.sheet && (
         <PageAction>
           <button ref={addButtonRef} type="button" className="fd-btn fx-accb" onClick={openAdd}>
-            <ChannelIcon name="plus" size={16} strokeWidth={2.2} />Add a lead
+            <ChannelIcon name="plus" size={16} strokeWidth={2.2} />{hasDraft ? "Finish lead" : "Add a lead"}
           </button>
         </PageAction>
       )}
@@ -128,20 +130,25 @@ export function LeadsReady({ leads: loaded, loadedAt, complete, dropped }: Props
               <button type="button" className="fd-btn is-plain" onClick={() => dispatch({ type: "filter", filter: "all" })}>Show all leads</button>
             </div>
           )}
-          <div className="fd-lst">
-            {added.map((a) => <AddedLeadRow key={a.id} lead={a} />)}
-            {rows.map((l) => (
-              <LeadRow
-                key={l.id}
-                lead={l}
-                status={state.status[l.id]}
-                main={l.id === mainId}
-                onCall={() => dispatch({ type: "call", id: l.id })}
-                onReply={openInbox}
-                onBook={() => dispatch({ type: "book", id: l.id })}
-              />
-            ))}
-          </div>
+          {rows.some((l) => (state.status[l.id] ?? l.status) === "new") && (
+            <p className="fd-pns">Calling and booking from this list are not available yet.</p>
+          )}
+          {rows.length + added.length > 0 && (
+            <div className="fd-lst">
+              {added.map((a) => <AddedLeadRow key={a.id} lead={a} />)}
+              {rows.map((l) => (
+                <LeadRow
+                  key={l.id}
+                  lead={l}
+                  status={state.status[l.id]}
+                  main={l.id === mainId}
+                  onCall={() => dispatch({ type: "call", id: l.id })}
+                  onReply={openInbox}
+                  onBook={() => dispatch({ type: "book", id: l.id })}
+                />
+              ))}
+            </div>
+          )}
           {!complete && <p className="fd-pns">Showing your newest {leads.length === 1 ? "lead" : `${leads.length} leads`}.</p>}
           {dropped > 0 && <p className="fd-pns">{dropped === 1 ? "1 lead" : `${dropped} leads`} could not be shown.</p>}
         </div>

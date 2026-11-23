@@ -59,7 +59,7 @@ describe("Settings with a tenant's real values", () => {
   });
 
   it("keeps the fields and Save usable", () => {
-    expect(html).toContain("Save changes");
+    expect(html).toContain("Apply for this visit");
     expect(html).toContain('id="cv-business_name"');
   });
 });

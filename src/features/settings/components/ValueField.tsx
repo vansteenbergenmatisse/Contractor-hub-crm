@@ -5,9 +5,10 @@ type Props = {
   field: Field;
   value: string;
   saved: string;
-  // True when Save stopped on this field. The message itself shows once, in the alert at the top
-  // of the page (as in the design); the field points to it.
+  // True when Save stopped on this field.
   invalid: boolean;
+  // The message, shown under the field. Left out when the alert at the top of the page carries it.
+  error?: string;
   swatch?: boolean;
   onChange: (key: string, value: string) => void;
 };
@@ -19,27 +20,28 @@ function swatchStyle(key: string, saved: string): React.CSSProperties {
   return { background: isHexColor(saved) ? saved : `var(--${key.replaceAll("_", "-")})` };
 }
 
-export function ValueField({ field, value, saved, invalid, swatch, onChange }: Props) {
+export function ValueField({ field, value, saved, invalid, error, swatch, onChange }: Props) {
+  const errorId = `cv-${field.key}-err`;
   return (
     <div className="fd-cvf">
       <label className="fd-ll" htmlFor={`cv-${field.key}`}>
         {field.label}
-        <span className="fd-cvk">custom_values.{field.key}</span>
       </label>
       <div className="fd-cvi">
         {swatch ? <span className="fd-swt" style={swatchStyle(field.key, saved)} aria-hidden="true" /> : null}
         <input
-          className="fd-lin"
+          className={`fd-lin${invalid ? " is-bad" : ""}`}
           id={`cv-${field.key}`}
           type="text"
           autoComplete="off"
           spellCheck={false}
           value={value}
           aria-invalid={invalid ? true : undefined}
-          aria-describedby={invalid ? "fd-st-err" : undefined}
+          aria-describedby={error ? errorId : invalid ? "fd-st-err" : undefined}
           onChange={(e) => onChange(field.key, e.target.value)}
         />
       </div>
+      {error ? <p className="fd-lerr" id={errorId} role="alert">{error}</p> : null}
     </div>
   );
 }
