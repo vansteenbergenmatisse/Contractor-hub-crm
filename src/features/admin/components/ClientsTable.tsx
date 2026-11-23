@@ -39,7 +39,7 @@ export function ClientsTable({ clients }: { clients: ClientRow[] }) {
       const response = await post(`/api/admin/clients/${encodeURIComponent(tenantId)}/login`, { disabled });
       if (!response.ok) return setMessage({ tenantId, text: "Could not change login. Try again." });
       setRows((current) =>
-        current.map((row) => (row.tenantId === tenantId && row.login !== "no users" ? { ...row, login: disabled ? "off" : "on" } : row)),
+        current.map((row) => (row.tenantId === tenantId ? { ...row, login: disabled ? "off" : row.users === 0 ? "no users" : "on" } : row)),
       );
       const body = (await response.json().catch(() => null)) as { removedCheck?: string } | null;
       if (!disabled && body?.removedCheck === "failed") {
@@ -171,7 +171,7 @@ export function ClientsTable({ clients }: { clients: ClientRow[] }) {
                         {row.login === "off" ? (
                           <button type="button" disabled={pending.has(row.tenantId)} onClick={() => setLogin(row.tenantId, false)}>Turn on login</button>
                         ) : (
-                          <button type="button" onClick={() => setLogin(row.tenantId, true)} disabled={row.login === "no users" || pending.has(row.tenantId)}>
+                          <button type="button" onClick={() => setLogin(row.tenantId, true)} disabled={pending.has(row.tenantId)}>
                             Turn off login
                           </button>
                         )}
