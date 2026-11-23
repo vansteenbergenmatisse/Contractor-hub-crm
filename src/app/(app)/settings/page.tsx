@@ -1,6 +1,6 @@
 import { getTenantCustomValues, getTenantCustomValuesReadOnly } from "@/features/brand";
 import { SettingsPage, loadSettingsValues, sectionFromParam, type AccountLayout } from "@/features/settings";
-import { SettingsWriteBackPage, freshValuesReader, isWriteBackEnabled } from "@/features/settings-write-back";
+import { SettingsWriteBackPage, freshValuesReader, isMediaReplaceEnabled, isWriteBackEnabled } from "@/features/settings-write-back";
 import { getRequestUser } from "../../session";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +21,7 @@ export default async function Page({ searchParams }: Props = {}) {
   return user?.viewing ? (
     <SettingsPage initialValues={values} initialSection={section} account={loaded.layout} readOnly />
   ) : canSave ? (
-    <SettingsWriteBackPage initialValues={values} initialSection={section} account={loaded.layout} />
+    <SettingsWriteBackPage initialValues={values} initialSection={section} account={loaded.layout} mediaReplace={isMediaReplaceEnabled(user?.tenantId ?? "")} />
   ) : (
     <SettingsPage initialValues={values} initialSection={section} account={loaded.layout} />
   );

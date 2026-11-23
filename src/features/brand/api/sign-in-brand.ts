@@ -50,9 +50,18 @@ function publicImage(raw: string | null, hosts: readonly string[]): string | nul
   return url && isAllowedLogoUrl(url, hosts) ? url : null;
 }
 
+// An image file by its extension. HighLevel's newer media host serves files with no extension in the
+// path, so there a last path segment without any dot also counts; a named video or page still does not.
+export function isBackgroundImagePath(url: URL): boolean {
+  if (IMAGE_PATH.test(url.pathname)) return true;
+  if (url.hostname.toLowerCase() !== "files.leadconnectorhq.com") return false;
+  const last = url.pathname.split("/").pop() ?? "";
+  return last !== "" && !last.includes(".");
+}
+
 function publicBackground(raw: string | null, hosts: readonly string[]): string | null {
   const url = publicImage(raw, hosts);
-  return url && IMAGE_PATH.test(new URL(url).pathname) ? url : null;
+  return url && isBackgroundImagePath(new URL(url)) ? url : null;
 }
 
 function publicName(raw: string | null): string | null {

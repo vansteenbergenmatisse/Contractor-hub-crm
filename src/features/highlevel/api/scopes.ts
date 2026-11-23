@@ -1,5 +1,6 @@
 // The one place the scope list lives. Default: the 37 scopes of docs/greenlane/build-prompt.md
-// section 14 (same list for the live and test app). `GHL_OAUTH_SCOPES` replaces it without a code
+// section 14 plus the two media scopes of Settings' Change image (same list for the live and test
+// app). `GHL_OAUTH_SCOPES` replaces it without a code
 // change. A scope must also be enabled on the Marketplace app, and adding one later needs a new app
 // version and re-approval by installed accounts.
 export const OAUTH_SCOPES = [
@@ -14,6 +15,7 @@ export const OAUTH_SCOPES = [
   "invoices/estimate.readonly", "invoices/estimate.write", "payments/transactions.readonly",
   "workflows.readonly", "workflows.write", "workflows.delete", "workflows.publish",
   "workflows.logs", "phonenumbers.read", "socialplanner/account.readonly",
+  "medias.readonly", "medias.write",
 ] as const;
 
 const SCOPE_PATTERN = /^[a-z0-9][a-z0-9._/-]*$/i;

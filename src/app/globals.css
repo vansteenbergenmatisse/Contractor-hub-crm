@@ -1299,6 +1299,9 @@ select.fd-lin{padding:0 10px}
 .fd-cvf.is-wide{grid-column:1 / -1}
 .fd-app .fd-cvh{margin:4px 0 0;color:var(--fd-muted);overflow-wrap:anywhere}
 .fd-cvp{display:block;width:96px;height:64px;margin-top:8px;border:1px solid var(--border-color);border-radius:10px;background-color:var(--background-color);background-position:center;background-repeat:no-repeat;background-size:contain}
+.fd-imgc{margin-top:8px;min-width:0}
+.fd-imga{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.fd-imgc .fd-okl{margin-top:6px}
 .fd-cvs{max-width:260px}
 .fd-st2{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:24px}
 .fd-app .fd-sth{margin-bottom:8px}

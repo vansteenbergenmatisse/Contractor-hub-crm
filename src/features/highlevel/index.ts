@@ -10,7 +10,10 @@ export { handleOAuthCallback } from "./api/callback";
 export type { OAuthCallbackDeps } from "./api/callback";
 export { createCustomValueAdapter, parseCustomValueDetails } from "./api/custom-value-write";
 export type { CustomValueAdapterDeps, CustomValueDetail, CustomValueRead, CustomValueWriteOutcome } from "./api/custom-value-write";
+export { createMediaAdapter, fetchMediaBytes } from "./api/media-write";
+export type { MediaAdapterDeps, MediaFile, MediaFind, MediaUpload, MediaUploadOutcome } from "./api/media-write";
 export {
+  createTenantMediaAdapter,
   createTenantCustomValueAdapter,
   createTenantContactsReader,
   createWebhookRoute,

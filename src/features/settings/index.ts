@@ -15,3 +15,5 @@ export { applyBrandVars, brandCssVars, brandScopeRule, businessPatchFromValues, 
 export type { BusinessPatch } from "./api/live-save";
 export type { ConnectionState, ConnectionStatus, CustomValues, Problem, SectionKey } from "./types";
 export type { SaveAnswer, SaveResult, SaveStatus, SaveValues, ValueChange } from "./types";
+export { imageKindOf } from "./api/image-keys";
+export type { ImageAnswer, ImageKind, ImageStatus, ImageUploader, PreparedImage, PrepareImage } from "./types";

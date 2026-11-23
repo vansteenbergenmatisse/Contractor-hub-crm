@@ -1,4 +1,4 @@
-import type { ComponentProps } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { LINK_GROUP_KEYS } from "../api/field-groups";
 import { labelOfKey } from "../api/fields";
 import { OUR_WORK_KEYS } from "../api/folder-keys";
@@ -12,12 +12,14 @@ type Props = {
   imageHosts?: readonly string[];
   folderNameId?: string;
   fieldProps: (field: Field) => ComponentProps<typeof ValueField>;
+  // The Change image control of a field, when this owner can use it.
+  imageControl?: (field: Field) => ReactNode;
 };
 
 const OUR_WORK: ReadonlySet<string> = new Set(OUR_WORK_KEYS);
 
 // The fields of a folder without sub-groups. An "our work" value is an image link with a preview.
-export function FolderFields({ keys, imageHosts = DEFAULT_IMAGE_HOSTS, folderNameId, fieldProps }: Props) {
+export function FolderFields({ keys, imageHosts = DEFAULT_IMAGE_HOSTS, folderNameId, fieldProps, imageControl }: Props) {
   return (
     <div className="fd-cvg">
       {keys.map((key) => {
@@ -32,6 +34,7 @@ export function FolderFields({ keys, imageHosts = DEFAULT_IMAGE_HOSTS, folderNam
             describedBy={link ? folderNameId : undefined}
           >
             {OUR_WORK.has(key) ? <ImagePreview src={previewSrc(props.value, imageHosts)} label={field.label} /> : null}
+            {imageControl?.(field)}
           </ValueField>
         );
       })}

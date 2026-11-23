@@ -67,8 +67,8 @@ describe("fetchLogoDataUri", () => {
 
 describe("allowedLogoHosts", () => {
   it("has HighLevel's media host by default and adds only well-formed hosts from the variable", () => {
-    expect(allowedLogoHosts("")).toEqual(["assets.cdn.filesafe.space"]);
-    expect(allowedLogoHosts("cdn.one.test, bad host!, CDN.two.test")).toEqual(["assets.cdn.filesafe.space", "cdn.one.test", "cdn.two.test"]);
+    expect(allowedLogoHosts("")).toEqual(["assets.cdn.filesafe.space", "files.leadconnectorhq.com"]);
+    expect(allowedLogoHosts("cdn.one.test, bad host!, CDN.two.test")).toEqual(["assets.cdn.filesafe.space", "files.leadconnectorhq.com", "cdn.one.test", "cdn.two.test"]);
   });
 });
 

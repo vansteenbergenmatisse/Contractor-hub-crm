@@ -36,6 +36,8 @@ export type SettingsAction =
   | { type: "save" }
   | { type: "normalize"; draft: CustomValues }
   | { type: "remoteSaved"; results: readonly SaveResult[]; submitted: CustomValues }
+  // Change image: what the account now holds for this key. `saved`: this change put it there.
+  | { type: "imageValue"; key: string; value: string; saved: boolean }
   | { type: "saveStart" }
   | { type: "saveEnd"; problem: string | null }
   | { type: "loaded"; values: CustomValues }
@@ -153,6 +155,14 @@ export function settingsReducer(s: SettingsState, a: SettingsAction): SettingsSt
     }
     case "normalize":
       return { ...s, draft: a.draft, err: null, ok: false };
+    case "imageValue":
+      return {
+        ...s,
+        values: { ...s.values, [a.key]: a.value },
+        draft: { ...s.draft, [a.key]: a.value },
+        err: s.err?.key === a.key ? null : s.err,
+        ok: a.saved ? true : s.ok,
+      };
     case "remoteSaved": {
       // Only what HighLevel confirmed becomes saved. A conflict moves the saved value to what the
       // account holds now and keeps the owner's text, so the next save starts from the real value.

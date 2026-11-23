@@ -1,20 +1,27 @@
 # Proposal: Replace a client's image from Settings
 
-## Hard requirement from the user (2026-11-23), overrides the sequence below
+Status: **built-off**. Built and tested against a mocked HighLevel only, off by default. No live HighLevel call, upload, Marketplace, Vercel or database change has been made.
 
-Replacing an image MUST overwrite the existing media library file so its URL stays exactly the same. Uploading a new file and repointing the custom value is NOT accepted as the default. Any "upload new, repoint" sequence in this document is only a fallback, and needs the user's explicit choice.
+## User decision (2026-11-23): "Upload and update"
 
-What is known (public sources, no live call, 2026-11-23):
+This replaces the earlier same-URL requirement. Settings compresses the image, uploads it as a NEW file to the client's HighLevel media library, then points the custom value at the new URL through the existing save rules. The old file is never deleted or changed.
 
-- API: NO documented same-URL image replace. `UpdateObject` takes `name, altType, altId`, `UpdateMediaObject` takes `id, name`, and upload has no target file id (`apps/medias.json:721,798`, `apps/v3/medias-v3.json:731,808`).
-- UI: possibly shipped, not documented. HighLevel's ideas board marks "Ability to replace existing media", with a merged request for replacing without updating the URL, as live on 2026-06-08. It gives no steps, file types or URL guarantee. Its Media Storage guide promises same-URL edits only for `.txt`, `.css`, `.json`, `.sql` and `.rtf`.
-- Not documented: whether the URL path derives from the file id, the content type after a replace, and CDN caching.
-- Private HighLevel endpoints are not an accepted route: they are unsupported and can break without notice.
-- Format conflict: a same-URL replace keeps the path, so a `.png` URL cannot honestly become WebP. Until tested, a replacement keeps the original format. WebP compression applies only where the URL already ends in `.webp`, or to a fallback upload.
+Why the same-URL route was dropped: the public API documents no way to replace an image's content in place (`apps/medias.json`, `apps/v3/medias-v3.json`), and private HighLevel endpoints are not an accepted route.
 
-First gate: a UI-only test on a throwaway sub-account, approved by the user: upload `A.png`, copy its URL, use Replace with a visibly different `B.png`, compare URL and file id, open the original URL in a private window and record `Content-Type`, `Cache-Control` and `Age`. Repeat for SVG and WebP. If no supported same-URL replace exists for images, this change stays Blocked until the user chooses another route.
+## As built
 
-Status: **Blocked** until the approval gates below are approved. Plan only. Nothing here is built. Every design item is a proposal, not existing.
+- `POST /api/settings/media`, owner only. Needs `SETTINGS_MEDIA_REPLACE_ENABLED` and `SETTINGS_MEDIA_REPLACE_TENANTS`, and also the write-back flags for the tenant, because the last step is a normal Settings save.
+- SVG parser: `@xmldom/xmldom` 0.9.12, pinned, no dependencies and no install scripts.
+- Stricter than a typical export: the SVG allowlist has no `style` element, gradients, `use`, masks or clip paths, because each needs `url()` or a reference. Such a logo is refused with a message, never changed silently.
+- Audit: no new table and no migration. Each upload writes a `CustomValueChange` row first, with `newValue` `upload:<key>-<sha256-12>`. **That row records a file, not a value change, so it is not a rollback target.** The row of the PUT that follows holds the previous and new URL. The file id is not stored.
+- Time limits (proposals, not measured): no upload starts after 15 seconds and no PUT after 35, inside the route's 60 seconds.
+- Hosts: `files.leadconnectorhq.com` is added to the logo and preview defaults. Its files have no extension, so the background rule also accepts a last path segment with no dot on that host only. A named video or page is still refused.
+
+**Known limits, not verified live:**
+
+- The OpenAPI example upload URL is on `storage.googleapis.com`, which is not allowlisted. If real uploads answer with that host, every change stops at `bad_host` with the old value live, until the user approves that host through `LOGO_HOST_ALLOWLIST`.
+- A browser with no canvas WebP encoder gets a clear message instead of an upload. Which phones this affects, Safari on iPhone especially, is not tested.
+- The list call's `sortBy=createdAt` and `type=file` values, the `Version` value (`v3` is sent), and whether HighLevel keeps the bytes unchanged. If it alters them, a repeat of the same image stops at `hash_mismatch`.
 
 ## Why
 
@@ -31,13 +38,13 @@ Source: `GoHighLevel/highlevel-api-docs@0af86a4`. No live call made.
 
 - Limit: 25 MB in the API docs, 100 MB on the help page. Use the lower.
 - `Version`: `v3` in `apps/v3/medias-v3.json`; the older file lists `2021-07-28`. The sandbox settles which works.
-- The docs show no way to replace an image's content in place. "Change" means: upload new, repoint the custom value, keep the old file.
+- The docs show no way to replace an image's content in place. "Change" means: upload new, repoint the custom value, keep the old file (user decision above).
 - `DELETE /medias/{id}` and `POST /medias/{id}` (rename) are never called.
 - Error cases: 400, 401, 403, 413, 422, 429, 5xx, timeout, malformed body, unapproved URL host.
 
 **Unverified:** upload URL host and shape, CDN content type for SVG, whether HighLevel sanitizes or alters bytes, deleted-URL behavior, cache, media rate limits, idempotency, list filtering by name, and list freshness after upload.
 
-## Design (proposal, not existing)
+## Design
 
 - `highlevel/api/media-write.ts` holds the vendor calls. `settings-write-back` orchestrates on the server. Owner only, never View as client. Tenant and `locationId` come from the session.
 - Separate flags, off by default: `SETTINGS_MEDIA_REPLACE_ENABLED` and `SETTINGS_MEDIA_REPLACE_TENANTS` (no wildcard).
@@ -83,19 +90,19 @@ Use `<test-sub-account>`, a throwaway sub-account, **not JCR**. Settle every Unv
 security_baseline:
   applies: true
   surfaces:
-    - id: POST <settings media route, proposal>
+    - id: POST /api/settings/media
       tier: STATE-MUTATING
       controls:
-        C1_auth:        { status: planned, mechanism: "session owner, exact origin, admin and client view refused" }
-        C2_rate_limit:  { status: planned, mechanism: "hitRateLimit per user and tenant, fails closed" }
-        C3_input:       { status: planned, mechanism: "server re-check of bytes, type, size; SVG allowlist" }
-        C4_timeout:     { status: planned, mechanism: "bounded calls, no blind upload retry; flag is the breaker" }
+        C1_auth:        { status: covered, mechanism: "session owner, exact origin, admin and client view refused, tenant from the session only" }
+        C2_rate_limit:  { status: covered, mechanism: "hitRateLimit, proposal 20 per hour per user and 40 per tenant, before the body is read, fails closed" }
+        C3_input:       { status: covered, mechanism: "strict three-field form, capped body, image keys only, WebP container and size re-read from bytes, SVG allowlist on a real XML parser" }
+        C4_timeout:     { status: covered, mechanism: "10s calls, 20s upload, 15s and 35s step cutoffs, no blind upload retry; flag is the breaker" }
         C5_output_rate: { status: opted_out, justification: "one short JSON status" }
         C6_redaction:   { status: opted_out, justification: "no LLM; logs hold no content" }
-        C7_idempotency: { status: planned, mechanism: "hash name, verified lookup before upload" }
-        C8_concurrency: { status: planned, mechanism: "existing per-tenant lease" }
-        C9_audit:       { status: planned, mechanism: "row before each external write" }
-        C10_abuse:      { status: planned, mechanism: "size caps, rate limits, tenant allowlist" }
+        C7_idempotency: { status: covered, mechanism: "hash name, lookup with byte-hash check before upload" }
+        C8_concurrency: { status: covered, mechanism: "existing per-tenant lease held across upload and PUT, kept after no answer" }
+        C9_audit:       { status: covered, mechanism: "CustomValueChange row before the upload and before the PUT" }
+        C10_abuse:      { status: covered, mechanism: "size caps, rate limits, exact tenant allowlist and kill switch" }
 ```
 
 ## Approval gates (each separate)
@@ -109,7 +116,7 @@ security_baseline:
 
 ## Open questions
 
-1. **Which SVG approach?** Recommended: strict rejecting parser on a vetted XML library.
+1. **Which SVG approach?** Decided: strict rejecting parser on `@xmldom/xmldom` 0.9.12.
 2. **Which test sub-account?** Recommended: a new, empty one you create, never JCR.
-3. **Existing non-SVG logos?** Recommended: keep them working; enforce SVG only on new uploads.
+3. **Existing non-SVG logos?** Decided: they keep working; SVG only applies to new uploads.
 4. **How to roll out reauthorization?** Recommended: one client at a time; clients not yet reauthorized keep today's link field.

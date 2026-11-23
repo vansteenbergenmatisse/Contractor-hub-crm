@@ -4,6 +4,7 @@ import { createHighLevelClient } from "./client";
 import { searchUsersWithRetry } from "./search-users";
 import { listCustomValuesWithRetry, readCustomValuesWithStoredToken } from "./custom-values";
 import { createCustomValueAdapter } from "./custom-value-write";
+import { createMediaAdapter } from "./media-write";
 import { listLocationUsersWithRetry } from "./location-users";
 import { CONTACTS_PAGE_SIZE, readContactsPage, readContactsThrottled } from "./contacts";
 import type { AgencyLocation, ContactsRead, CustomValue, HighLevelUser, InstalledLocation, SaveLocationConnectionInput, SearchUsersQuery } from "../types";
@@ -249,6 +250,20 @@ export function createTenantCustomValueAdapter() {
     getLocationToken: (tenantId) => tokens.getLocationToken(tenantId),
     requestList: client.requestCustomValues,
     requestUpdate: client.requestUpdateCustomValue,
+  });
+}
+
+// Finds and uploads media library files for Settings' Change image. The tenant id always comes from
+// the caller's server session. It offers no delete or rename.
+export function createTenantMediaAdapter() {
+  const env = parseEnv("highlevel");
+  const client = buildClient(env);
+  const tokens = buildTokenService(env, client);
+  return createMediaAdapter({
+    readLocationId: async (id) => (await readLocationState(id, env.TOKEN_ENCRYPTION_KEY))?.locationId ?? null,
+    getLocationToken: (tenantId) => tokens.getLocationToken(tenantId),
+    requestFiles: client.requestMediaFiles,
+    requestUpload: client.requestMediaUpload,
   });
 }
 
