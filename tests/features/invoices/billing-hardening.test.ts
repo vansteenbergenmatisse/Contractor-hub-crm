@@ -78,7 +78,7 @@ describe("due and blocked", () => {
   });
 
   it("an open live row with nothing owed does not block", () => {
-    expect(dueSummary([row({ amountDue: 0 })], true)).toMatchObject({ due: [], blocked: false });
+    expect(dueSummary([row({ amountDue: 0, amountPaid: 999 })], true)).toMatchObject({ due: [], blocked: false });
   });
 });
 
@@ -96,7 +96,7 @@ describe("completeness proof", () => {
   });
 
   it("is incomplete when the page cap prevents the proof", async () => {
-    const expected = BILLING_PAGE_SIZE * BILLING_MAX_PAGES;
+    const expected = BILLING_PAGE_SIZE * BILLING_MAX_PAGES + 1;
     const invoices = vi.fn(async (_t: string, _l: string, offset: number) => json({ invoices: fullPage(`p${offset}-`), total: expected }));
     const out = await buildInvoicesReader(() => runtime(invoices), allow)("t");
     expect(invoices).toHaveBeenCalledTimes(BILLING_MAX_PAGES);

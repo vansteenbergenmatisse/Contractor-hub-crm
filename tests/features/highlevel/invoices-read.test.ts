@@ -141,7 +141,7 @@ describe("buildInvoicesReader", () => {
     expect(await buildInvoicesReader(() => runtime(invoices), allow)("t")).toMatchObject({ ok: true, complete: false });
   });
 
-  it.each([[401, "reconnect"], [403, "reconnect"], [429, "unavailable"], [500, "unavailable"]])("maps status %i to %s without a retry", async (status, reason) => {
+  it.each([[401, "reconnect"], [403, "unavailable"], [429, "unavailable"], [500, "unavailable"]])("maps status %i to %s without a retry", async (status, reason) => {
     const invoices = vi.fn(async () => json({}, status));
     expect(await buildInvoicesReader(() => runtime(invoices), allow)("t")).toEqual({ ok: false, reason });
     expect(invoices).toHaveBeenCalledTimes(1);

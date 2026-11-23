@@ -1,7 +1,5 @@
-import { createInitialState, tiles, withReceived, type Lead, type LeadsResult } from "@/features/leads";
+import { createInitialState, isThisWeek, tiles, withReceived, type Lead, type LeadsResult } from "@/features/leads";
 import type { LeadRange } from "../types";
-
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type LeadPane = { rows: readonly Lead[]; count: number | null };
 type Ready = Extract<LeadsResult, { state: "ready" }>;
@@ -24,7 +22,7 @@ export function leadPanes(result: Ready, timeZone: string): Record<LeadRange, Le
   const counts = leadCounts(result, timeZone);
   return {
     today: { rows: rows.filter((l) => !Number.isNaN(at(l)) && dayKey(at(l), timeZone) === todayKey), count: counts.today },
-    week: { rows: rows.filter((l) => at(l) >= now - WEEK_MS && at(l) <= now), count: counts.week },
+    week: { rows: rows.filter((l) => isThisWeek(at(l), result.loadedAt, timeZone)), count: counts.week },
   };
 }
 

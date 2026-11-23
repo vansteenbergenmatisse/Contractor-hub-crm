@@ -94,10 +94,11 @@ describe("source mapping", () => {
   it.each(["xyz form", "facebook ad", "Referral", "Google", "website", "", "constructor", "__proto__", null, undefined])("%s is unlabelled", (value) => {
     expect(sourceKey(value)).toBeNull();
   });
-  it("counts an unlabelled lead in the total and in no channel, within the last 7 days", () => {
+  it("counts an unlabelled lead in the total and in no channel, within this calendar week", () => {
     const counts = sourceCounts(
       [lead({ id: "1", source: "fb" }), lead({ id: "2", source: null }), lead({ id: "3", source: "fb", receivedAt: "2026-02-20T00:00:00.000Z" })],
       NOW.toISOString(),
+      "UTC",
     );
     expect(counts.byKey.fb).toBe(1);
     expect(counts.unlabelled).toBe(1);
@@ -108,7 +109,7 @@ describe("source mapping", () => {
 describe("tiles from real rows", () => {
   const rows = [lead({ id: "1" }), lead({ id: "2", receivedAt: "2026-03-02T11:00:00.000Z" }), lead({ id: "3", receivedAt: "2026-02-01T11:00:00.000Z" })];
 
-  it("counts today and the last 7 days, and hides the wait tile with no wait data", () => {
+  it("counts today and this calendar week, and hides the wait tile with no wait data", () => {
     expect(tiles(rows, createInitialState(rows), ctx())).toEqual({ today: 1, week: 2, wait: null });
   });
 

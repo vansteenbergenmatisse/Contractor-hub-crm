@@ -132,11 +132,11 @@ describe("readEstimates", () => {
     expect(out.ok && out.rows.length).toBe(ESTIMATES_PAGE_SIZE);
   });
 
-  it("asks to reconnect with no location, on 401 and on 403", async () => {
+  it("asks to reconnect with no location and on 401; a 403 is unavailable", async () => {
     expect(await readEstimates(deps([], null).deps, "t")).toEqual({ ok: false, reason: "reconnect" });
     vi.spyOn(console, "error").mockImplementation(() => {});
     expect(await readEstimates(deps([new Response("", { status: 401 })]).deps, "t")).toEqual({ ok: false, reason: "reconnect" });
-    expect(await readEstimates(deps([new Response("", { status: 403 })]).deps, "t")).toEqual({ ok: false, reason: "reconnect" });
+    expect(await readEstimates(deps([new Response("", { status: 403 })]).deps, "t")).toEqual({ ok: false, reason: "unavailable" });
   });
 
   it("is unavailable on 429, on a bad body and on an oversized body, with no retry", async () => {

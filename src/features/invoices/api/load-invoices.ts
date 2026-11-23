@@ -22,10 +22,13 @@ export function formatLiveAmount(value: number | null, currency: string | null):
 const isOpenStatus = (row: LiveInvoiceRow) => row.status === "sent" || row.status === "partially_paid";
 const isDue = (row: LiveInvoiceRow) => row.liveMode === true && isOpenStatus(row) && row.amountDue !== null && row.amountDue > 0;
 // amountDue above total is caught when the row is parsed (invoices-read.ts), which nulls both.
-// An open, non-test row that may be owed but has a field that cannot be trusted. Nothing owed is not blocked.
+// Still open, yet nothing is due and no payment is on record, so it is not proven settled.
+const needsCheck = (row: LiveInvoiceRow) =>
+  isOpenStatus(row) && row.liveMode !== false && row.amountDue === 0 && !(row.amountPaid !== null && row.amountPaid > 0);
+// An open, non-test row that may be owed but has a field that cannot be trusted. Nothing owed after a payment is not blocked.
 const isUnreadable = (row: LiveInvoiceRow) =>
-  isOpenStatus(row) && row.liveMode !== false && row.amountDue !== 0 &&
-  (row.liveMode === null || row.amountDue === null || row.amountDue < 0 || row.currency === null);
+  needsCheck(row) || (isOpenStatus(row) && row.liveMode !== false && row.amountDue !== 0 &&
+  (row.liveMode === null || row.amountDue === null || row.amountDue < 0 || row.currency === null));
 
 // One overall limit for a page load, shared by every read in it. Past it the load gives up.
 const BILLING_LOAD_DEADLINE_MS = 25_000;
@@ -91,7 +94,8 @@ export function blockedNote(complete: boolean, blockedBy?: BlockedBy): string {
 }
 
 export function invoiceView(row: LiveInvoiceRow): LiveInvoiceView {
-  const known = row.status ? LABELS[row.status] : { label: "Status not shown", tone: "is-plain" as const, bucket: "other" as const };
+  const listed = row.status ? LABELS[row.status] : { label: "Status not shown", tone: "is-plain" as const, bucket: "other" as const };
+  const known = needsCheck(row) ? { ...listed, label: "Check this invoice", tone: "is-warn" as const } : listed;
   const due = isDue(row);
   const detail = [row.number ? `Invoice ${row.number}` : "Invoice", row.name].filter(Boolean).join(" · ");
   const dueText = due ? (row.dueDate ? `Due ${DAY.format(Date.parse(`${row.dueDate}T00:00:00.000Z`))}` : "Due date not shown") : null;

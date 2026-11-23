@@ -1,6 +1,7 @@
 import { parseEnv } from "@/shared/config";
 import { readLocationState } from "../db/token-store";
 import { HighLevelHttpError } from "./client";
+import { readFailureReason } from "./read-failure";
 import { getTokenService } from "./routes";
 import { withStoredLocationToken } from "./stored-token";
 import { TokenServiceError } from "./token-service";
@@ -226,7 +227,7 @@ function failure(label: string, error: unknown): { ok: false; reason: "reconnect
   }
   if (error instanceof HighLevelHttpError) {
     console.error(`HighLevel ${label} read failed: step=request status=${error.status ?? "none"}`);
-    return { ok: false, reason: error.status === 401 || error.status === 403 ? "reconnect" : "unavailable" };
+    return { ok: false, reason: readFailureReason(error.status) };
   }
   console.error(`HighLevel ${label} read failed: step=${error instanceof BillingBodyTooLargeError ? "size" : "parse"}`);
   return { ok: false, reason: "unavailable" };
@@ -234,7 +235,8 @@ function failure(label: string, error: unknown): { ok: false; reason: "reconnect
 
 // All or nothing per read: a failed page fails it. `complete` is true only when the rows received
 // add up exactly to the documented total, with nothing dropped, repeated or moved between pages, and
-// the end was seen: a short page, or an empty page after a full one. A cap that stops first is incomplete.
+// the end was seen: a short page, an empty page after a full one, or a full last allowed page that
+// reaches the total. A cap that stops before the total is incomplete.
 async function readAllPages<T extends { id: string }>(
   label: string,
   rt: { readLocationId: BillingRuntime["readLocationId"]; withToken: WithToken },
@@ -274,7 +276,7 @@ async function readAllPages<T extends { id: string }>(
           rows.push(row);
         }
       }
-      if (parsed.received === 0 || (received >= expected && parsed.received < BILLING_PAGE_SIZE)) {
+      if (parsed.received === 0 || (received >= expected && (parsed.received < BILLING_PAGE_SIZE || page === BILLING_MAX_PAGES - 1))) {
         endSeen = true;
         break;
       }
