@@ -4,7 +4,8 @@
 export const CRON_RENEWAL_WINDOW_MS = 26 * 60 * 60 * 1000; // a daily job must cover a full day
 export const VISIT_RENEWAL_WINDOW_MS = 6 * 60 * 60 * 1000;
 export const VISIT_RENEWAL_INTERVAL_MS = 10 * 60 * 1000;
-const TIME_BUDGET_MS = 25_000;
+// No new job starts after this, so a job in flight can finish inside the 60-second function limit.
+const TIME_BUDGET_MS = 15_000;
 const MAX_AGENCIES = 20;
 const MAX_LOCATIONS = 200;
 
@@ -17,6 +18,8 @@ export type TokenRenewalDeps = {
   // True when a new token was stored, false when nothing needed doing.
   renewAgency: (companyId: string, minLifeMs: number) => Promise<boolean>;
   renewLocation: (tenantId: string, minLifeMs: number) => Promise<boolean>;
+  // Where to start in the location list, so rows that keep failing cannot use up every run's budget.
+  startOffset?: (length: number) => number;
 };
 
 export async function renewDueTokens(deps: TokenRenewalDeps, windowMs: number): Promise<TokenRenewalSummary> {
@@ -27,7 +30,9 @@ export async function renewDueTokens(deps: TokenRenewalDeps, windowMs: number): 
   try {
     // Agencies first: a location whose refresh token was refused is re-minted with the agency token.
     const agencies = await deps.listDueAgencies(before, MAX_AGENCIES);
-    const locations = await deps.listDueLocations(before, MAX_LOCATIONS);
+    const listed = await deps.listDueLocations(before, MAX_LOCATIONS);
+    const offset = listed.length > 0 ? (deps.startOffset?.(listed.length) ?? 0) : 0;
+    const locations = [...listed.slice(offset), ...listed.slice(0, offset)];
     jobs = [
       ...agencies.map((id) => () => deps.renewAgency(id, windowMs)),
       ...locations.map((id) => () => deps.renewLocation(id, windowMs)),

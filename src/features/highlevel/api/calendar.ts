@@ -243,7 +243,8 @@ function defaultRuntime(): CalendarRuntime {
 
 // The read behind a limit, counted before any env, token or HighLevel call; a limiter failure denies
 // it. With `viewer` (an admin's read-only client view) the stored token is used, nothing is refreshed,
-// and the count is the viewer's, so the client's token and quota are left alone.
+// and the count is the viewer's, so this app's per-client limit is left alone. The calls still count
+// toward HighLevel's own rate limit for the location, and this limit counts page loads, not calls.
 export function buildCalendarReader(runtime: () => CalendarRuntime, hit: Hit, viewer?: { viewerId: string }) {
   return async <R extends CalendarRange>(tenantId: string, boundsFor: (timeZone: string) => R | null): Promise<CalendarWeekRead<R>> => {
     const key = viewer ? `highlevel-calendar-view:${viewer.viewerId}` : `highlevel-calendar:${tenantId}`;

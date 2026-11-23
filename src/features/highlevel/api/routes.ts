@@ -28,6 +28,7 @@ import {
   updateAgencyLocked,
   updateLocationLocked,
 } from "../db/token-store";
+import { claimForcedRefresh } from "../db/forced-refresh";
 import { beginWebhookEvent, markWebhookProcessed } from "../db/webhook-events";
 import { findTenantByLocation, listAgencyCompanyIds, listConnectedTenants, updateTenantName } from "../db/onboarding";
 import type { WebhookHooks } from "./webhook";
@@ -60,6 +61,7 @@ function buildTokenService(env: EnvValues<"highlevel">, client = buildClient(env
       updateAgencyLocked: (companyId, decide) => updateAgencyLocked(companyId, key, decide),
     },
     now: () => new Date(),
+    claimForcedRefresh: (tenantId) => claimForcedRefresh(tenantId),
   });
 }
 
@@ -79,6 +81,7 @@ export async function runTokenRenewal(windowMs: number): Promise<TokenRenewalSum
       listDueLocations: listDueLocationTenantIds,
       renewAgency: tokens.renewAgencyToken,
       renewLocation: tokens.renewLocationToken,
+      startOffset: (length) => Math.floor(Math.random() * length),
     },
     windowMs,
   );

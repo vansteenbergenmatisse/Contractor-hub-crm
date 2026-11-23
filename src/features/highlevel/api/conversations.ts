@@ -238,7 +238,7 @@ export type InboxViewer = { viewerId: string };
 
 // Counts each read before any token or HighLevel call; a limiter failure denies the read. An admin's
 // read-only client view uses the stored token only (no refresh, no store write) and its own counter,
-// so it never spends the client's quota.
+// so it does not use this app's per-client limit. Its calls still count toward HighLevel's own limit.
 export function buildInboxReader(deps: ReaderDeps, viewer?: InboxViewer): InboxAdapter {
   const key = (tenantId: string) => (viewer ? `highlevel-inbox-view:${viewer.viewerId}` : `highlevel-inbox:${tenantId}`);
   const read: ReadDeps = { ...deps, withToken: viewer ? deps.withStoredLocationToken : deps.withLocationToken };

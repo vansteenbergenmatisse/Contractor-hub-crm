@@ -73,6 +73,8 @@ export type TokenServiceDeps = {
     ): Promise<AgencyState | null>;
   };
   now: () => Date;
+  // True when this caller may replace a token after a 401. Left out, every 401 may.
+  claimForcedRefresh?: (tenantId: string) => Promise<boolean>;
 };
 
 export function createTokenService(deps: TokenServiceDeps) {
@@ -237,6 +239,12 @@ export function createTokenService(deps: TokenServiceDeps) {
     const token = await getLocationToken(tenantId);
     const first = await call(token);
     if (first.status !== 401) return first;
+    // A 401 can also mean a missing scope, which no new token fixes. Without this claim every page
+    // load would rotate the token and queue on its row lock. Losing the claim hands back the 401.
+    if (deps.claimForcedRefresh) {
+      const claimed = await deps.claimForcedRefresh(tenantId).catch(() => false);
+      if (!claimed) return first;
+    }
     await first.body?.cancel().catch(() => {});
     const renewed = await getLocationToken(tenantId, { rejectedToken: token });
     return call(renewed);

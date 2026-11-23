@@ -138,9 +138,12 @@ export async function syncRoute(request: Request): Promise<Response> {
     cronSecret: process.env.CRON_SECRET?.trim() || undefined,
     run: async () => {
       // First, and on its own: a failed renewal must not stop the user sync, or the other way round.
-      await runTokenRenewal(CRON_RENEWAL_WINDOW_MS).catch((error: unknown) => {
+      // The window covers every token, so a retried or repeated call must not rotate them all again.
+      try {
+        if (await hitRateLimit("token-renewal:cron", 1, 3600_000, new Date())) await runTokenRenewal(CRON_RENEWAL_WINDOW_MS);
+      } catch (error) {
         console.error(`Token renewal: cron step failed: ${error instanceof Error ? error.name : "unknown error"}`);
-      });
+      }
       const { hl, userSync, onboardDeps } = build();
       const sender = createEmailSenderFromEnv();
       const appUrl = process.env.APP_URL?.trim() ?? "";
