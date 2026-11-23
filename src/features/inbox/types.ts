@@ -38,6 +38,28 @@ export type Conversation = {
 
 export type QuickReply = { label: string; text: string };
 
+// Real data (read-only). The server page injects the reader, so this feature makes no HighLevel call.
+type ReadFailure = { ok: false; reason: "reconnect" | "unavailable" };
+export type InboxReader = {
+  list: (tenantId: string) => Promise<
+    | { ok: true; conversations: { id: string; name: string | null; lastMessageBody: string | null; lastMessageType: string | null; unreadCount: number }[]; dropped: number; complete: boolean }
+    | ReadFailure
+  >;
+  thread: (tenantId: string, conversationId: string) => Promise<
+    | { ok: true; messages: { id: string; direction: "inbound" | "outbound"; body: string | null; dateAdded: string; messageType: string | null }[]; dropped: number; complete: boolean }
+    | ReadFailure
+  >;
+};
+// `channel` is null for a type with no exact match in the design's six channels.
+export type LiveConversation = { id: string; name: string; channel: Channel | null; snippet: string; unreadCount: number };
+export type LiveMessage = { id: string; direction: "inbound" | "outbound"; body: string | null; at: string };
+export type LiveThread =
+  | { state: "ready"; messages: LiveMessage[]; complete: boolean; dropped: number }
+  | { state: "empty" | "reconnect" | "unavailable" };
+export type InboxResult =
+  | { state: "ready"; conversations: LiveConversation[]; complete: boolean; dropped: number; selectedId: string | null; thread: LiveThread | null }
+  | { state: "empty" | "reconnect" | "unavailable" };
+
 // The business facts a sample text can use. Always from the business record, never hardcoded.
 // A missing fact is "". `bookingLink` is the link a text can share, "" when the business has none.
 export type TextBusiness = { name: string; first: string; site: string; bookingLink: string };

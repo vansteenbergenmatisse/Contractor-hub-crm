@@ -5,6 +5,10 @@ import { MOCK_CONVERSATIONS } from "./mock";
 
 export { InboxPage } from "./components/InboxPage";
 export { InboxPageFromUrl } from "./components/InboxPageFromUrl";
+export { InboxLivePage } from "./components/InboxLivePage";
+export { InboxSkeleton } from "./components/InboxSkeleton";
+export { channelOfType, loadInbox } from "./api/load-inbox";
+export type { InboxReader, InboxResult } from "./types";
 export { INBOX_WAITING_COUNT } from "./mock";
 export { waitTier, waitLabel } from "./api/wait";
 
