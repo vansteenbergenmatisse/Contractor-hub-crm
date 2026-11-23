@@ -9,9 +9,13 @@ export async function claimAlerts(
   companyId: string,
   missing: ReadonlyArray<{ locationId: string; name: string | null }>,
   now: Date,
+  options: { keepOthers: boolean } = { keepOthers: false },
 ): Promise<Array<{ locationId: string; name: string | null }>> {
   const prisma = getPrisma();
-  await prisma.missingAppAlert.deleteMany({ where: { companyId, locationId: { notIn: missing.map((m) => m.locationId) } } });
+  // A partial list says nothing about the sub-accounts it leaves out.
+  if (!options.keepOthers) {
+    await prisma.missingAppAlert.deleteMany({ where: { companyId, locationId: { notIn: missing.map((m) => m.locationId) } } });
+  }
   const cutoff = new Date(now.getTime() - ALERT_EVERY_MS);
   const due: Array<{ locationId: string; name: string | null }> = [];
   for (const item of missing) {

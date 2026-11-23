@@ -387,9 +387,12 @@ export function createHighLevelClient(config: HighLevelClientConfig) {
   // back to first and last name.
   function parseUsers(list: unknown[]): HighLevelUser[] {
     const users: HighLevelUser[] = [];
+    const withoutEmail = new Set<string>();
+    listedWithoutEmailByList.set(users, withoutEmail);
     for (const raw of list) {
       if (typeof raw !== "object" || raw === null) continue;
       const item = raw as Record<string, unknown>;
+      if (isNonEmptyString(item.id) && !isNonEmptyString(item.email) && item.deleted !== true) withoutEmail.add(item.id);
       if (!isNonEmptyString(item.id) || !isNonEmptyString(item.email)) continue;
       const roles =
         typeof item.roles === "object" && item.roles !== null ? (item.roles as Record<string, unknown>) : {};
@@ -487,3 +490,9 @@ export function createHighLevelClient(config: HighLevelClientConfig) {
 
   return { exchangeAgencyCode, exchangeCode, listAgencyLocations, listCustomValues, listLocationUsers, listInstalledLocations, mintLocationToken, refreshToken, requestContactSearch, requestCustomValues, requestUpdateCustomValue, searchUsers };
 }
+
+// Ids of people a parsed user list named but dropped for having no email. They are still in
+// HighLevel, so the user sync must not treat them as gone.
+const listedWithoutEmailByList = new WeakMap<readonly HighLevelUser[], ReadonlySet<string>>();
+createHighLevelClient.listedWithoutEmail = (users: readonly HighLevelUser[]): ReadonlySet<string> =>
+  listedWithoutEmailByList.get(users) ?? new Set<string>();

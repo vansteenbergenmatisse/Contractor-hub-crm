@@ -142,7 +142,10 @@ export function createTokenService(deps: TokenServiceDeps) {
     try {
       return await getAgencyToken(companyId);
     } catch (error) {
-      if (error instanceof TokenServiceError && error.code === "agency_unavailable") return null;
+      if (error instanceof TokenServiceError && error.code === "agency_unavailable") {
+        console.error("HighLevel agency token refused: code=agency_unavailable");
+        return null;
+      }
       throw error;
     }
   }

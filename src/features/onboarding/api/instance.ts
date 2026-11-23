@@ -138,6 +138,7 @@ export async function syncRoute(request: Request): Promise<Response> {
   return handleSync(request, {
     cronSecret: process.env.CRON_SECRET?.trim() || undefined,
     run: async () => {
+      const startedAt = new Date();
       // First, and on its own: a failed renewal must not stop the user sync, or the other way round.
       // The window covers every token, so a retried or repeated call must not rotate them all again.
       try {
@@ -160,6 +161,10 @@ export async function syncRoute(request: Request): Promise<Response> {
         adminEmail: process.env.ADMIN_ALERT_EMAIL?.trim() || null,
         installLink: `${appUrl}/api/integrations/oauth/start`,
         send: (message) => sender.send(message),
+        // Under a day, so a mail that failed is tried again by the next daily run.
+        claimAgencyAlert: (companyId, now) => hitRateLimit(`agency-token-alert:${companyId}`, 1, 20 * 3600_000, now),
+        startedAt,
+        startOffset: (length) => Math.floor(Math.random() * length),
       };
       return runSync(deps);
     },
