@@ -744,7 +744,7 @@ a.fd-lead:focus-visible{outline:3px solid var(--main-color);outline-offset:-3px}
 .fd-src{padding-left:2px}
 .fd-cr.is-need .fd-cr2{color:var(--fd-ink)}
 .fd-crw{align-self:flex-start;margin-top:5px}
-.fd-app .fd-none{display:flex;align-items:center;justify-content:center;gap:8px;margin:28px 12px;font-size:1.0625rem;font-weight:var(--weight-semibold);color:var(--main-hover-color);text-align:center;line-height:1.375rem;letter-spacing:-0.026em;--apl-lh:1.375rem;--apl-lh-loose:1.5rem;--apl-lh-tight:1.25rem;--weight-regular:400;--weight-medium:400;--weight-semibold:600;--weight-bold:600;--weight-black:600}
+.fd-app .fd-none{display:flex;align-items:center;justify-content:center;gap:8px;margin:28px 12px;font-size:1.0625rem;font-weight:var(--weight-semibold);color:var(--fd-muted);text-align:center;line-height:1.375rem;letter-spacing:-0.026em;--apl-lh:1.375rem;--apl-lh-loose:1.5rem;--apl-lh-tight:1.25rem;--weight-regular:400;--weight-medium:400;--weight-semibold:600;--weight-bold:600;--weight-black:600}
 .fd-app .fd-none.is-off{display:none}
 
 /* the open conversation */
