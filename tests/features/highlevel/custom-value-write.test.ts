@@ -23,6 +23,39 @@ let errorLog: ReturnType<typeof vi.spyOn>;
 beforeEach(() => { errorLog = vi.spyOn(console, "error").mockImplementation(() => {}); });
 afterEach(() => { errorLog.mockRestore(); });
 
+describe("readAll: every row's raw value, for the in-use check", () => {
+  const list = (rows: unknown[]) => adapter({ requestList: async () => json({ customValues: rows }) }).readAll("t1");
+
+  it("keeps both rows of a key listed twice, and rows the normal read drops", async () => {
+    const answer = await list([
+      row({ id: "a", value: "first" }),
+      row({ id: "b", value: "second" }),
+      row({ id: "c", name: undefined, fieldKey: "{{ custom_values.no_name }}", value: "no name" }),
+      row({ id: "d", fieldKey: "not a key", value: "bad key" }),
+      row({ id: "e", fieldKey: undefined, value: "no key" }),
+      row({ id: "f", fieldKey: "{{ custom_values.empty }}", value: null }),
+    ]);
+    expect(answer).toEqual({ ok: true, rows: [
+      { key: "main_color", value: "first" }, { key: "main_color", value: "second" },
+      { key: "no_name", value: "no name" }, { key: null, value: "bad key" }, { key: null, value: "no key" }, { key: "empty", value: "" },
+    ] });
+  });
+
+  it.each([
+    ["a row that is not an object", "junk"],
+    ["a number as value", row({ value: 7 })],
+    ["an object as value", row({ value: { url: "x" } })],
+    ["another location", row({ locationId: "loc-b" })],
+  ])("refuses the whole answer on %s", async (_name, bad) => {
+    expect(await list([row(), bad])).toEqual({ ok: false, reason: "retry" });
+  });
+
+  it("refuses a body with no list and a failed call", async () => {
+    expect((await adapter({ requestList: async () => json({}) }).readAll("t1")).ok).toBe(false);
+    expect(await adapter({ requestList: async () => json({}, 403) }).readAll("t1")).toEqual({ ok: false, reason: "permission" });
+  });
+});
+
 describe("the HighLevel custom value update request", () => {
   it("sends the documented PUT with name and value", async () => {
     const doFetch = vi.fn<typeof fetch>(async () => json({}));

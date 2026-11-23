@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { isAllowedLogoUrl } from "@/features/brand";
-import type { MediaFile, MediaFind, MediaTrashOutcome, MediaUpload, MediaUploadOutcome } from "@/features/highlevel";
+import type { CustomValueRawRead, MediaFile, MediaFind, MediaTrashOutcome, MediaUpload, MediaUploadOutcome } from "@/features/highlevel";
 import type { ImageAnswer, ImageFormat, ImageOldFile, ImageStatus } from "@/features/settings";
 import { saveCustomValues, type AuditOutcome, type SaveDeps } from "./write-back";
 import { MAX_IMAGE_BYTES } from "./webp-check";
@@ -13,7 +13,7 @@ const UPLOAD_CUTOFF_MS = 15_000;
 const PUT_CUTOFF_MS = 25_000;
 // No removal starts later than this. The image has changed by then; the old file is reported as kept.
 const REMOVE_CUTOFF_MS = 40_000;
-const MAX_CANDIDATES = 2;
+const MAX_CANDIDATES = 8;
 
 export type CheckedImage = { bytes: Uint8Array; contentType: string; extension: string; hash: string };
 export type MediaDeps = SaveDeps & {
@@ -22,6 +22,8 @@ export type MediaDeps = SaveDeps & {
   trash: (tenantId: string, fileId: string) => Promise<MediaTrashOutcome>;
   upload: (tenantId: string, file: MediaUpload) => Promise<MediaUploadOutcome>;
   fetchBytes: (url: string, maxBytes: number) => Promise<Uint8Array | null>;
+  // Every row's raw value, for the in-use check before any file is removed.
+  readAll: (tenantId: string) => Promise<CustomValueRawRead>;
   hosts: readonly string[];
 };
 type Input = { tenantId: string; actorId: string; key: string; expected: string; file: CheckedImage };
@@ -78,21 +80,29 @@ async function findOld(input: Input, url: string, deps: MediaDeps): Promise<{ ol
   return { old: found.files[0], siblings: found.siblings };
 }
 
-// A same-name file in the folder may be this image from an earlier try. Its real bytes decide.
+// A same-name file in the folder may be this image from an earlier try. Its real bytes decide: the
+// same bytes are reused, so no duplicate is made. Other bytes are simply another file, left alone.
+// Every one is compared, or the run stops, because a skipped file could be the identical one.
 async function matchSibling(input: Input, siblings: readonly MediaFile[], deps: MediaDeps): Promise<MediaFile | { stop: ImageStatus } | null> {
   if (siblings.length === 0) return null;
-  for (const file of siblings.slice(0, MAX_CANDIDATES)) {
-    if (!isAllowedLogoUrl(file.url, deps.hosts)) return { stop: "bad_host" };
-    const bytes = await deps.fetchBytes(file.url, MAX_IMAGE_BYTES).catch(() => null);
-    if (!bytes) return { stop: "retry" };
-    if (sha256(bytes) === input.file.hash) return file;
-  }
-  return { stop: "hash_mismatch" };
+  if (siblings.length > MAX_CANDIDATES) return { stop: "ambiguous" };
+  if (siblings.some((file) => !isAllowedLogoUrl(file.url, deps.hosts))) return { stop: "bad_host" };
+  const all = await Promise.all(siblings.map((file) => deps.fetchBytes(file.url, MAX_IMAGE_BYTES).catch(() => null)));
+  if (all.some((bytes) => !bytes)) return { stop: "retry" };
+  const at = all.findIndex((bytes) => sha256(bytes as Uint8Array) === input.file.hash);
+  return at >= 0 ? siblings[at] : null;
+}
+
+// The owner picked the image that is already live. A failed read just means it is not proven the same.
+async function isCurrentImage(input: Input, old: MediaFile, deps: MediaDeps): Promise<boolean> {
+  if (!isAllowedLogoUrl(old.url, deps.hosts)) return false;
+  const bytes = await deps.fetchBytes(old.url, MAX_IMAGE_BYTES).catch(() => null);
+  return !!bytes && sha256(bytes) === input.file.hash;
 }
 
 // One upload, never repeated. After no answer the library is read again; a file still absent is
 // `unknown`, because the list may lag behind an upload that did land.
-async function uploadNew(input: Input, old: MediaFile, deps: MediaDeps): Promise<Target | Run> {
+async function uploadNew(input: Input, old: MediaFile, before: readonly MediaFile[], deps: MediaDeps): Promise<Target | Run> {
   let auditId: string;
   try {
     auditId = await deps.begin({ tenantId: input.tenantId, actorId: input.actorId, key: input.key, previousValue: input.expected, newValue: `upload:${input.key}-${input.file.hash.slice(0, 12)}` });
@@ -118,14 +128,21 @@ async function uploadNew(input: Input, old: MediaFile, deps: MediaDeps): Promise
   }
   const again = await findOld(input, old.url, deps);
   if ("old" in again && again.old.id === old.id) {
-    const match = await matchSibling(input, again.siblings, deps);
+    // Only a file that appeared since the first look can be this upload.
+    const known = new Set(before.map((file) => file.id));
+    const appeared = again.siblings.filter((file) => !known.has(file.id));
+    const match = await matchSibling(input, appeared, deps);
     if (match && "id" in match) {
       await closeAudit(auditId, "saved", deps);
       return { file: match, uploadedNow: false };
     }
-    if (match && (match.stop === "hash_mismatch" || match.stop === "bad_host")) {
+    if (!match && appeared.length > 0) {
       await closeAudit(auditId, "failed", deps);
-      return stopped(match.stop);
+      return stopped("hash_mismatch");
+    }
+    if (match?.stop === "bad_host") {
+      await closeAudit(auditId, "failed", deps);
+      return stopped("bad_host");
     }
   }
   await closeAudit(auditId, "unknown", deps);
@@ -164,9 +181,11 @@ async function pointValueAt(input: Input, url: string, started: number, deps: Me
 }
 
 // Audited, by exact id, after one last check that the library still lists this very file.
-async function trashVerified(input: Input, file: MediaFile, deps: MediaDeps): Promise<MediaTrashOutcome | "not_verified"> {
+async function trashVerified(input: Input, file: MediaFile, started: number, deps: MediaDeps): Promise<MediaTrashOutcome | "not_verified"> {
   const verified = await deps.verify(input.tenantId, file).catch(() => false);
   if (!verified) return "not_verified";
+  // The checks above take time: the trash call must still fit inside the route's limit.
+  if (deps.now() - started > REMOVE_CUTOFF_MS) return "not_verified";
   let auditId: string;
   try {
     auditId = await deps.begin({ tenantId: input.tenantId, actorId: input.actorId, key: input.key, previousValue: file.url, newValue: `trash:${file.id}` });
@@ -188,24 +207,31 @@ async function trashVerified(input: Input, file: MediaFile, deps: MediaDeps): Pr
 async function removeOld(input: Input, old: MediaFile, target: MediaFile, started: number, deps: MediaDeps): Promise<ImageOldFile> {
   if (old.id === target.id || old.url === target.url) return "kept";
   if (deps.now() - started > REMOVE_CUTOFF_MS) return "kept";
-  const read = await deps.read(input.tenantId).catch(() => null);
-  if (!read?.ok) return "kept";
-  if ((read.duplicates ?? []).some((row) => row.key === input.key)) return "kept";
-  if (read.values.find((row) => row.key === input.key)?.value.trim() !== target.url) return "kept";
-  const holders = [...read.values.filter((row) => row.key !== input.key), ...(read.duplicates ?? [])];
-  if (holders.some((row) => row.value.includes(old.url))) return "in_use";
-  const outcome = await trashVerified(input, old, deps);
+  const all = await deps.readAll(input.tenantId).catch(() => null);
+  if (!all?.ok) return "kept";
+  const own = all.rows.filter((row) => row.key === input.key);
+  if (own.length !== 1 || own[0].value.trim() !== target.url) return "kept";
+  if (all.rows.some((row) => row.key !== input.key && row.value.includes(old.url))) return "in_use";
+  if (!(await isProvenNew(input, target, deps))) return "unproven";
+  const outcome = await trashVerified(input, old, started, deps);
   if (outcome === "trashed") return "trashed";
   return outcome === "unconfirmed" ? "unconfirmed" : "kept";
+}
+
+// The upload answer holds only an id and URL. The listing must show the name and folder we asked
+// for, and the stored bytes must be the ones sent, or the old file is the only good copy.
+async function isProvenNew(input: Input, target: MediaFile, deps: MediaDeps): Promise<boolean> {
+  if (!(await deps.verify(input.tenantId, target).catch(() => false))) return false;
+  const bytes = await deps.fetchBytes(target.url, MAX_IMAGE_BYTES).catch(() => null);
+  return !!bytes && sha256(bytes) === input.file.hash;
 }
 
 // The value did not move: only the file this request uploaded may go, and only if nothing points at it.
 async function removeUploaded(input: Input, file: MediaFile, started: number, deps: MediaDeps): Promise<boolean> {
   if (deps.now() - started > REMOVE_CUTOFF_MS) return false;
-  const read = await deps.read(input.tenantId).catch(() => null);
-  if (!read?.ok) return false;
-  if ([...read.values, ...(read.duplicates ?? [])].some((row) => row.value.includes(file.url))) return false;
-  return (await trashVerified(input, file, deps)) === "trashed";
+  const all = await deps.readAll(input.tenantId).catch(() => null);
+  if (!all?.ok || all.rows.some((row) => row.value.includes(file.url))) return false;
+  return (await trashVerified(input, file, started, deps)) === "trashed";
 }
 
 async function failAfterUpload(input: Input, run: Run, target: Target, started: number, deps: MediaDeps): Promise<Run> {
@@ -238,8 +264,9 @@ async function run(input: Input, deps: MediaDeps): Promise<Run> {
   let target: Target;
   if (match) target = { file: match, uploadedNow: false };
   else {
+    if (await isCurrentImage(input, old, deps)) return { answer: { status: "saved", url: old.url, oldFile: "same" }, keepLease: false };
     if (deps.now() - started > UPLOAD_CUTOFF_MS) return stopped("retry");
-    const uploaded = await uploadNew(input, old, deps);
+    const uploaded = await uploadNew(input, old, siblings, deps);
     if (!("file" in uploaded)) return uploaded;
     target = uploaded;
   }

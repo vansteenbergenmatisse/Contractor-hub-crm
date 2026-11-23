@@ -225,6 +225,46 @@ describe("checkSvg refuses a bypass of each allowance", () => {
   });
 });
 
+describe("checkSvg stays fast on hostile sizes", () => {
+  const fast = (text: string) => {
+    const started = performance.now();
+    const result = checkSvg(bytes(text));
+    return { result, ms: performance.now() - started };
+  };
+
+  it.each([
+    ["a long word in a fill", wrap(`<rect fill="${"a".repeat(80_000)}"/>`)],
+    ["a long hyphenated word", wrap(`<rect stroke="${"a-".repeat(40_000)}"/>`)],
+    ["a long word in a style", wrap(`<rect style="fill:${"a".repeat(80_000)}"/>`)],
+    ["a long word in a rule", wrap(`<style>.a{fill:${"a".repeat(80_000)}}</style>`)],
+    ["spaces before a bracket", wrap(`<rect fill="a${" ".repeat(80_000)}b"/>`)],
+  ])("%s", (_name, text) => {
+    expect(fast(text).ms).toBeLessThan(1_000);
+  });
+
+  it("refuses 100k selectors times 30k references without doing that work", () => {
+    const selectors = Array.from({ length: 100_000 }, () => "a").join(",");
+    const declarations = `fill:${"url(#g)".repeat(30_000)}`;
+    const text = wrap(`${GRADIENT}<style>${selectors}{${declarations}}</style><rect class="a"/>`);
+    expect(text.length).toBeLessThan(MAX_SVG_BYTES);
+    const { result, ms } = fast(text);
+    expect(result).toEqual({ ok: false, reason: "svg_unsafe" });
+    expect(ms).toBeLessThan(2_000);
+  });
+
+  it("counts selector and reference work across rules", () => {
+    const rule = `${Array.from({ length: 400 }, (_, i) => `.c${i}`).join(",")}{${"fill:url(#g);".repeat(30)}}`;
+    const { result, ms } = fast(wrap(`${GRADIENT}<style>${rule.repeat(10)}</style><rect class="c1"/>`));
+    expect(result).toEqual({ ok: false, reason: "svg_unsafe" });
+    expect(ms).toBeLessThan(2_000);
+  });
+
+  it("still accepts a normal sheet with many classes", () => {
+    const rules = Array.from({ length: 200 }, (_, i) => `.c${i}{fill:url(#g)}`).join("");
+    expect(checkSvg(bytes(wrap(`${GRADIENT}<style>${rules}</style><rect class="c1"/>`))).ok).toBe(true);
+  });
+});
+
 describe("inspectSvg names the problem", () => {
   it.each([
     ["script", wrap("<script>alert(1)</script>")],

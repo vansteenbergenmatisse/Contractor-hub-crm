@@ -25,7 +25,8 @@ The user's words: "it can delete it and replace it if it gives the same name and
 - The OpenAPI example upload URL is on `storage.googleapis.com`, which is not allowlisted. If real uploads answer with that host, every change stops at `bad_host` with the old value live, until the user approves that host through `LOGO_HOST_ALLOWLIST`.
 - A browser with no canvas WebP encoder gets a clear message instead of an upload. Which phones this affects, Safari on iPhone especially, is not tested.
 - The list call's `sortBy=createdAt` and `type=file`/`type=folder` values, how `parentId`, `offset` and `limit` behave, the `Version` value (`v3` is sent), and whether HighLevel keeps the bytes unchanged. If it alters them, a repeat of the same image stops at `hash_mismatch`.
-- The documented list example shows no id field. The code reads `_id`, then `id`, and needs `altId` and `altType` on each row. If real rows lack them, every change stops at `not_found` before any write.
+- The documented list example shows no id field. The code reads `_id`, then `id`, and needs `altId` and `altType` on each row. If real rows lack them, every change stops at `library_limit` before any write.
+- **If HighLevel re-encodes an uploaded file, or lists it late, the byte or listing proof fails:** the image still changes, but the old file is kept and reported, every time.
 - Whether the upload accepts a name that already exists in the folder, keeps it exactly, and honors `parentId`. Whether `status: "trashed"` really is recoverable, and what its answer looks like (the documented example is `[{deleted, id}]`). Any other answer is reported as unconfirmed.
 - **Only custom values are checked for other uses of the old URL.** A funnel, website, email or workflow that uses the same URL directly is not seen, and would show a broken image once the file is trashed. Whether a trashed file's URL keeps serving is unverified.
 
@@ -69,13 +70,13 @@ Source: `GoHighLevel/highlevel-api-docs@0af86a4`. No live call made.
 
 All under the per-tenant lease.
 
-1. **Find the old file.** Read the custom value. Walk the tenant's library (`GET /medias/files`, every folder and page, at most 60 calls and 12 seconds) and match the exact URL. No match, more than one match, or a library that could not be read to the end stops here, before any write.
-2. **Validate.** The new file keeps the old file's exact name. A format that differs from the name's extension is refused; a photo is encoded to the file's format first.
-3. **Check for an earlier try.** A same-name file in that folder is fetched through the limited fetcher and its hash compared. Same bytes: reuse it, no upload. Other bytes: stop.
+1. **Find the current file**, the one the custom value points at. Walk the tenant's library (`GET /medias/files`, every folder, at most 120 calls and 12 seconds). The offset moves by the rows returned and only an empty page ends a folder. Match the exact URL. No match, more than one match, a row that cannot be read, or a library that could not be read to the end stops here, before any write.
+2. **Validate.** The new file keeps the current file's exact name. A format that differs from the name's extension is refused; a photo is encoded to the file's format first.
+3. **Check for identical content.** Up to 8 same-name files in that folder are fetched through the limited fetcher and their hash compared (more than 8 stops). Same bytes: reuse that file, no upload. Other bytes: another file, left alone. If the current file already holds these bytes, nothing changes.
 4. **Upload** under that name into that `parentId`, after an audit row. **No blind upload retry.** On no answer, re-read first. If still absent, report `unknown`, because the list may lag. Verify the URL host against the allowlist (`assets.cdn.filesafe.space` plus `LOGO_HOST_ALLOWLIST`) and never widen it automatically. An answer naming the old file's id or URL stops the run.
 5. **Save** the new URL through the existing save rules (stale check, audit, no PUT retry) and read it back. If that fails, the old value and file stay live. The file this request uploaded is trashed only when the save certainly did not apply, no custom value holds its URL and its id verifies; otherwise it is reported.
-6. **Remove the old file**, only after the read-back. Re-read all custom values: if any other value contains the old URL, keep the file and say so. Otherwise verify the id, URL, name and folder once more, write an audit row, and send one `PUT /medias/delete-files` with `status: "trashed"`. No removal starts after 40 seconds.
-7. **Tell the owner** what happened: replaced, kept because in use, could not be removed, or removal unconfirmed.
+6. **Remove the old file**, only after the read-back. Read the raw value of every custom value row, also rows without a name or readable key and keys listed twice. An unreadable row keeps the file; any other value containing the old URL keeps it. **Prove the new file:** the real listing must show its id, URL, exact name and folder, and its fetched bytes must hash to what was sent; otherwise keep the old file. Then verify the old file's id, URL, name and folder (at most 20 pages and 5 seconds), recheck the 40-second cutoff immediately before the trash call, write an audit row, and send one `PUT /medias/delete-files` with `status: "trashed"`.
+7. **Tell the owner** what happened: replaced, already current, kept because in use, kept because the new file could not be proven, could not be removed, or removal unconfirmed.
 
 The sign-in background needs a URL path ending in an image extension (`docs/tenant-branding.md:36`). Check this in the sandbox.
 

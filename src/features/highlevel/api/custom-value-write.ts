@@ -11,6 +11,9 @@ export type CustomValueDetail = { id: string; key: string; name: string; value: 
 export type CustomValueWriteOutcome = "saved" | "rejected" | "permission" | "retry" | "no_answer";
 // `duplicates`: keys listed twice, with the first row's value to show. They are never a write target.
 export type CustomValueRead = { ok: true; values: CustomValueDetail[]; duplicates?: { key: string; value: string }[] } | { ok: false; reason: "permission" | "retry" };
+// `key` is null when the row's field key cannot be read.
+export type CustomValueRawRow = { key: string | null; value: string };
+export type CustomValueRawRead = { ok: true; rows: CustomValueRawRow[] } | { ok: false; reason: "permission" | "retry" };
 
 export type CustomValueAdapterDeps = {
   readLocationId: (tenantId: string) => Promise<string | null>;
@@ -62,6 +65,23 @@ function listedTwice(json: unknown, locationId: string): { key: string; value: s
   });
 }
 
+// Every row's raw value, also of rows the normal read leaves out (no name, unreadable key, listed
+// twice), so a URL in use is never missed. A row whose value cannot be read refuses the whole answer.
+function parseAllRows(json: unknown, locationId: string): CustomValueRawRow[] | null {
+  const list = typeof json === "object" && json !== null ? (json as Record<string, unknown>).customValues : null;
+  if (!Array.isArray(list)) return null;
+  const rows: CustomValueRawRow[] = [];
+  for (const raw of list as unknown[]) {
+    if (typeof raw !== "object" || raw === null) return null;
+    const item = raw as Record<string, unknown>;
+    if (item.locationId !== undefined && item.locationId !== locationId) return null;
+    if (item.value !== null && item.value !== undefined && typeof item.value !== "string") return null;
+    const key = typeof item.fieldKey === "string" ? (FIELD_KEY.exec(item.fieldKey.trim())?.[1] ?? null) : null;
+    rows.push({ key, value: item.value ?? "" });
+  }
+  return rows;
+}
+
 function outcomeOfStatus(status: number): CustomValueWriteOutcome {
   if (status >= 200 && status < 300) return "saved";
   if (status === 400 || status === 422) return "rejected";
@@ -102,6 +122,24 @@ export function createCustomValueAdapter(deps: CustomValueAdapterDeps) {
         const values = parseCustomValueDetails(json, locationId);
         const duplicates = listedTwice(json, locationId);
         return duplicates.length > 0 ? { ok: true, values, duplicates } : { ok: true, values };
+      } catch (error) {
+        return { ok: false, reason: outcomeOfError("read", error) };
+      }
+    },
+
+    // For the in-use check before a file is removed. Never a write target.
+    async readAll(tenantId: string): Promise<CustomValueRawRead> {
+      try {
+        const locationId = await deps.readLocationId(tenantId);
+        if (!locationId) return { ok: false, reason: "permission" };
+        const response = await deps.requestList(await deps.getLocationToken(tenantId), locationId);
+        if (!response.ok) {
+          await response.body?.cancel().catch(() => {});
+          console.error(`HighLevel custom value read failed: status=${response.status}`);
+          return { ok: false, reason: response.status === 401 || response.status === 403 ? "permission" : "retry" };
+        }
+        const rows = parseAllRows(await readListJson(response), locationId);
+        return rows ? { ok: true, rows } : { ok: false, reason: "retry" };
       } catch (error) {
         return { ok: false, reason: outcomeOfError("read", error) };
       }

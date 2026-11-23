@@ -9,7 +9,7 @@ export type { OAuthStartDeps } from "./api/start";
 export { handleOAuthCallback } from "./api/callback";
 export type { OAuthCallbackDeps } from "./api/callback";
 export { createCustomValueAdapter, parseCustomValueDetails } from "./api/custom-value-write";
-export type { CustomValueAdapterDeps, CustomValueDetail, CustomValueRead, CustomValueWriteOutcome } from "./api/custom-value-write";
+export type { CustomValueAdapterDeps, CustomValueDetail, CustomValueRawRead, CustomValueRawRow, CustomValueRead, CustomValueWriteOutcome } from "./api/custom-value-write";
 export { createMediaAdapter, fetchMediaBytes } from "./api/media-write";
 export type { MediaAdapterDeps, MediaFile, MediaFind, MediaTrashOutcome, MediaUpload, MediaUploadOutcome } from "./api/media-write";
 export {
