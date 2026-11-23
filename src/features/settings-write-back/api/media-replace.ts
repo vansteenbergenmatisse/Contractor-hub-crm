@@ -83,10 +83,15 @@ async function findOld(input: Input, url: string, deps: MediaDeps): Promise<{ ol
 // A same-name file in the folder may be this image from an earlier try. Its real bytes decide: the
 // same bytes are reused, so no duplicate is made. Other bytes are simply another file, left alone.
 // Every one is compared, or the run stops, because a skipped file could be the identical one.
+function siblingStop(siblings: readonly MediaFile[], deps: MediaDeps): ImageStatus | null {
+  if (siblings.length > MAX_CANDIDATES) return "ambiguous";
+  return siblings.some((file) => !isAllowedLogoUrl(file.url, deps.hosts)) ? "bad_host" : null;
+}
+
 async function matchSibling(input: Input, siblings: readonly MediaFile[], deps: MediaDeps): Promise<MediaFile | { stop: ImageStatus } | null> {
   if (siblings.length === 0) return null;
-  if (siblings.length > MAX_CANDIDATES) return { stop: "ambiguous" };
-  if (siblings.some((file) => !isAllowedLogoUrl(file.url, deps.hosts))) return { stop: "bad_host" };
+  const stop = siblingStop(siblings, deps);
+  if (stop) return { stop };
   const all = await Promise.all(siblings.map((file) => deps.fetchBytes(file.url, MAX_IMAGE_BYTES).catch(() => null)));
   if (all.some((bytes) => !bytes)) return { stop: "retry" };
   const at = all.findIndex((bytes) => sha256(bytes as Uint8Array) === input.file.hash);
@@ -259,12 +264,15 @@ async function run(input: Input, deps: MediaDeps): Promise<Run> {
     return { answer: wanted === "other" ? { status: "format_mismatch" } : { status: "format_mismatch", format: wanted }, keepLease: false };
   }
 
+  const blocked = siblingStop(siblings, deps);
+  if (blocked) return stopped(blocked);
+  // Checked first: an identical copy in the folder must never move the value off the live file.
+  if (await isCurrentImage(input, old, deps)) return { answer: { status: "saved", url: old.url, oldFile: "same" }, keepLease: false };
   const match = await matchSibling(input, siblings, deps);
   if (match && "stop" in match) return stopped(match.stop);
   let target: Target;
   if (match) target = { file: match, uploadedNow: false };
   else {
-    if (await isCurrentImage(input, old, deps)) return { answer: { status: "saved", url: old.url, oldFile: "same" }, keepLease: false };
     if (deps.now() - started > UPLOAD_CUTOFF_MS) return stopped("retry");
     const uploaded = await uploadNew(input, old, siblings, deps);
     if (!("file" in uploaded)) return uploaded;

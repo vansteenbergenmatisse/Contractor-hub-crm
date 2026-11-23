@@ -623,6 +623,16 @@ describe("replaceImage: a retry after a partial failure", () => {
     expect(d.trash).not.toHaveBeenCalled();
   });
 
+  it("re-selecting the current image with an identical same-name copy in the folder changes nothing", async () => {
+    const copy = { id: "copy", name: NAME, url: OTHER, parentId: FOLDER };
+    const d = deps({ found: { ok: true, files: [OLD_FILE], siblings: [copy] } });
+    d.fetchBytes.mockResolvedValue(BYTES);
+    expect(await run(d)).toEqual({ status: "saved", url: OLD, oldFile: "same" });
+    expect(d.upload).not.toHaveBeenCalled();
+    expect(d.update).not.toHaveBeenCalled();
+    expect(d.trash).not.toHaveBeenCalled();
+  });
+
   it("after no answer, a same-name file that was already there is not taken for the upload", async () => {
     const before = { id: "earlier", name: NAME, url: OTHER, parentId: FOLDER };
     const list: MediaFind = { ok: true, files: [OLD_FILE], siblings: [before] };
