@@ -104,6 +104,13 @@ Single source of truth for where the project stands. Read it at the start of eve
 
 ## Log
 
+### 2026-11-23 - Bug sweep fixes combined on `fix/sweep-combined` (not merged)
+- Six fixers, then two independent reviewers (rejected, fixed, re-reviewed), both APPROVED at 337b38c. `pnpm check` exit 0: 3516 passed, 9 skipped, build compiled. No existing test edited.
+- Fixed: A1, A3, A4 (null role only), A5, H1 (alert only, never auto-uninstalls), H2, H4, H5, H6, H7, S1, S2, S3, S4, S6, S7, S8, L1 to L6, L8, B2, B5, B6, B7 (Invoices only), U1 to U8. Turning login on now re-checks removed people; if HighLevel's list misses every linked user it blocks nobody and warns the admin.
+- NOT fixed, the user must decide: A2 (tenant-level login off, needs a migration); whether the invite or HighLevel decides a role (A4); B1, B3, B4 and Quotes dates in B7, because existing tests pin the current behavior; L7 (meaning of "this week").
+- Known limits: H4 uses compensation, not a transaction, and fails toward blocked; an overlapping partial HighLevel list can still block someone; L8 compares UTC days; S6 can show the label "Business address city" for JCR; the time zone read limit of 30 a minute and the 35-second sync deadline are proposals.
+- NOT VERIFIED: any of this on the dev site, in a real browser, against live HighLevel or a real database (Prisma is mocked in these tests).
+
 ### 2026-11-23 - Settings save now refreshes the app and confirms the write
 - Live test by the user on JCR: `business_owner_name` changed to `Mike Dalton` in HighLevel and was restored to `Jon`. The frame stayed stale and the audit outcome was `unknown`.
 - Fixed on `fix/settings-write-back-refresh`: a cross-instance brand version read from `CustomValueChange` (no migration); a 5-second cache for 60 seconds after a save, then 300 seconds; `router.refresh()` after a save; up to 3 more real read-backs after a 2xx; per-field client overrides that expire 60 seconds after a real save; visit-only edits do not expire; `loadBrand` uses React `cache`; read-only paths keep last-good values; a location UNINSTALL clears them on the receiving instance.
