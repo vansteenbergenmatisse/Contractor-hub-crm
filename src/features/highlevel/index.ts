@@ -138,6 +138,7 @@ export {
   WORKFLOWS_MAX_PAGES,
   WORKFLOWS_PAGE_SIZE,
   WORKFLOWS_READS_PER_MINUTE,
+  WORKFLOWS_READ_DEADLINE_MS,
   buildWorkflowsReader,
   createTenantWorkflowsReader,
   createWorkflowRequests,

@@ -21,6 +21,11 @@ export async function loadAutomations(
     return { state: "unavailable" };
   }
   if (!answer.ok) return { state: answer.reason };
+  // A row of another location means the answer cannot be trusted for this tenant: show none of it.
+  if (answer.foreign) {
+    console.error(`Automations: refused a list with ${answer.foreign} rows from another location.`);
+    return { state: "unavailable" };
+  }
   if (answer.dropped > 0) console.warn(`Automations: left out ${answer.dropped} malformed rows.`);
   if (answer.workflows.length === 0) {
     // A gap that may hide a real workflow must not read as "none".

@@ -44,7 +44,7 @@ export type FolderGroup = { folder: string; items: Automation[] };
 // feature does not depend on the adapter.
 export type WorkflowRow = { id: string; name: string | null; status: string | null };
 export type AutomationsReader = (tenantId: string) => Promise<
-  | { ok: true; workflows: WorkflowRow[]; dropped: number; complete: boolean }
+  | { ok: true; workflows: WorkflowRow[]; dropped: number; foreign?: number; complete: boolean }
   | { ok: false; reason: "reconnect" | "unavailable" | "not-enabled" }
 >;
 
