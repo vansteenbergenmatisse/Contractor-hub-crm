@@ -117,6 +117,7 @@ Single source of truth for where the project stands. Read it at the start of eve
 - Image change: compress to WebP, or strict SVG check for logo and favicon, upload a new file, point the custom value at it, keep the old file. `@xmldom/xmldom` 0.9.12 added with the user's approval. `medias.*` are not default scopes.
 - Notify on Start: the toggle adds tag `crm_on_my_way` once for the current job or estimate. Workflow contract: `docs/routes-notify.md`. A job is past when its end time has passed. Calendars must be named Job, Jobs, Estimate or Estimates.
 - Security review rejected 1772f2c with five findings, all fixed, then approved 665fee3 for dev with flags off. The first migration attempt was blocked by the permission system; the user then approved it. `20261123140000_route_start_notification` applied to Neon `develop`; `migrate status` up to date. `pnpm check` exit 0: 4076 passed, 9 skipped.
+- Pushed: `develop` moved from f3e797d to be4f763 with no force. CI run 45263118530 success. Vercel success, and `dev.crm.forgeforward.io` serves that deployment. Signed out: `/sign-in` and `/api/health/db` 200; `/routes` and `/settings` 307; POST `/api/settings/media` and `/api/routes/notify` 403. The four new flags were not set by Claude.
 - NOT VERIFIED: any live upload, tag or workflow; the real upload response and URL host; whether remove then add fires Tag Added; `contactId` on real events; JCR calendar names; iPhone WebP encoding.
 
 ### 2026-11-23 - Social links folder in Settings
