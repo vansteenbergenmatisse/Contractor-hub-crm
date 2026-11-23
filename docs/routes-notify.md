@@ -36,6 +36,17 @@ Source: official OpenAPI files `apps/contacts.json` and `apps/calendars.json`, `
 
 HighLevel's event has no job or estimate field (`docs/greenlane/hl-api-notes.md`), so the **calendar name** decides. After trimming and ignoring letter case, it must be exactly `Job`, `Jobs`, `Estimate` or `Estimates`. Anything else fails closed: no notification, and the card says "Only calendars named Job or Estimate can notify a client." A name like "Job Interview" is refused on purpose. A client whose calendars have other names must rename them, or this rule must be extended.
 
+## Which job may notify
+
+Exactly one job at a time: `notifyId`, the first job today, by start time, that is neither done nor past. The server re-reads the day and refuses every other id.
+
+- **Done:** HighLevel status is `showed`, `completed` or `noshow`.
+- **Past:** not done, and its end time has been reached (`end <= now`). A job ending at this exact moment is past.
+- **In progress is not past** (`start <= now < end`). A crew member running late can still notify the client until the job's end time.
+- A past job left open no longer blocks the day: it is skipped, and its own Start is refused as `past`. `nextId` (first job not done) is unchanged and still drives the card when notifying is off. With notifying on, the card shows `notifyId`, or `nextId` if no job can notify.
+- A job in progress holds the turn until it ends or is marked done, so the job after it cannot notify earlier. This includes a job that runs past today, and a crew that leaves early without marking the job done.
+- A wrong-type job holding the turn is refused and does not pass the turn on.
+
 ## Once per job
 
 Table `RouteStartNotification`, unique on tenant + appointment id, written as `pending` **before** any tag call (migration `20261123140000_route_start_notification`, not applied).

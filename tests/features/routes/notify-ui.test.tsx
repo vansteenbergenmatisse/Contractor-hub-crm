@@ -176,4 +176,32 @@ describe("Start with the toggle on", () => {
     const row = within(screen.getByRole("list", { name: "Today's jobs" })).getAllByRole("listitem")[0];
     expect(within(row).getByText("Client notified")).toBeTruthy();
   });
+
+  it("with a past job not marked done, the card's Start notifies for the job after it", async () => {
+    const jobs = [job({ id: "stale", name: "Stale Sam", pastTime: true }), job({ id: "b", name: "Later Lee" })];
+    on({ ...ready(jobs), notifyId: "b" } as RoutesResult);
+    await tap(start("Later Lee"));
+    expect(JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string)).toEqual({ appointmentId: "b" });
+  });
+
+  it("the skipped past job's row Start never notifies", async () => {
+    const jobs = [job({ id: "stale", name: "Stale Sam", pastTime: true }), job({ id: "b", name: "Later Lee" })];
+    on({ ...ready(jobs), notifyId: "b" } as RoutesResult);
+    const list = screen.getByRole("list", { name: "Today's jobs" });
+    await tap(within(list).getByRole("link", { name: "Start directions to Stale Sam" }));
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("with only past jobs left, the card stays on the next job", () => {
+    on({ ...ready([job({ pastTime: true })]), notifyId: null } as RoutesResult);
+    expect(within(screen.getByRole("region", { name: "Next job" })).getByRole("heading", { name: "Pat Test" })).toBeTruthy();
+  });
+});
+
+describe("with the flag off", () => {
+  it("the card stays on nextId, even past a job not marked done", () => {
+    const jobs = [job({ id: "stale", name: "Stale Sam", pastTime: true }), job({ id: "b", name: "Later Lee" })];
+    render(<RoutesLivePage result={{ ...ready(jobs), notifyId: "b" } as RoutesResult} notify={null} />);
+    expect(within(screen.getByRole("region", { name: "Next job" })).getByRole("heading", { name: "Stale Sam" })).toBeTruthy();
+  });
 });
