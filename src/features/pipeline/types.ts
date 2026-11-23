@@ -98,3 +98,38 @@ export type StubView = {
   auto: string;
   showClassName: string;
 };
+
+// The real, read-only board. Stages come from the tenant's own pipeline at runtime.
+
+// What the injected reader answers (the server page passes it; this feature never calls the CRM).
+export type PipelineBoardAnswer =
+  | {
+      ok: true;
+      pipelines: readonly { id: string; name: string; stages: readonly { id: string; name: string }[] }[];
+      pipelineId: string | null;
+      opportunities: readonly {
+        id: string;
+        name: string | null;
+        contactName: string | null;
+        stageId: string;
+        monetaryValue: number | null;
+        lastStageChangeAt: string | null;
+      }[];
+      dropped: number;
+      complete: boolean;
+    }
+  | { ok: false; reason: "reconnect" | "unavailable" };
+
+export type PipelineBoardReader = (tenantId: string, pipelineId?: string) => Promise<PipelineBoardAnswer>;
+
+export type LiveCard = { id: string; name: string; init: string; detail: string; amount: string; since: string };
+export type LiveColumn = { id: string; name: string; cards: LiveCard[] };
+export type PipelineChoice = { id: string; name: string };
+
+// What one load gives the page. Never sample data. `complete`: no open deal lies beyond these.
+// `dropped`: malformed rows left out.
+export type PipelineResult =
+  | { state: "ready"; pipelines: PipelineChoice[]; pipelineId: string; columns: LiveColumn[]; loadedAt: string; complete: boolean; dropped: number }
+  | { state: "empty"; pipelines: PipelineChoice[]; pipelineId: string | null }
+  | { state: "reconnect" }
+  | { state: "unavailable" };

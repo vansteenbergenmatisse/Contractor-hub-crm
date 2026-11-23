@@ -5,6 +5,13 @@ import { MOCK_CARDS } from "./mock";
 
 export { PipelinePage } from "./components/PipelinePage";
 
+// The real, read-only board. The route renders only these.
+export { LivePipelinePage } from "./components/LivePipelinePage";
+export { LivePipelineSkeleton } from "./components/LivePipelineSkeleton";
+export { loadPipeline } from "./api/load-pipeline";
+export { boardChunks, chunkOfStage, liveSearchRows } from "./api/live-board";
+export type { LiveCard, LiveColumn, PipelineBoardAnswer, PipelineBoardReader, PipelineChoice, PipelineResult } from "./types";
+
 // Rows the global search can find (sample cards, Phase 2).
 export const searchRows: SearchRow[] = buildSearchRows(MOCK_CARDS);
 
