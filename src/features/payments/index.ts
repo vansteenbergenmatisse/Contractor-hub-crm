@@ -6,5 +6,6 @@ export { canUndo, chipText, historyLines, initialState, isPaid, liveState, payme
 export { PaymentsLivePage } from "./components/PaymentsLivePage";
 export { PaymentsSkeleton } from "./components/PaymentsSkeleton";
 export { loadPayments } from "./api/load-payments";
+export { isPaymentsPageLive } from "./api/page-flag";
 export type { LiveTransactionRow, LiveTransactionView, PaymentsResult, TransactionsRead, TransactionsReader } from "./types";
 export type { Lateness, PaymentRow, PaymentsAction, PaymentsState, RowActionSpec, Totals } from "./types";

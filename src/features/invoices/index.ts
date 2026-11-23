@@ -40,5 +40,6 @@ export { InvoicesLivePage } from "./components/InvoicesLivePage";
 export { InvoicesSkeleton } from "./components/InvoicesSkeleton";
 export { LiveInvoiceRowItem } from "./components/LiveInvoiceRow";
 export { dueSummary, formatLiveAmount, invoiceView, loadInvoices, withBillingDeadline } from "./api/load-invoices";
+export { isInvoicesPageLive } from "./api/page-flag";
 export type { DueSummary, DueTotal, InvoicesRead, InvoicesReader, InvoicesResult, LiveInvoiceRow, LiveInvoiceView } from "./types";
 export type { InvoicesKeptState, InvoicesPatch, BusinessCard, BusinessValues, Chip, EditForm, Filter, Invoice, InvoiceStatus, MissingField, Result, SheetView } from "./types";

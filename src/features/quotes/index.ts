@@ -3,6 +3,7 @@ export { QuotesPage } from "./components/QuotesPage";
 export { QuoteSheet } from "./components/QuoteSheet";
 export { QuotesLivePage } from "./components/QuotesLivePage";
 export { loadQuotes, type QuotesReader } from "./api/load-quotes";
+export { isQuotesPageLive } from "./api/page-flag";
 export type { LiveQuote, QuotesResult } from "./types";
 export { searchRows, SEED_QUOTES, mockBuildLines } from "./mock";
 export {
