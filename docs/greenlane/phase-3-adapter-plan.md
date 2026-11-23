@@ -4,6 +4,8 @@ Written 2026-11-22. Endpoint facts: `docs/greenlane/hl-api-notes.md`. Scope of t
 
 **Global rule (user):** new clients are created from a snapshot of JCR Landscaping with the same variables. Everything must work for any such sub-account. Code holds no JCR-specific id, name or value. Ids that differ per sub-account (pipelines, stages, calendars) are looked up per tenant at runtime.
 
+**Status 2026-11-22:** Leads, Today lead rows, Inbox, Pipeline and Calendar follow this pattern. An admin client view uses the stored token only (`docs/view-as-client-and-token-renewal.md`).
+
 ## Adapter
 
 - **Owner:** `src/features/highlevel` holds every HighLevel call. Leads and Today receive an injected reader from their server page, following `settings/api/load-values.ts`.

@@ -1,6 +1,6 @@
 # GreenLane build plan
 
-Source: `docs/greenlane/build-prompt.md` (spec) and `docs/greenlane/greenlane-dashboard.html` (design). Decisions so far are in `PROGRESS.md` under "Current state". Status on 2026-11-22: Phases 1 and 2 are built; Phase 3 is next. Current state and open items are in `PROGRESS.md`.
+Source: `docs/greenlane/build-prompt.md` (spec) and `docs/greenlane/greenlane-dashboard.html` (design). Decisions so far are in `PROGRESS.md` under "Current state". Status on 2026-11-22: Phases 1 and 2 are built. Phase 3 is under way: Leads, Today lead rows, Inbox, Pipeline and Calendar are wired read-only and not yet proven on real responses. Current state and open items are in `PROGRESS.md`.
 
 Per-ticket loop (all tickets): plan in `PROGRESS.md` "In progress", test first, code, `pnpm check`, Playwright where UI, independent verifier agent, update `PROGRESS.md`, local commit on `develop`, then tell the user what to test on staging. Max 3 revision rounds; stop after 2 rounds with no progress. No push, merge, migration or dependency install without asking.
 

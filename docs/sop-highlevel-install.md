@@ -66,6 +66,8 @@ On dev and staging, a new test sub-account is not picked up automatically becaus
 
 ## Troubleshooting
 
+To see a client's real data as a Forge Forward admin, use **View client** on `/admin/clients` (`docs/view-as-client-and-token-renewal.md`). Production also needs `CRON_SECRET` so tokens renew when nobody opens the app.
+
 | What you see | Cause | Fix |
 |---|---|---|
 | `No integration found with the id` | Wrong install host or path | Set `GHL_INSTALL_BASE_URL` as above and redeploy |
