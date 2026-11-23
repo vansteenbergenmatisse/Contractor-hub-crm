@@ -20,7 +20,7 @@ Source: the user's rules in `CLAUDE.md` and the decisions recorded in `PROGRESS.
 11. The browser never holds a HighLevel token. Tenant and `locationId` come from the server session only.
 
 ## JCR Landscaping (real client, the only test sub-account)
-12. Code that touches JCR only reads. No texts, no emails to the JCR owner, no contact changes, no custom-value writes, no workflow publish. Settings write-back stays off. One exception (user, 2026-11-22): the first real write-back test may change ONE harmless custom value on JCR, through the Settings save as a signed-in JCR owner, after the user names the key and value.
+12. Code that touches JCR only reads. No texts, no emails to the JCR owner, no contact changes, no custom-value writes, no workflow publish. Settings write-back stays off. One exception (user, 2026-11-22): the first real write-back test may change ONE harmless custom value on JCR, through the Settings save as a signed-in JCR owner, after the user names the key and value. Second exception (user, 2026-11-23): on dev, Settings may replace JCR's logo with the user's file, after a backup of the current logo.
 13. Test invites go to the user's own email, never to the JCR owner.
 
 ## Stops
