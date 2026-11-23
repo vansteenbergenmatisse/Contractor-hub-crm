@@ -26,4 +26,12 @@ export type RoutesResult =
   | { state: "reconnect" }
   | { state: "unavailable" };
 
+// What a Start did. "unconfirmed" means HighLevel gave no answer, so the client may have been told.
+export type NotifyOutcome = "notified" | "failed" | "unconfirmed";
+// Why nothing was sent. Only these are safe to try again.
+export type NotifyRefusal = "wrong_type" | "not_next" | "no_contact" | "past" | "unsure_next" | "unavailable";
+export type NotifyDisplay = { status: NotifyOutcome } | { status: "refused"; reason: NotifyRefusal };
+// Null or left out: no toggle (flag off, an admin, or View as client).
+export type RoutesNotifyView = { userId: string; outcomes: Record<string, NotifyOutcome> };
+
 export type LocationStatus = "idle" | "asking" | "on" | "denied" | "unavailable" | "unsupported";

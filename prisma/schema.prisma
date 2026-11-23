@@ -298,3 +298,20 @@ model CustomValueSaveLock {
   holder    String
   expiresAt DateTime
 }
+
+// ---- feature: routes ----
+
+// One "on my way" trigger per appointment. Written as "pending" before HighLevel is called, so a repeat
+// tap, a reload or a second crew member can never fire it again. Outcome: pending, notified, failed or
+// unconfirmed. No relations, so the record outlives the user or tenant it names.
+model RouteStartNotification {
+  id            String    @id @default(cuid())
+  tenantId      String
+  appointmentId String
+  actorId       String
+  outcome       String    @default("pending")
+  createdAt     DateTime  @default(now())
+  finishedAt    DateTime?
+
+  @@unique([tenantId, appointmentId])
+}

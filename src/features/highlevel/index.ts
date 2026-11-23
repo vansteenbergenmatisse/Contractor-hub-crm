@@ -195,3 +195,15 @@ export {
   type HighLevelTransaction,
 } from "./api/invoices-read";
 export { readFailureReason } from "./api/read-failure";
+export {
+  CRM_ON_MY_WAY_TAG,
+  createContactTagAdapter,
+  createContactTagRequests,
+  createTenantContactTagAdapter,
+  type AppointmentContactQuery,
+  type AppointmentContactRead,
+  type ContactTagDeps,
+  type ContactTagOutcome,
+  type ContactTagRequests,
+  type ContactTagState,
+} from "./api/contact-tag";

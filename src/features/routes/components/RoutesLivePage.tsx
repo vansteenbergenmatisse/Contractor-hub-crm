@@ -1,13 +1,15 @@
 "use client";
 
-import type { RoutesResult } from "../types";
+import { useNotifyStart } from "../hooks/use-notify-start";
+import type { RoutesNotifyView, RoutesResult } from "../types";
 import { JobRow } from "./JobRow";
 import { NextJobCard } from "./NextJobCard";
 import { RoutesHeader } from "./RoutesHeader";
 import { RoutesStatus } from "./RoutesStatus";
 
 // The real Routes page: read-only, today's jobs with the next one first.
-export function RoutesLivePage({ result }: { result: RoutesResult }) {
+export function RoutesLivePage({ result, notify }: { result: RoutesResult; notify?: RoutesNotifyView | null }) {
+  const { on, toggle, onStart, displayFor } = useNotifyStart(notify);
   if (result.state === "reconnect" || result.state === "unavailable") return <RoutesStatus state={result.state} />;
   if (result.state === "empty") {
     return (
@@ -24,9 +26,9 @@ export function RoutesLivePage({ result }: { result: RoutesResult }) {
     <div className="fd-cal">
       <RoutesHeader timeZone={result.timeZone} />
       {result.partial ? <p className="fd-cdl" role="status"><span>Some jobs may be missing from today, so the next job could be a different one.</span></p> : null}
-      {next ? <NextJobCard job={next} /> : <div className="fd-none fx-none fd-in" role="status"><p>No open jobs left today.</p></div>}
+      {next ? <NextJobCard job={next} notify={notify ? { on, onToggle: toggle, onStart, result: displayFor(next.id) } : null} /> : <div className="fd-none fx-none fd-in" role="status"><p>No open jobs left today.</p></div>}
       <ul className="fd-card fd-in" aria-label="Today's jobs" style={{ listStyle: "none", margin: 0, padding: 0 }}>
-        {result.jobs.map((job) => <JobRow key={job.id} job={job} isNext={job.id === result.nextId} />)}
+        {result.jobs.map((job) => <JobRow key={job.id} job={job} isNext={job.id === result.nextId} result={notify ? displayFor(job.id) : null} />)}
       </ul>
     </div>
   );

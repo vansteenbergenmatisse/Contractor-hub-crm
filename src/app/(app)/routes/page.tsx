@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { hitRateLimit } from "@/features/auth";
 import { createTenantCalendarReader } from "@/features/highlevel";
-import { RoutesLivePage, RoutesSkeleton, loadRoutes } from "@/features/routes";
+import { RoutesLivePage, RoutesSkeleton, isRoutesNotifyEnabled, loadNotifyView, loadRoutes, readStartOutcomes } from "@/features/routes";
 import { getRequestUser } from "../../session";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +11,8 @@ async function RoutesData() {
   const user = await getRequestUser();
   const reader = user?.viewing ? createTenantCalendarReader(hitRateLimit, { viewerId: user.id }) : createTenantCalendarReader(hitRateLimit);
   const result = await loadRoutes(user?.tenantId, reader);
-  return <RoutesLivePage result={result} />;
+  const notify = await loadNotifyView(user, result, { isEnabled: (tenantId) => isRoutesNotifyEnabled(tenantId), readOutcomes: readStartOutcomes });
+  return <RoutesLivePage result={result} notify={notify} />;
 }
 
 // Thin page. Suspense covers the data.
