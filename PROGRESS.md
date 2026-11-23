@@ -1,6 +1,6 @@
 # PROGRESS
 
-> **QUESTIONS FOR THE USER (2026-11-23), in order:** (1) Approve pushing the Routes page, Communications rename and Other values removal to `develop` (committed on `feat/settings-structure`, not on the dev site). Also: should the six Settings sentences and the Leads sentence that say "your Inbox" change too? Two of them are pinned in `tests/features/settings/page.test.tsx`. (2) Which links are required, and where do the social links live? (3) Test HighLevel's Replace on a throwaway sub-account: does an image keep its URL? (`openspec/changes/settings-media-replace/`). (4) Decide A2, the A4 role winner, B1, B3, B4 and L7 (`docs/bug-sweep-2026-11-23.md`). (5) Remove the dev test owner and turn off dev write-back, or keep them?
+> **QUESTIONS FOR THE USER (2026-11-23), in order:** (1) DONE: Routes, Communications and the Other values removal are approved for `develop`. (2) Which links are required, and where do the social links live? (3) Test HighLevel's Replace on a throwaway sub-account: does an image keep its URL? (`openspec/changes/settings-media-replace/`). (4) Decide A2, the A4 role winner, B1, B3, B4 and L7 (`docs/bug-sweep-2026-11-23.md`). (5) Remove the dev test owner and turn off dev write-back, or keep them?
 
 Single source of truth for where the project stands. Read it at the start of every session and before every ticket. Plan work under "In progress" before starting, move it to the Log when done (see "Recording work" in `CLAUDE.md`). Newest log entries first.
 
@@ -40,6 +40,7 @@ Single source of truth for where the project stands. Read it at the start of eve
 
 ## In progress
 
+- 2026-11-23 USER DECISION (chat): replace "Inbox" with "Communications" in all user-visible text, including the seven sentences, and update test lines that pin the old text. Then fast-forward `develop` to `feat/settings-structure` and push it. Internal names and the `/inbox` URL stay. Touches `src/features` text, matching tests, git `develop`, GitHub and the Vercel dev deployment.
 - 2026-11-23 RESUME HERE. The save-refresh fix, the combined bug sweep and the Settings layout are merged into `develop`, pushed, and deployed to the dev site (see the newest Log entry). The user retested a save on the dev site (Mike Dalton, back to Jon) and it worked. Not yet checked: Settings at 320px and the color picker.
   - LIVE STATE, dev only (Vercel Preview `develop`, none on Production): `QUOTES_PAGE_LIVE`, `INVOICES_PAGE_LIVE`, `PAYMENTS_PAGE_LIVE`, `AUTOMATIONS_PAGE_LIVE` are on (user: keep them); `SETTINGS_WRITE_BACK_ENABLED` and `SETTINGS_WRITE_BACK_TENANTS` (JCR only) are on. Vercel requires the user's direct approval to remove a variable.
   - Neon `develop` holds one test owner for JCR, using the user's work email as login, with no HighLevel link. Its password is in a session scratchpad file that can vanish; it needs removal after testing, or a reset. JCR's `business_owner_name` is back to `Jon` (user confirmed).
@@ -109,14 +110,14 @@ Single source of truth for where the project stands. Read it at the start of eve
 
 ## Log
 
-### 2026-11-23 - Routes page, Communications name, Other values removed (not pushed)
+### 2026-11-23 - Routes page, Communications name, Other values removed
 - User retest: `business_owner_name` changed to Mike Dalton and back to Jon on the dev site. The two newest `CustomValueChange` rows on Neon `develop` read `saved`; the two earlier rows read `unknown`.
 - Routes: new `/routes` page in the Overview group after Calendar (the menu has no "Main" group; the user chose this). It shows "Not available yet" because its content is not defined.
 - Inbox now reads Communications in the menu, phone tab, page heading and back button. The `/inbox` URL and internal names are unchanged.
 - Other values: list removed from Settings, and unknown key names are no longer sent to the browser. An allowlisted value over the length limit now has no row on the page.
 - Tests changed with the user's approval: `app-shell`, `inbox-live`, `inbox-round3-dom`, `structure`. New: `tests/app/routes-page.test.tsx`.
 - `pnpm check` exit 0: 3543 passed, 9 skipped, build compiled.
-- NOT changed: seven sentences still say "your Inbox" (`settings/api/fields.ts`, `OldLeadsPanel.tsx`), because `tests/features/settings/page.test.tsx` pins two and was outside the approval.
+- Follow-up approved by the user: the seven "your Inbox" sentences (`settings/api/fields.ts`, `OldLeadsPanel.tsx`) now say "land in Communications", with the two pinned lines in `tests/features/settings/page.test.tsx` updated. A search of `src` found no other user-visible "Inbox".
 - NOT VERIFIED: these changes in a real browser or on the dev site.
 
 ### 2026-11-23 - Bug sweep and Settings layout pushed to the dev site

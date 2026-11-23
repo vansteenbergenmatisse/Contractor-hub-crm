@@ -82,10 +82,10 @@ describe("SettingsPage markup", () => {
   });
 
   it("leaves out the phone number sentence when there is no number", () => {
-    expect(html).toContain('<p class="fd-rsb">Calls and texts to this number land in your Inbox.</p>');
+    expect(html).toContain('<p class="fd-rsb">Calls and texts to this number land in Communications.</p>');
     expect(html).not.toContain(". Calls and texts");
     const withNumber = renderToStaticMarkup(<SettingsPage initialValues={{ business_phone_number: "+1 (555) 010-0000" }} />);
-    expect(withNumber).toContain('<span class="fd-h">+1 (555) 010-0000</span>. Calls and texts to this number land in your Inbox.');
+    expect(withNumber).toContain('<span class="fd-h">+1 (555) 010-0000</span>. Calls and texts to this number land in Communications.');
   });
 
   it("after Ask, says the request is noted on this screen only, never that it was received", () => {

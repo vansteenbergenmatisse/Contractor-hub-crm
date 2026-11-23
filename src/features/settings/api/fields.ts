@@ -119,12 +119,12 @@ export function sectionTitle(key: SectionKey): string {
 export const CONNECTIONS: Connection[] = [
   {
     name: "Business phone number",
-    sub: "Calls and texts to this number land in your Inbox.",
+    sub: "Calls and texts to this number land in Communications.",
     need: "Nothing. Forge Forward sets it up and gets it verified.",
     steps: [
       "Forge Forward sets up your business number.",
       "Forge Forward gets it A2P verified, so your texts get delivered.",
-      "Calls and texts to it land in your Inbox.",
+      "Calls and texts to it land in Communications.",
       "A missed call gets a text back at once.",
     ],
   },
@@ -141,24 +141,24 @@ export const CONNECTIONS: Connection[] = [
   },
   {
     name: "Facebook page",
-    sub: "Messages to your page land in your Inbox.",
+    sub: "Messages to your page land in Communications.",
     need: "Admin rights on your Facebook page.",
     steps: [
       "Ask Forge Forward to connect it.",
       "Sign in to Facebook in the window that opens.",
       "Pick your business page.",
-      "Messages to your page land in your Inbox.",
+      "Messages to your page land in Communications.",
     ],
   },
   {
     name: "Instagram",
-    sub: "Instagram messages land in your Inbox.",
+    sub: "Instagram messages land in Communications.",
     need: "An Instagram business account linked to your Facebook page.",
     steps: [
       "Ask Forge Forward to connect it.",
       "Sign in to Instagram in the window that opens.",
       "Allow messages.",
-      "Instagram messages land in your Inbox.",
+      "Instagram messages land in Communications.",
     ],
   },
   {

@@ -8,7 +8,7 @@ type Props = { count: number; old: OldState; auto: boolean; onAsk: () => void; o
 // workflow; this app holds no automation of its own.
 export function OldLeadsPanel({ count, old, auto, onAsk, onYes, onNo, onToggleAuto }: Props) {
   const text =
-    old === "sent" ? `Sent. ${count} people got a check-in text. Their answers land in your Inbox.`
+    old === "sent" ? `Sent. ${count} people got a check-in text. Their answers land in Communications.`
     : old === "ask" ? `This texts ${count} people at once. You can not take it back.`
     : "Nobody called or texted them in the last 3 months. One press sends each one a friendly check-in text.";
   return (
