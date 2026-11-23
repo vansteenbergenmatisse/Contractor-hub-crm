@@ -64,3 +64,40 @@ export type InvoicesKeptState = {
   fixError: Record<number, string>;
 };
 export type InvoicesPatch = Partial<InvoicesKeptState> | ((s: InvoicesKeptState) => Partial<InvoicesKeptState>);
+
+// Real invoices (read-only). The shape the adapter hands over; declared here so this feature does
+// not depend on it (the server page injects the reader). A field that was not readable is null.
+export type LiveInvoiceRow = {
+  id: string;
+  status: "draft" | "sent" | "payment_processing" | "paid" | "void" | "partially_paid" | null;
+  liveMode: boolean | null;
+  name: string | null;
+  number: string | null;
+  contactName: string | null;
+  currency: string | null;
+  issueDate: string | null;
+  dueDate: string | null;
+  total: number | null;
+  amountDue: number | null;
+  amountPaid: number | null;
+};
+export type InvoicesRead =
+  | { ok: true; rows: LiveInvoiceRow[]; expected: number; dropped: number; complete: boolean }
+  | { ok: false; reason: "reconnect" | "unavailable" };
+export type InvoicesReader = (tenantId: string) => Promise<InvoicesRead>;
+export type DueTotal = { amount: number; currency: string; count: number };
+export type DueSummary = { due: LiveInvoiceRow[]; total: DueTotal | null; blocked: boolean };
+export type LiveInvoiceView = {
+  id: string;
+  name: string;
+  detail: string;
+  statusLabel: string;
+  tone: "is-plain" | "is-warn" | "is-ok";
+  bucket: "draft" | "sent" | "paid" | "other";
+  amountText: string;
+  dueText: string | null;
+  test: boolean;
+};
+export type InvoicesResult =
+  | { state: "reconnect" | "unavailable" | "empty" }
+  | { state: "ready"; rows: LiveInvoiceView[]; total: DueTotal | null; blocked: boolean; complete: boolean };

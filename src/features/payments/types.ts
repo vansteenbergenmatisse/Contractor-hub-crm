@@ -1,4 +1,5 @@
 // Types shared inside the payments feature.
+import type { DueTotal, LiveInvoiceView } from "@/features/invoices";
 
 // One open invoice. `daysLate` is 0 or less when the invoice is not due yet.
 export type PaymentRow = {
@@ -35,3 +36,39 @@ export type PaymentsAction = { type: "remind" | "paid" | "undo"; id: string } | 
 
 // What a row's swipe and menu can do (design uxActs / uxItems).
 export type RowActionSpec = { label: string; key: "remind" | "paid" | "undo"; swipe?: "right" | "left" };
+
+// Real payment records (read-only). The shape the adapter hands over; declared here so this feature
+// does not depend on it (the server page injects the readers). An unreadable field is null.
+export type LiveTransactionRow = {
+  id: string;
+  contactName: string | null;
+  currency: string | null;
+  amount: number | null;
+  amountRefunded: number | null;
+  status: string | null;
+  liveMode: boolean | null;
+  createdAt: string | null;
+};
+export type TransactionsRead =
+  | { ok: true; rows: LiveTransactionRow[]; expected: number; dropped: number; complete: boolean }
+  | { ok: false; reason: "reconnect" | "unavailable" };
+export type TransactionsReader = (tenantId: string) => Promise<TransactionsRead>;
+export type LiveTransactionView = {
+  id: string;
+  name: string;
+  statusLabel: string;
+  amountText: string;
+  refundText: string | null;
+  dateText: string;
+  test: boolean;
+};
+export type PaymentsResult =
+  | { state: "reconnect" | "unavailable" | "empty" }
+  | {
+      state: "ready";
+      due: LiveInvoiceView[];
+      total: DueTotal | null;
+      blocked: boolean;
+      complete: boolean;
+      transactions: { rows: LiveTransactionView[]; complete: boolean } | null;
+    };
