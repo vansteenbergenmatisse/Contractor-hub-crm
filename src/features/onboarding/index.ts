@@ -7,7 +7,7 @@ export { addCounts, syncTenantUsers } from "./api/users";
 export type { UserSyncDeps } from "./api/users";
 export { createWebhookHooks } from "./api/hooks";
 export type { WebhookHookDeps } from "./api/hooks";
-export { getCallbackOnboard, getWebhookHooks, scheduleVisitSync, syncRoute } from "./api/instance";
+export { getCallbackOnboard, getWebhookHooks, scheduleTokenRenewal, scheduleVisitSync, syncRoute } from "./api/instance";
 export { deferVisitSync, runVisitSync, syncUsersOnVisit, VISIT_SYNC_INTERVAL_MS } from "./api/visit-sync";
 export { createMailCap, MAX_SET_PASSWORD_MAILS_PER_TENANT_PER_DAY } from "./api/mail-cap";
 export type { MailCapDeps } from "./api/mail-cap";

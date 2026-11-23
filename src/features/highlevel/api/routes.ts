@@ -8,6 +8,7 @@ import { CONTACTS_PAGE_SIZE, readContactsPage, readContactsThrottled } from "./c
 import type { AgencyLocation, ContactsRead, CustomValue, HighLevelUser, InstalledLocation, SaveLocationConnectionInput, SearchUsersQuery } from "../types";
 import { createTokenService } from "./token-service";
 import { withStoredLocationToken } from "./stored-token";
+import { renewDueTokens, type TokenRenewalSummary } from "./token-renewal";
 import { handleOAuthStart } from "./start";
 import { resolveScopes } from "./scopes";
 import { handleOAuthCallback, type OAuthCallbackDeps } from "./callback";
@@ -20,6 +21,8 @@ import {
   saveLocationConnection,
 } from "../db/connections";
 import {
+  listDueAgencyIds,
+  listDueLocationTenantIds,
   readAgencyState,
   readLocationState,
   updateAgencyLocked,
@@ -64,6 +67,21 @@ function buildTokenService(env: EnvValues<"highlevel">, client = buildClient(env
 // environment is incomplete; the message names variables, never values.
 export function getTokenService() {
   return buildTokenService(parseEnv("highlevel"));
+}
+
+// Renews every token that expires within `windowMs`. Throws only when the environment is incomplete.
+export async function runTokenRenewal(windowMs: number): Promise<TokenRenewalSummary> {
+  const tokens = buildTokenService(parseEnv("highlevel"));
+  return renewDueTokens(
+    {
+      now: () => new Date(),
+      listDueAgencies: listDueAgencyIds,
+      listDueLocations: listDueLocationTenantIds,
+      renewAgency: tokens.renewAgencyToken,
+      renewLocation: tokens.renewLocationToken,
+    },
+    windowMs,
+  );
 }
 
 // The admin check is injected by the route file in src/app (it needs the auth feature, which

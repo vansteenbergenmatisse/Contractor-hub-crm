@@ -242,5 +242,22 @@ export function createTokenService(deps: TokenServiceDeps) {
     return call(renewed);
   }
 
-  return { getLocationToken, getAgencyToken, findAgencyToken, withLocationToken };
+  // Background renewal: replaces a token with less than `minLifeMs` left. It names the token it read
+  // as the one to replace, so if another caller already renewed it nothing rotates a second time.
+  async function renewLocationToken(tenantId: string, minLifeMs: number): Promise<boolean> {
+    const current = await store.readLocationState(tenantId).catch(hideStoreFailure);
+    if (!current || current.status !== "connected") return false;
+    if (current.expiresAt.getTime() - deps.now().getTime() >= minLifeMs) return false;
+    const renewed = await getLocationToken(tenantId, { rejectedToken: current.accessToken });
+    return renewed !== current.accessToken;
+  }
+
+  async function renewAgencyToken(companyId: string, minLifeMs: number): Promise<boolean> {
+    const current = await store.readAgencyState(companyId).catch(hideStoreFailure);
+    if (!current || current.expiresAt.getTime() - deps.now().getTime() >= minLifeMs) return false;
+    const renewed = await getAgencyToken(companyId, { rejectedToken: current.accessToken });
+    return renewed !== null && renewed !== current.accessToken;
+  }
+
+  return { getLocationToken, getAgencyToken, findAgencyToken, withLocationToken, renewLocationToken, renewAgencyToken };
 }

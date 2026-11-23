@@ -80,6 +80,27 @@ export async function readAgencyState(companyId: string, key: string): Promise<A
   return row ? toAgencyState(row, key) : null;
 }
 
+// Ids only, soonest expiry first: what the background renewal has to look at.
+export async function listDueAgencyIds(before: Date, limit: number): Promise<string[]> {
+  const rows = await getPrisma().hlAgencyConnection.findMany({
+    where: { expiresAt: { lt: before } },
+    orderBy: { expiresAt: "asc" },
+    take: limit,
+    select: { companyId: true },
+  });
+  return rows.map((row) => row.companyId);
+}
+
+export async function listDueLocationTenantIds(before: Date, limit: number): Promise<string[]> {
+  const rows = await getPrisma().hlLocationConnection.findMany({
+    where: { expiresAt: { lt: before }, tenant: { status: "connected" } },
+    orderBy: { expiresAt: "asc" },
+    take: limit,
+    select: { tenantId: true },
+  });
+  return rows.map((row) => row.tenantId);
+}
+
 // Row lock, then re-read, then decide, then write, all in one transaction: two callers that both
 // found the token stale take turns, and the second one sees the first one's new token and keeps it.
 // Refresh tokens rotate (the old one dies), so a second refresh with the old one would break the

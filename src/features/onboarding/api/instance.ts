@@ -1,7 +1,15 @@
 import { after } from "next/server";
-import { createEmailSenderFromEnv, deactivateGhlUser, getProvisionDeps, listActiveLinks, provisionGhlUser } from "@/features/auth";
+import { createEmailSenderFromEnv, deactivateGhlUser, getProvisionDeps, hitRateLimit, listActiveLinks, provisionGhlUser } from "@/features/auth";
 import { getBrandService } from "@/features/brand";
-import { getOnboardingApi, type OAuthCallbackDeps, type WebhookHooks } from "@/features/highlevel";
+import {
+  CRON_RENEWAL_WINDOW_MS,
+  getOnboardingApi,
+  runTokenRenewal,
+  VISIT_RENEWAL_INTERVAL_MS,
+  VISIT_RENEWAL_WINDOW_MS,
+  type OAuthCallbackDeps,
+  type WebhookHooks,
+} from "@/features/highlevel";
 import { claimAlerts, releaseAlerts } from "../db/alerts";
 import { claimVisitSync, reserveSetPasswordMail } from "../db/sync-state";
 import { createWebhookHooks } from "./hooks";
@@ -110,11 +118,29 @@ export function scheduleVisitSync(tenantId: string): void {
   );
 }
 
+// Called when an admin opens the client list: after the response, renews tokens close to expiry, at
+// most once per 10 minutes across all instances. This is what keeps dev and staging connected, since
+// Vercel runs its cron on production only.
+export function scheduleTokenRenewal(): void {
+  deferVisitSync(after, async () => {
+    try {
+      if (!(await hitRateLimit("token-renewal:visit", 1, VISIT_RENEWAL_INTERVAL_MS, new Date()))) return;
+      await runTokenRenewal(VISIT_RENEWAL_WINDOW_MS);
+    } catch (error) {
+      console.error(`Token renewal: visit step failed: ${error instanceof Error ? error.name : "unknown error"}`);
+    }
+  });
+}
+
 // POST or GET /api/integrations/sync.
 export async function syncRoute(request: Request): Promise<Response> {
   return handleSync(request, {
     cronSecret: process.env.CRON_SECRET?.trim() || undefined,
     run: async () => {
+      // First, and on its own: a failed renewal must not stop the user sync, or the other way round.
+      await runTokenRenewal(CRON_RENEWAL_WINDOW_MS).catch((error: unknown) => {
+        console.error(`Token renewal: cron step failed: ${error instanceof Error ? error.name : "unknown error"}`);
+      });
       const { hl, userSync, onboardDeps } = build();
       const sender = createEmailSenderFromEnv();
       const appUrl = process.env.APP_URL?.trim() ?? "";
