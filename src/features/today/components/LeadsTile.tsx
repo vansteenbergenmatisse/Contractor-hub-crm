@@ -19,8 +19,9 @@ function view(result: LeadsResult | null, timeZone: string): TileView {
 }
 
 // Null `result`: still loading.
-export function LeadsTile({ result }: { result: LeadsResult | null }) {
+export function LeadsTile({ result, timeZone: locationZone }: { result: LeadsResult | null; timeZone?: string | null }) {
   const router = useRouter();
-  const timeZone = useTimeZone();
+  const viewerZone = useTimeZone();
+  const timeZone = locationZone ?? viewerZone;
   return <Tile tile={view(result, timeZone)} index={0} onOpen={() => router.push(PAGE_PATH.leads)} />;
 }

@@ -22,12 +22,13 @@ import { WaitSummary } from "./WaitSummary";
 
 const rise = (i: number) => ({ "--i": i }) as CSSProperties;
 
-type Props = { leads: readonly Lead[]; loadedAt: string; complete: boolean; dropped: number };
+type Props = { leads: readonly Lead[]; loadedAt: string; complete: boolean; dropped: number; locationZone?: string | null };
 
 // The list of real leads. Read-only toward the CRM: nothing here sends or saves. A hand-added lead
 // stays on this screen; call, reply and booking buttons are off on real contacts.
-export function LeadsReady({ leads: loaded, loadedAt, complete, dropped }: Props) {
-  const timeZone = useTimeZone();
+export function LeadsReady({ leads: loaded, loadedAt, complete, dropped, locationZone }: Props) {
+  const viewerZone = useTimeZone();
+  const timeZone = locationZone ?? viewerZone;
   const leads = useMemo(() => withReceived(loaded, loadedAt, timeZone), [loaded, loadedAt, timeZone]);
   const [kept, dispatch] = useLeads(leads);
   const router = useRouter();
@@ -66,7 +67,7 @@ export function LeadsReady({ leads: loaded, loadedAt, complete, dropped }: Props
   const state = waitData ? kept : { ...kept, filter: "all" as const };
   const counts = filterCounts(leads, state);
   const summary = summarize(leads, state);
-  const t = tiles(leads, state, { loadedAt, complete, timeZone });
+  const t = tiles(leads, state, { loadedAt, complete, timeZone, dropped });
   const shownTiles = [
     { label: "New today", value: t.today },
     { label: "This week", value: t.week },
@@ -164,7 +165,7 @@ export function LeadsReady({ leads: loaded, loadedAt, complete, dropped }: Props
             onSubmit={() => dispatch({ type: "submit" })}
             onClose={() => dispatch({ type: "closeAdd" })}
           />
-          {weekKnown(leads, loadedAt, complete) && <SourcesPanel nAdded={state.nAdd} counts={sourceCounts(leads, loadedAt)} />}
+          {weekKnown(leads, loadedAt, complete, dropped) && <SourcesPanel nAdded={state.nAdd} counts={sourceCounts(leads, loadedAt)} />}
         </div>
       </div>
     </>

@@ -203,13 +203,15 @@ export function hasWaitData(leads: readonly Lead[]): boolean {
 
 // "This week" is the last 7 days. With more contacts beyond the loaded page, a count is only known
 // when the page reaches past its window; otherwise it would undercount.
-export function weekKnown(leads: readonly Lead[], loadedAt: string, complete: boolean): boolean {
-  if (complete) return true;
+// A row left out or without a usable date could fall inside the window, so no count is proven then.
+export function weekKnown(leads: readonly Lead[], loadedAt: string, complete: boolean, dropped = 0): boolean {
   const times = receivedTimes(leads);
+  if (dropped > 0 || times.length !== leads.length) return false;
+  if (complete) return true;
   return times.length > 0 && Math.min(...times) < Date.parse(loadedAt) - WEEK_MS;
 }
 
-type TileContext = { loadedAt: string; complete: boolean; timeZone: string };
+type TileContext = { loadedAt: string; complete: boolean; timeZone: string; dropped?: number };
 
 // The three tiles, from real rows. Null: there is no honest number, so the tile is hidden. A lead
 // added on screen shows in the list and the sources panel, not in New today or This week.
@@ -217,10 +219,12 @@ export function tiles(leads: readonly Lead[], state: LeadsState, context: TileCo
   const now = Date.parse(context.loadedAt);
   const times = receivedTimes(leads);
   const todayKey = dayKey(now, context.timeZone);
-  const todayKnown = context.complete || (times.length > 0 && dayKey(Math.min(...times), context.timeZone) !== todayKey);
+  const dropped = context.dropped ?? 0;
+  const allDated = dropped === 0 && times.length === leads.length;
+  const todayKnown = allDated && (context.complete || (times.length > 0 && dayKey(Math.min(...times), context.timeZone) !== todayKey));
   return {
     today: todayKnown ? times.filter((t) => dayKey(t, context.timeZone) === todayKey).length : null,
-    week: weekKnown(leads, context.loadedAt, context.complete) ? times.filter((t) => t >= now - WEEK_MS && t <= now).length : null,
+    week: weekKnown(leads, context.loadedAt, context.complete, dropped) ? times.filter((t) => t >= now - WEEK_MS && t <= now).length : null,
     wait: hasWaitData(leads) ? waitingCount(leads, state) : null,
   };
 }

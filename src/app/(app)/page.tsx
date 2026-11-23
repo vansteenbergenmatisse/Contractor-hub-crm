@@ -2,7 +2,7 @@ import { cache } from "react";
 import { businessValues } from "@/features/app-shell";
 import { hitRateLimit } from "@/features/auth";
 import { loadBusiness } from "@/features/brand";
-import { loadCalendar } from "@/features/calendar";
+import { calendarTimeZone, loadCalendar } from "@/features/calendar";
 import { createTenantCalendarReader, createTenantContactsReader } from "@/features/highlevel";
 import { loadLeads } from "@/features/leads";
 import { AppointmentsTile, dayPartWord, LeadsTile, TodayCalendarCard, TodayLeadsCard, TodayPage } from "@/features/today";
@@ -31,12 +31,23 @@ const loadTenantCalendar = cache(async () => {
   return loadCalendar(user?.tenantId, null, reader);
 });
 
+// The location's time zone from the calendar read Today already makes. Null: unknown.
+async function locationZone(): Promise<string | null> {
+  try {
+    return calendarTimeZone(await loadTenantCalendar());
+  } catch {
+    return null;
+  }
+}
+
 async function LeadsTileData() {
-  return <LeadsTile result={await loadTenantLeads()} />;
+  const [result, timeZone] = await Promise.all([loadTenantLeads(), locationZone()]);
+  return <LeadsTile result={result} timeZone={timeZone} />;
 }
 
 async function LeadsCardData() {
-  return <TodayLeadsCard result={await loadTenantLeads()} />;
+  const [result, timeZone] = await Promise.all([loadTenantLeads(), locationZone()]);
+  return <TodayLeadsCard result={result} timeZone={timeZone} />;
 }
 
 async function AppointmentsTileData() {

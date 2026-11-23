@@ -1,6 +1,11 @@
 import type { CalendarResult, CalendarWeekReader } from "../types";
 import { toStops, weekInfo, weekRange, type WeekRange } from "./live-week";
 
+// The location's HighLevel time zone, when this read learned it.
+export function calendarTimeZone(result: CalendarResult | null): string | null {
+  return result?.state === "ready" || result?.state === "empty" ? result.week.timeZone : null;
+}
+
 // One week of one tenant, read by `read` (the server page passes its reader). The tenant comes from
 // the server session. Never sample data: a failure is a state the page shows. Setting the server flag
 // CALENDAR_READ_DISABLED=true turns the read off and shows the unavailable state.

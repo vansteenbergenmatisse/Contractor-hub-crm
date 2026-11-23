@@ -14,7 +14,8 @@ function sinceText(changedAt: string | null, now: Date): string {
   const elapsed = now.getTime() - Date.parse(changedAt);
   if (elapsed < 0) return "";
   const days = Math.floor(elapsed / DAY_MS);
-  if (days === 0) return "In this stage today";
+  // Under 24 hours can still be yesterday. The location's zone is not known here, so days compare in UTC.
+  if (days === 0) return new Date(changedAt).toISOString().slice(0, 10) === now.toISOString().slice(0, 10) ? "In this stage today" : "Under 1 day in this stage";
   return days === 1 ? "1 day in this stage" : `${days} days in this stage`;
 }
 
@@ -55,6 +56,8 @@ export async function loadPipeline(
   const selected = answer.pipelines.find((p) => p.id === answer.pipelineId);
   if (!selected) return { state: "unavailable" };
   if (answer.opportunities.length === 0) return { state: "empty", pipelines, pipelineId: selected.id };
+  // Deals with no stage to sit in cannot be drawn, and must not read as an empty pipeline.
+  if (selected.stages.length === 0) return { state: "unavailable" };
   const at = now();
   const columns = selected.stages.map((stage) => ({
     id: stage.id,

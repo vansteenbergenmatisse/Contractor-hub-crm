@@ -13,9 +13,10 @@ const reducer = createReducer(NO_TODOS);
 const NO_ROWS: readonly SearchRow[] = [];
 
 // The card with its range, kept while the owner moves between pages.
-export function TodayLeadsCard({ result }: { result: LeadsResult | null }) {
+export function TodayLeadsCard({ result, timeZone: locationZone }: { result: LeadsResult | null; timeZone?: string | null }) {
   const [state, dispatch] = useKeptReducer("today", reducer, NO_TODOS, initialState);
-  const timeZone = useTimeZone();
+  const viewerZone = useTimeZone();
+  const timeZone = locationZone ?? viewerZone;
   // The leads Today already loaded, so search finds them before Leads has been opened.
   const rows = useMemo(
     () => (result?.state === "ready" ? leadSearchRows(withReceived(result.leads, result.loadedAt, timeZone)) : NO_ROWS),

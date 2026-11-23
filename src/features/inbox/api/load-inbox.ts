@@ -23,7 +23,8 @@ async function loadThread(tenantId: string, read: InboxReader, conversationId: s
   }
   if (!answer.ok) return { state: answer.reason };
   if (answer.dropped > 0) console.warn(`Inbox: left out ${answer.dropped} malformed message rows.`);
-  if (answer.messages.length === 0) return { state: answer.dropped > 0 ? "unavailable" : "empty" };
+  // No row on a cut-off read: messages may lie beyond it, so it must not read as empty.
+  if (answer.messages.length === 0) return { state: answer.dropped > 0 || !answer.complete ? "unavailable" : "empty" };
   // The docs do not state the message order, so it is set here: oldest first, as a thread reads.
   const messages = answer.messages
     .map((m) => ({ id: m.id, direction: m.direction, body: m.body, at: m.dateAdded }))
@@ -44,7 +45,7 @@ export async function loadInbox(tenantId: string | null | undefined, read: Inbox
   }
   if (!answer.ok) return { state: answer.reason };
   if (answer.dropped > 0) console.warn(`Inbox: left out ${answer.dropped} malformed conversation rows.`);
-  if (answer.conversations.length === 0) return { state: answer.dropped > 0 ? "unavailable" : "empty" };
+  if (answer.conversations.length === 0) return { state: answer.dropped > 0 || !answer.complete ? "unavailable" : "empty" };
   const conversations = answer.conversations.map((c) => ({
     id: c.id,
     name: c.name ?? "Unnamed contact",
