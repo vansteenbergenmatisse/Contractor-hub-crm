@@ -9,6 +9,8 @@ export type SessionUser = {
   role: Role;
   tenantId: string | null;
   disabledAt?: Date | null;
+  // Set only on the server pages' user while an admin uses read-only View as client.
+  viewing?: boolean;
 };
 
 export class TenancyError extends Error {

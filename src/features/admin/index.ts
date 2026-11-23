@@ -2,4 +2,5 @@
 export { loginState, statusLabel, toClientRow } from "./api/clients";
 export { listClients } from "./db/clients";
 export { ClientsTable } from "./components/ClientsTable";
+export { ClientViewBanner } from "./components/ClientViewBanner";
 export type { ClientRow, LoginState } from "./types";

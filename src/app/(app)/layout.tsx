@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
+import { ClientViewBanner } from "@/features/admin";
 import { AppShell, type SearchRow } from "@/features/app-shell";
 import { loadBusiness } from "@/features/brand";
 import { loadMailboxPrompt, MailboxPromptCard } from "@/features/mailbox-prompt";
@@ -17,14 +18,21 @@ const SEARCH_ROWS: readonly SearchRow[] = [];
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const user = await getRequestUser();
   if (!user) redirect("/sign-in");
-  if (user.role === "admin" || !user.tenantId) redirect("/admin/clients");
+  // An admin only gets here with a tenant through the read-only client view.
+  const viewing = user.role === "admin" && user.viewing === true;
+  if ((user.role === "admin" && !viewing) || !user.tenantId) redirect("/admin/clients");
   // Runs after the response; the page never waits for it and a failure never reaches it.
-  scheduleVisitSync(user.tenantId);
+  // Not while an admin is viewing: a look at a client must not change or sync anything.
+  if (!viewing) scheduleVisitSync(user.tenantId);
   // The reminder never throws and has a short read limit, so it cannot break or hold up the page.
-  const [business, mailboxPrompt] = await Promise.all([loadBusiness(user.tenantId, user.name), loadMailboxPrompt(user)]);
+  const [business, mailboxPrompt] = await Promise.all([
+    loadBusiness(user.tenantId, viewing ? "" : user.name),
+    viewing ? Promise.resolve({ show: false as const }) : loadMailboxPrompt(user),
+  ]);
   // Keyed by user and tenant (hashed, keys reach the browser): another signed-in user gets a new frame.
   return (
     <AppShell key={frameKey(user.id, user.tenantId)} business={business} searchRows={SEARCH_ROWS}>
+      {viewing ? <ClientViewBanner name={business.name} /> : null}
       {mailboxPrompt.show ? <MailboxPromptCard token={mailboxPrompt.token} /> : null}
       {children}
     </AppShell>

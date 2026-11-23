@@ -4,6 +4,7 @@ import { listTenantUsers, searchLocationUsers } from "@/features/highlevel";
 import { createAuth, createInvitedUser, setUserDisabled, type Auth } from "./auth";
 import { provisionGhlUser, type ProvisionDeps } from "./provision";
 import { randomBytes } from "node:crypto";
+import { applyClientView, clientViewCookieName } from "./client-view";
 import { createGuards } from "./guards";
 import { readSession } from "./session";
 import { checkInviteEligibility } from "./invite-check";
@@ -179,9 +180,31 @@ export function getInviteService() {
 }
 
 // For server pages: the signed-in user from the request headers (null when signed out).
+// An admin with a valid View as client cookie gets that client's tenant here, for reading pages only:
+// API routes use the guards, which never see it.
 export async function currentUserFromHeaders(headers: Headers) {
-  return getGuards().currentUser(new Request("https://internal.invalid/", { headers }));
+  const user = await getGuards().currentUser(new Request("https://internal.invalid/", { headers }));
+  if (user?.role !== "admin") return user;
+  try {
+    const env = parseEnv("auth");
+    const name = clientViewCookieName(new URL(env.APP_URL).origin);
+    const value = (headers.get("cookie") ?? "")
+      .split(";")
+      .map((part) => part.trim())
+      .find((part) => part.startsWith(`${name}=`))
+      ?.slice(name.length + 1);
+    return await applyClientView(user, value, clientViewDeps(env.BETTER_AUTH_SECRET));
+  } catch {
+    return user;
+  }
 }
+
+export const clientViewDeps = (secret: string) => ({
+  secret,
+  now: () => new Date(),
+  isTenantUnavailable: isTenantUninstalled,
+  disabled: process.env.CLIENT_VIEW_DISABLED?.trim() === "true",
+});
 
 // Per-key limits for the invite endpoints: 20 a minute per client address (preview and accept),
 // 30 an hour per admin (create). Counted in Postgres so every serverless instance agrees.
@@ -190,6 +213,7 @@ const LIMITS: Record<string, { limit: number; windowMs: number }> = {
   "invite-preview": { limit: 20, windowMs: 60_000 },
   "invite-accept": { limit: 20, windowMs: 60_000 },
   "tenant-login": { limit: 60, windowMs: 3600_000 },
+  "client-view": { limit: 60, windowMs: 3600_000 },
 };
 
 export function getInviteLimiter() {

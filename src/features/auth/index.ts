@@ -17,6 +17,8 @@ export { hitRateLimit } from "./db/rate-limit";
 export { createInviteService, hashInviteCode, InviteError, newInviteCode } from "./api/invites";
 export type { InviteErrorCode, InviteRecord, InviteRole, InviteServiceDeps, InviteTenant } from "./api/invites";
 export { handleSetTenantLogin } from "./api/tenant-login";
+export { applyClientView, clientViewCookieName, handleExitClientView, handleStartClientView, signClientView } from "./api/client-view";
+export { clientViewDeps } from "./api/instance";
 export { listTenantUserIds } from "./db/tenant-users";
 export { createGuards, TenancyError } from "./api/guards";
 export { readSession } from "./api/session";

@@ -33,6 +33,17 @@ export function ClientsTable({ clients }: { clients: ClientRow[] }) {
     setEmail("");
   }
 
+  async function viewClient(tenantId: string) {
+    setMessage(null);
+    try {
+      const response = await fetch(`/api/admin/clients/${encodeURIComponent(tenantId)}/view`, { method: "POST" });
+      if (!response.ok) return setMessage({ tenantId, text: "Could not open this client. Try again." });
+      window.location.assign("/");
+    } catch {
+      setMessage({ tenantId, text: "Could not open this client. Try again." });
+    }
+  }
+
   async function copyLink(tenantId: string, path: string) {
     try {
       await navigator.clipboard.writeText(`${window.location.origin}${path}`);
@@ -110,6 +121,11 @@ export function ClientsTable({ clients }: { clients: ClientRow[] }) {
                       </div>
                     ) : (
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+                        {row.status !== "Uninstalled" ? (
+                          <button type="button" aria-label={`View ${row.name} as client, read-only`} onClick={() => viewClient(row.tenantId)}>
+                            View client
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           onClick={() => {
