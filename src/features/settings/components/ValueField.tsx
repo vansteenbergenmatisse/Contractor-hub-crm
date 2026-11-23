@@ -14,16 +14,18 @@ type Props = {
   readOnly?: boolean;
   // Short lines under the field, read out with it.
   helpers?: readonly string[];
+  // The id of text elsewhere on the page that also describes this field.
+  describedBy?: string;
   // Shown under the field, for example an image preview.
   children?: ReactNode;
   wide?: boolean;
   onChange: (key: string, value: string) => void;
 };
 
-export function ValueField({ field, value, saved, invalid, error, swatch, readOnly, helpers = [], children, wide, onChange }: Props) {
+export function ValueField({ field, value, saved, invalid, error, swatch, readOnly, helpers = [], describedBy: extraDescription, children, wide, onChange }: Props) {
   const errorId = `cv-${field.key}-err`;
   const helperId = `cv-${field.key}-help`;
-  const describedBy = [error ? errorId : invalid ? "fd-st-err" : null, helpers.length > 0 ? helperId : null].filter(Boolean).join(" ") || undefined;
+  const describedBy = [error ? errorId : invalid ? "fd-st-err" : null, helpers.length > 0 ? helperId : null, extraDescription].filter(Boolean).join(" ") || undefined;
   return (
     <div className={`fd-cvf${wide ? " is-wide" : ""}`}>
       <label className="fd-ll" htmlFor={`cv-${field.key}`}>

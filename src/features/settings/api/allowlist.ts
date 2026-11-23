@@ -1,4 +1,5 @@
 import { COLOR_KEYS, ESSENTIAL_KEYS } from "./fields";
+import { FOLDER_VALUE_KEYS } from "./folder-keys";
 
 // Which custom values may reach the browser. The server builds the Settings value map from this list,
 // so the form webhook (`0_webhook_url_form`, build prompt section 5) and any other secret an agency
@@ -27,7 +28,7 @@ const EXTRA_KEYS: readonly string[] = [
 ];
 // Built on first use: fields.ts imports this file too, so its lists are not ready at load time.
 let allowed: Set<string> | null = null;
-const allowedKeys = () => (allowed ??= new Set<string>([...ESSENTIAL_KEYS, ...COLOR_KEYS, ...EXTRA_KEYS]));
+const allowedKeys = () => (allowed ??= new Set<string>([...ESSENTIAL_KEYS, ...COLOR_KEYS, ...EXTRA_KEYS, ...FOLDER_VALUE_KEYS]));
 const KEY_CHARS = /^[A-Za-z0-9_]{1,100}$/;
 // Backstop applied to every key, allowlisted or not.
 const DENY = /webhook|token|secret|password|api_key|apikey|embed|credential|private|bank|account_number|_key$/i;

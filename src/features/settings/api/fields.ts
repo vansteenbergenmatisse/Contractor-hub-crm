@@ -1,5 +1,6 @@
 import type { ColorGroup, Connection, Field, SectionKey } from "../types";
 import { isSettingsKeyAllowed } from "./allowlist";
+import { OUR_WORK_KEYS, folderKeyLabel } from "./folder-keys";
 
 // Folder 01_Business_essentials (build prompt section 5). Keys never change.
 export const ESSENTIAL_FIELDS: Field[] = [
@@ -75,6 +76,8 @@ export function extraKeys(values: Record<string, string>): string[] {
 export function labelOfKey(key: string): string {
   const known = [...ESSENTIAL_FIELDS, ...COLOR_GROUPS.flatMap((g) => g.fields)].find((f) => f.key === key);
   if (known) return known.label;
+  const numbered = folderKeyLabel(key);
+  if (numbered) return numbered;
   const words = key.replace(/_/g, " ").trim();
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
@@ -83,6 +86,7 @@ export const LINK_KEYS: string[] = [
   "business_logo", "business_favicon_url", "business_main_background_video_or_image",
   "business_website_url", "request_a_job_booking_link", "request_a_quote_booking_link",
   "business_google_profile_url", "google_review_request_url", "bbb_review_request_url",
+  ...OUR_WORK_KEYS,
 ];
 
 // The brand reader's spellings of one fact, in its order (brand/api/build-brand.ts).
