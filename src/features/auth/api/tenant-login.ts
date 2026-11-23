@@ -10,7 +10,8 @@ export async function handleSetTenantLogin(
   deps: {
     guards: ReturnType<typeof createGuards>;
     // Ids of the tenant's non-admin users, or null when the tenant does not exist.
-    listUserIds: (tenantId: string) => Promise<string[] | null>;
+    // `excludeRemoved` leaves out users HighLevel no longer lists, so turning on never revives them.
+    listUserIds: (tenantId: string, options?: { excludeRemoved?: boolean }) => Promise<string[] | null>;
     setUserDisabled: (userId: string, disabled: boolean) => Promise<void>;
     limiter: RateLimiter;
     appOrigin: string;
@@ -27,7 +28,7 @@ export async function handleSetTenantLogin(
   const disabled = body.disabled;
   // Written before any change, so a crash or timeout midway still leaves a record of the attempt.
   audit("tenant_login_attempt", { by: admin, tenantId, disabled: String(disabled) });
-  const userIds = await deps.listUserIds(tenantId);
+  const userIds = await deps.listUserIds(tenantId, { excludeRemoved: !disabled });
   if (userIds === null) return reply(404, { error: "not_found" });
 
   let affected = 0;

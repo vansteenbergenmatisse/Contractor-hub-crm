@@ -175,6 +175,7 @@ export function getInviteService() {
         { searchUsers: (query) => searchLocationUsers(tenant.id, query) },
       ),
     createUser: (input) => createInvitedUser(auth, input),
+    links: { find: findLink, insert: insertLink },
     store: { findTenant: findTenantForInvite, emailTaken, insertInvite, findInviteByCodeHash, claimInvite, releaseInvite, deleteInvite },
   });
 }

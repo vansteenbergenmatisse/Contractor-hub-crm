@@ -79,6 +79,10 @@ export function embedLoginPlugin(options: EmbedLoginOptions & { appOrigin: strin
           }
         }
         await setSessionCookie(ctx, { session, user }, true, { sameSite: "none", secure: true });
+        // Better Auth writes its "do not remember" cookie as SameSite=Lax, which a cross-site iframe
+        // does not send: the next session read would then extend this one-day session to a year.
+        const dontRemember = ctx.context.authCookies.dontRememberToken;
+        await ctx.setSignedCookie(dontRemember.name, "true", ctx.context.secret, { ...dontRemember.attributes, sameSite: "none", secure: true });
         audit("embed_login", { outcome: "ok", userId });
         return ctx.json({ ok: true });
       }),
