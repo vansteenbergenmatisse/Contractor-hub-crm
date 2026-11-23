@@ -28,6 +28,11 @@ export function createRemovedUserCheck(deps: {
   return async (tenantId) => {
     const users = await deps.readUsers(tenantId);
     if (users.length === 0) return false;
+    // A list that names none of the active links says nothing about who left, and a block made here
+    // is not undone by a later turn-on. A listed id counts with or without an email.
+    const links = await deps.activeLinks(tenantId);
+    const present = new Set(users.filter((user) => !user.deleted).map((user) => user.id));
+    if (links.length > 0 && !links.some((link) => present.has(link.ghlUserId))) return false;
     const counts = await deps.syncUsers(
       { provision: async () => ({ outcome: "exists", userId: null }), deactivate: deps.deactivate, activeLinks: deps.activeLinks },
       tenantId,
