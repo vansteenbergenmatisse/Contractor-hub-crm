@@ -10,6 +10,7 @@ type Props = {
   // The message, shown under the field. Left out when the alert at the top of the page carries it.
   error?: string;
   swatch?: boolean;
+  readOnly?: boolean;
   onChange: (key: string, value: string) => void;
 };
 
@@ -20,7 +21,7 @@ function swatchStyle(key: string, saved: string): React.CSSProperties {
   return { background: isHexColor(saved) ? saved : `var(--${key.replaceAll("_", "-")})` };
 }
 
-export function ValueField({ field, value, saved, invalid, error, swatch, onChange }: Props) {
+export function ValueField({ field, value, saved, invalid, error, swatch, readOnly, onChange }: Props) {
   const errorId = `cv-${field.key}-err`;
   return (
     <div className="fd-cvf">
@@ -36,6 +37,7 @@ export function ValueField({ field, value, saved, invalid, error, swatch, onChan
           autoComplete="off"
           spellCheck={false}
           value={value}
+          readOnly={readOnly}
           aria-invalid={invalid ? true : undefined}
           aria-describedby={error ? errorId : invalid ? "fd-st-err" : undefined}
           onChange={(e) => onChange(field.key, e.target.value)}

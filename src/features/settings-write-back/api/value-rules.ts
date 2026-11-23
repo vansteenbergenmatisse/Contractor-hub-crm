@@ -7,10 +7,6 @@ import { safeHttpsUrl } from "@/shared/lib/safe-https-url";
 // Unicode control, format and bidi character.
 const UNSAFE_TEXT = /[<>"`\\]|\{\{|\}\}|\{%|%\}|\p{C}/u;
 
-const EXTRA_LINK_KEYS = [
-  "business_website_url", "request_a_job_booking_link", "request_a_quote_booking_link",
-  "business_google_profile_url", "google_review_request_url", "bbb_review_request_url",
-];
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE = /^[+\d().\-\s]{3,25}$/;
 const COORDINATE = /^-?\d{1,3}(\.\d+)?$/;
@@ -32,7 +28,7 @@ function isInRange(value: string, limit: number): boolean {
 
 export function isSafeToWrite(key: string, value: string): boolean {
   if (UNSAFE_TEXT.test(value)) return false;
-  if (EXTRA_LINK_KEYS.includes(key) || LINK_KEYS.includes(key)) return isSafeLink(value);
+  if (LINK_KEYS.includes(key)) return isSafeLink(value);
   if (key === "business_email") return EMAIL.test(value);
   if (key === "business_phone_number") return PHONE.test(value) && /\d/.test(value);
   if (key === "business_latitude") return isInRange(value, 90);

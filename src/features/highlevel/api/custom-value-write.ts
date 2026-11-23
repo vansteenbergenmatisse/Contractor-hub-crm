@@ -9,7 +9,8 @@ const FIELD_KEY = /^\{\{\s*custom_values\.([A-Za-z0-9_]+)\s*\}\}$/;
 export type CustomValueDetail = { id: string; key: string; name: string; value: string };
 // `retry`: HighLevel answered that it did not apply. `no_answer`: a timeout or 5xx, so it may have.
 export type CustomValueWriteOutcome = "saved" | "rejected" | "permission" | "retry" | "no_answer";
-export type CustomValueRead = { ok: true; values: CustomValueDetail[] } | { ok: false; reason: "permission" | "retry" };
+// `duplicates`: keys listed twice, with the first row's value to show. They are never a write target.
+export type CustomValueRead = { ok: true; values: CustomValueDetail[]; duplicates?: { key: string; value: string }[] } | { ok: false; reason: "permission" | "retry" };
 
 export type CustomValueAdapterDeps = {
   readLocationId: (tenantId: string) => Promise<string | null>;
@@ -40,6 +41,25 @@ export function parseCustomValueDetails(json: unknown, locationId: string): Cust
     rows.push({ id: item.id, key, name: item.name, value: item.value ?? "" });
   }
   return rows.filter((row) => seen.get(row.key) === 1);
+}
+
+// The keys `parseCustomValueDetails` leaves out for being listed twice. Call it after that parse.
+function listedTwice(json: unknown, locationId: string): { key: string; value: string }[] {
+  const counts = new Map<string, number>();
+  const firstValue = new Map<string, string>();
+  for (const raw of (json as { customValues: unknown[] }).customValues) {
+    if (typeof raw !== "object" || raw === null) continue;
+    const item = raw as Record<string, unknown>;
+    const key = typeof item.fieldKey === "string" ? FIELD_KEY.exec(item.fieldKey.trim())?.[1] : undefined;
+    if (!key) continue;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+    if (firstValue.has(key) || (item.locationId !== undefined && item.locationId !== locationId)) continue;
+    firstValue.set(key, typeof item.value === "string" ? item.value : "");
+  }
+  return [...counts].flatMap(([key, count]) => {
+    const value = firstValue.get(key);
+    return count > 1 && value !== undefined ? [{ key, value }] : [];
+  });
 }
 
 function outcomeOfStatus(status: number): CustomValueWriteOutcome {
@@ -78,7 +98,10 @@ export function createCustomValueAdapter(deps: CustomValueAdapterDeps) {
           console.error(`HighLevel custom value read failed: status=${response.status}`);
           return { ok: false, reason: response.status === 401 || response.status === 403 ? "permission" : "retry" };
         }
-        return { ok: true, values: parseCustomValueDetails(await readListJson(response), locationId) };
+        const json = await readListJson(response);
+        const values = parseCustomValueDetails(json, locationId);
+        const duplicates = listedTwice(json, locationId);
+        return duplicates.length > 0 ? { ok: true, values, duplicates } : { ok: true, values };
       } catch (error) {
         return { ok: false, reason: outcomeOfError("read", error) };
       }

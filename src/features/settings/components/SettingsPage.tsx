@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { COLOR_GROUPS, CONNECTIONS, ESSENTIAL_FIELDS, SECTIONS, SOON_ITEMS, SWITCHES, labelOfKey, sectionOfKey } from "../api/fields";
-import type { SettingsState } from "../api/state";
+import { dirtyKeysOf, type SettingsState } from "../api/state";
 import { UNKNOWN_CONNECTIONS, connectionsIntro } from "../api/connections";
 import { useSaveValues } from "../hooks/use-save-values";
 import { useSettings } from "../hooks/use-settings";
@@ -39,22 +39,25 @@ type Props = {
 // `saveValues`: given only when this owner may save to the sub-account. Without it Save lasts for this visit.
 export function SettingsPage({ initial, initialValues, initialSection, connections = UNKNOWN_CONNECTIONS, readOnly = false, saveValues }: Props & { readOnly?: boolean; saveValues?: SaveValues }) {
   const live = !!saveValues && !readOnly;
-  const { state, dispatch, filter, extras, phone, choicesAvailable } = useSettings(initial, initialValues, initialSection, connections, live);
+  const { state, dispatch, filter, extras, phone, choicesAvailable, notLoaded } = useSettings(initial, initialValues, initialSection, connections, live);
   const remote = useSaveValues(state, dispatch, saveValues);
   const signOut = useSignOut();
   const [signOutFailed, setSignOutFailed] = useState(false);
   const { values, draft, err } = state;
   const show = (id: string) => filter.items[id];
-  const dirtyKeys = Object.keys({ ...values, ...draft }).filter((k) => (draft[k] ?? "") !== (values[k] ?? ""));
+  const dirtyKeys = dirtyKeysOf(values, draft);
   const dirty = dirtyKeys.length > 0;
   const dirtySections = new Set<SectionKey>(dirtyKeys.map((k) => sectionOfKey(k) ?? "biz"));
   // An error shows next to its field when that field can be seen. A search shows the color fields
   // even when they are closed. Otherwise the top alert carries the message.
   const errFieldSeen = !!err && !!show(`cv-${err.key}`) &&
     (filter.active || (state.sec === err.section && (err.section !== "colors" || state.cols)));
-  const topErr = errFieldSeen ? null : err;
+  // Only where the page would otherwise speak for the account: a live save or a client view.
+  const loadFailed = notLoaded && (live || readOnly);
+  const loadMessage = readOnly ? "Your details did not load. Reload this page to try again." : "Your details did not load, so nothing can be saved. Reload this page to try again.";
+  const topMessage = (errFieldSeen ? null : err?.message) ?? (loadFailed ? loadMessage : null);
   const edit = (key: string, value: string) => dispatch({ type: "edit", key, value });
-  const fieldProps = (f: Field) => ({ field: f, value: draft[f.key] ?? "", saved: values[f.key] ?? "", invalid: err?.key === f.key, error: errFieldSeen && err?.key === f.key ? err.message : undefined, onChange: edit });
+  const fieldProps = (f: Field) => ({ field: f, value: draft[f.key] ?? "", saved: values[f.key] ?? "", invalid: err?.key === f.key, error: errFieldSeen && err?.key === f.key ? err.message : undefined, readOnly, onChange: edit });
 
   const bizFields = [...ESSENTIAL_FIELDS, ...extras.map((key) => ({ key, label: labelOfKey(key) }))].filter((f) => show(`cv-${f.key}`));
   
@@ -122,15 +125,15 @@ export function SettingsPage({ initial, initialValues, initialSection, connectio
       </p>
 
       <div className="fx-stbody">
-        <p className={`fd-lerr fd-ste${topErr ? "" : " is-off"}`} id="fd-st-err" role="alert">
+        <p className={`fd-lerr fd-ste${topMessage ? "" : " is-off"}`} id="fd-st-err" role="alert">
           <svg width="16" height="16" {...svgProps}><circle cx="12" cy="12" r="9" /><path d="M12 7.5v5M12 16.2v.3" /></svg>
-          <span><span className="fd-h">{topErr?.message ?? ""}</span></span>
+          <span><span className="fd-h">{topMessage ?? ""}</span></span>
         </p>
 
         {filter.sections.biz ? (
           <section className="fd-pnl fd-in" style={{ "--i": 1 } as React.CSSProperties} aria-labelledby="fd-st-1">
             <h2 className="fd-pnh" id="fd-st-1">Business details</h2>
-            <p className="fd-pns">{live ? "Your business name, contact details and links. Saved changes update your account, and can change your website and texts." : "Your business name, contact details and links. Changes here do not reach your website or texts yet."}</p>
+            <p className="fd-pns">{readOnly ? "Your business name, contact details and links." : live ? "Your business name, contact details and links. Saved changes update your account, and can change your website and texts." : "Your business name, contact details and links. Changes here do not reach your website or texts yet."}</p>
             <div className="fd-cvg">{bizFields.map((f) => <ValueField key={f.key} {...fieldProps(f)} />)}</div>
           </section>
         ) : null}
@@ -138,7 +141,7 @@ export function SettingsPage({ initial, initialValues, initialSection, connectio
         {filter.sections.colors ? (
           <section className="fd-pnl fd-in" style={{ "--i": 2 } as React.CSSProperties} aria-labelledby="fd-st-2">
             <h2 className="fd-pnh" id="fd-st-2">Brand colors</h2>
-            <p className="fd-pns">{live ? "Type a color like #2E7D32, then press Save to your account." : "Type a color like #2E7D32, then press Apply for this visit."}</p>
+            <p className="fd-pns">{readOnly ? "The brand colors this account uses." : live ? "Type a color like #2E7D32, then press Save to your account." : "Type a color like #2E7D32, then press Apply for this visit."}</p>
             <button
               type="button"
               className="fd-btn is-plain fd-cvt"
@@ -146,7 +149,7 @@ export function SettingsPage({ initial, initialValues, initialSection, connectio
               aria-controls="fd-st-col"
               onClick={() => dispatch({ type: "toggleCols" })}
             >
-              <span className="fd-h">{state.cols ? "Hide the color fields" : "Change the brand colors"}</span>
+              <span className="fd-h">{state.cols ? "Hide the color fields" : readOnly ? "Show the brand colors" : "Change the brand colors"}</span>
             </button>
             <div className={`fd-cvg${state.cols ? "" : " is-off"}`} id="fd-st-col">
               {/* The group headings stay while searching, as in the design; only fields hide. */}
@@ -169,10 +172,10 @@ export function SettingsPage({ initial, initialValues, initialSection, connectio
               <span>{live ? "Saved to your account." : "Changed for this visit only. Not saved to your account yet."}</span>
             </p>
             {live && remote.problem ? <p className="fd-pns" role="alert" style={{ flexBasis: "100%", marginBottom: 0 }}>{remote.problem}</p> : null}
-            <button type="button" className="fd-btn is-fill fd-lgo fd-cvs" disabled={readOnly || (live && remote.saving)} onClick={() => (live ? void remote.save() : dispatch({ type: "save" }))}>
+            <button type="button" className="fd-btn is-fill fd-lgo fd-cvs" disabled={readOnly || (live && (remote.saving || loadFailed))} onClick={() => (live ? void remote.save() : dispatch({ type: "save" }))}>
               {readOnly ? "Read-only view" : live ? (remote.saving ? "Saving…" : "Save to your account") : "Apply for this visit"}
             </button>
-            <p className="fd-pns fd-hint" role="status">{live
+            <p className="fd-pns fd-hint" role="status">{readOnly ? "You are viewing this account. Nothing can be changed here." : loadFailed ? "Nothing can be saved until your details load." : live
               ? (dirty ? "You have changes that are not saved yet." : "Your account has these values.")
               : (dirty ? "You have changes that are not applied yet." : "Changes last until you close or reload this page.")}</p>
           </div>

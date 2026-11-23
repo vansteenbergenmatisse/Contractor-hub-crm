@@ -7,6 +7,7 @@ export const SAVE_LIMITED = "Too many saves. Try again later.";
 const SENTENCE: Partial<Record<SaveStatus, (labels: string) => string>> = {
   invalid: (labels) => `${labels} could not be saved. Check the value.`,
   missing: (labels) => `${labels} does not exist in your account yet, so it was not saved.`,
+  duplicate: (labels) => `${labels} is listed twice in your account, so it was not saved. Ask Forge Forward to fix it.`,
   denied: (labels) => `${labels} cannot be changed here.`,
   rejected: (labels) => `Your account refused ${labels}.`,
   permission: (labels) => `${labels} did not save. Your account connection needs attention.`,

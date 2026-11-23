@@ -2,6 +2,8 @@ import type { CustomValues, Problem } from "../types";
 import { COLOR_KEYS, LINK_KEYS, labelOfKey, sectionOfKey } from "./fields";
 
 const HEX6 = /^#[0-9a-fA-F]{6}$/;
+// HighLevel can hold a short color that the brand reader accepts, so the contrast rule judges it too.
+const HEX_ANY = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 const HTTPS = /^https:\/\/\S+$/i;
 const MIN_CONTRAST = 4.5;
 
@@ -9,8 +11,9 @@ const MIN_CONTRAST = 4.5;
 // "@/features/brand" (a test pins them together). It is repeated here because the brand index
 // also exports server code (database access) that a client bundle must not pull in.
 function luminance(hex: string): number {
+  const full = hex.length === 4 ? `#${[...hex.slice(1)].map((c) => c + c).join("")}` : hex;
   const [r, g, b] = [1, 3, 5].map((i) => {
-    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+    const c = parseInt(full.slice(i, i + 2), 16) / 255;
     return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
   });
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
@@ -52,7 +55,7 @@ export function validateValues(values: CustomValues, saved?: CustomValues): Prob
   const onMain = v("text_on_main_color");
   if (
     (changed("main_color") || changed("text_on_main_color")) &&
-    HEX6.test(main) && HEX6.test(onMain) &&
+    HEX_ANY.test(main) && HEX_ANY.test(onMain) &&
     contrast(main, onMain) < MIN_CONTRAST
   ) {
     return problem("main_color", "The text on your main color is hard to read. Make Main color darker.");
