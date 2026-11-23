@@ -16,7 +16,7 @@ export { listActiveLinks } from "./db/ghl-links";
 export { hitRateLimit } from "./db/rate-limit";
 export { createInviteService, hashInviteCode, InviteError, newInviteCode } from "./api/invites";
 export type { InviteErrorCode, InviteRecord, InviteRole, InviteServiceDeps, InviteTenant } from "./api/invites";
-export { handleSetTenantLogin } from "./api/tenant-login";
+export { createRemovedUserCheck, handleSetTenantLogin } from "./api/tenant-login";
 export { applyClientView, clientViewCookieName, handleExitClientView, handleStartClientView, signClientView } from "./api/client-view";
 export { clientViewDeps } from "./api/instance";
 export { listTenantUserIds } from "./db/tenant-users";
