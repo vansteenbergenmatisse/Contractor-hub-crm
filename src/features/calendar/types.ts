@@ -105,6 +105,8 @@ export type LiveStop = {
   eventId: string;
   day: number;
   start: number;
+  // The true start on this day, in minutes after midnight. Grid rows are too coarse to order by.
+  startMinute: number;
   len: number;
   lane: number;
   lanes: number;

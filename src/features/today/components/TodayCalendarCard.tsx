@@ -13,25 +13,25 @@ function Status({ bad, title, body }: { bad: boolean; title: string; body: strin
   );
 }
 
+const PARTIAL = { title: "Some appointments could not be read.", body: "Check your calendar in your CRM." };
+
 // Today's real appointments, read-only. Null `result`: still loading.
 export function TodayCalendarCard({ result }: { result: CalendarResult | null }) {
   const day = result ? todayCalendar(result) : null;
-  const count = day?.proven ? `${day.stops.length} ${day.stops.length === 1 ? "appointment" : "appointments"}` : "";
+  const count = day?.proven && !day.noCalendars ? `${day.stops.length} ${day.stops.length === 1 ? "appointment" : "appointments"}` : "";
   return (
     <section className="fd-card fd-in" style={{ "--i": 6 } as CSSProperties} aria-labelledby="fd-cal-h" aria-busy={result ? undefined : true}>
       <div className="fd-ch"><h2 className="fd-ct" id="fd-cal-h">Today’s calendar</h2>{count ? <span className="fd-cm">{count}</span> : null}</div>
       {result && !day ? (
         <Status bad title="Your calendar can't load right now." body="Nothing was changed. Open Calendar to try again." />
       ) : null}
-      {day && day.stops.length === 0 ? (
-        day.proven
-          ? <Status bad={false} title="Nothing booked today." body="New appointments show up here." />
-          : <Status bad title="Some appointments could not be read." body="Check your calendar in your CRM." />
-      ) : null}
+      {day && !day.proven ? <Status bad {...PARTIAL} /> : null}
+      {day?.proven && day.noCalendars ? <Status bad={false} title="No calendar is set up yet." body="Appointments show up here once your CRM has a calendar." /> : null}
+      {day?.proven && !day.noCalendars && day.stops.length === 0 ? <Status bad={false} title="Nothing booked today." body="New appointments show up here." /> : null}
       {day && day.stops.length > 0 ? (
         <ol className="fd-stops">
           {day.stops.map((stop) => (
-            <li key={stop.id} className={`fd-stop is-${stopWhen(day.stops, stop)}`}>
+            <li key={stop.id} className={`fd-stop is-${stopWhen(day, stop)}`}>
               <span className="fd-time">{stop.startLabel}</span>
               <span className="fd-node" aria-hidden="true" />
               <div className="fd-sx">

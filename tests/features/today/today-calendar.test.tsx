@@ -13,8 +13,8 @@ import { chunkLabel, chunkSpan } from "@/features/pipeline";
 
 // All values are fake.
 const week: CalendarWeekInfo = { timeZone: "UTC", weekStart: "2026-03-01", prevWeek: "2026-02-22", nextWeek: "2026-03-08", todayDay: 3, rangeLabel: "", days: [] };
-const stop = (id: string, day: number, past = false): LiveStop => ({
-  id, eventId: id, day, start: 0, len: 1, lane: 0, lanes: 1, name: `Stop ${id}`, service: "", address: "1 Test St",
+const stop = (id: string, day: number, past = false, startMinute = 540): LiveStop => ({
+  id, eventId: id, day, start: 0, startMinute, len: 1, lane: 0, lanes: 1, name: `Stop ${id}`, service: "", address: "1 Test St",
   statusLabel: "Confirmed", startLabel: "9:00 AM", endLabel: "10:00 AM", past,
 });
 const ready = (stops: LiveStop[], over: Partial<Extract<CalendarResult, { state: "ready" }>> = {}): CalendarResult => ({
@@ -53,6 +53,11 @@ describe("the Appointments tile", () => {
 
   it("counts today and the week", () => {
     expect(tile(ready([stop("a", 3), stop("b", 3), stop("c", 5)]))).toContain('aria-label="Appointments: 2 today, 3 this week. Open the calendar"');
+  });
+
+  it("counts an appointment across several days once in the week", () => {
+    const days = [3, 4, 5].map((day) => ({ ...stop(`job:${day}`, day), eventId: "job" }));
+    expect(tile(ready(days))).toContain('aria-label="Appointments: 1 today, 1 this week. Open the calendar"');
   });
 
   it("counts zero when nothing is booked", () => {
@@ -99,6 +104,25 @@ describe("Today's calendar card", () => {
   it("marks a failed read as a failure", () => {
     expect(card({ state: "unavailable" })).toContain("is-bad");
     expect(card({ state: "reconnect" })).toContain("is-bad");
+  });
+
+  it("orders two appointments in one grid row by their real start", () => {
+    const out = card(ready([stop("late", 3, false, 495), stop("early", 3, false, 480)]));
+    expect(out.indexOf("Stop early")).toBeLessThan(out.indexOf("Stop late"));
+    expect(out.match(/fd-stop is-next[\s\S]*?<b>([^<]+)/)?.[1]).toBe("Stop early");
+  });
+
+  it("warns on a partial day and claims no next appointment", () => {
+    const out = card(ready([stop("a", 3)], { complete: false }));
+    expect(out).toContain("Some appointments could not be read.");
+    expect(out).toContain("Stop a");
+    expect(out).not.toContain("is-next");
+  });
+
+  it("does not call a sub-account with no calendars a free day", () => {
+    const out = card({ state: "empty", week, reason: "no-calendars" });
+    expect(out).toContain("No calendar is set up yet.");
+    expect(out).not.toContain("Nothing booked today.");
   });
 
   it("has no button that would change an appointment", () => {
