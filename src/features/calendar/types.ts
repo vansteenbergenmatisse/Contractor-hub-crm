@@ -107,6 +107,8 @@ export type LiveStop = {
   start: number;
   // The true start on this day, in minutes after midnight. Grid rows are too coarse to order by.
   startMinute: number;
+  // The appointment began on an earlier day and continues on this one.
+  startedEarlier: boolean;
   len: number;
   lane: number;
   lanes: number;

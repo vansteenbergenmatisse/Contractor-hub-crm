@@ -32,7 +32,7 @@ export function TodayCalendarCard({ result }: { result: CalendarResult | null })
         <ol className="fd-stops">
           {day.stops.map((stop) => (
             <li key={stop.id} className={`fd-stop is-${stopWhen(day, stop)}`}>
-              <span className="fd-time">{stop.startLabel}</span>
+              <span className="fd-time">{stop.startedEarlier ? "Continues" : stop.startLabel}</span>
               <span className="fd-node" aria-hidden="true" />
               <div className="fd-sx">
                 <p className="fd-st"><b>{stop.name}</b></p>

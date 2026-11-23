@@ -29,5 +29,6 @@ export function todayCalendar(result: CalendarResult): TodayCalendar | null {
 // On a partial day the real next appointment may be missing, so none is marked.
 export function stopWhen(day: Pick<TodayCalendar, "stops" | "proven">, stop: LiveStop): "past" | "next" | "later" {
   if (stop.past) return "past";
-  return day.proven && day.stops.find((item) => !item.past)?.id === stop.id ? "next" : "later";
+  // A job carried over from an earlier day is under way, so it is never the next stop.
+  return day.proven && day.stops.find((item) => !item.past && !item.startedEarlier)?.id === stop.id ? "next" : "later";
 }

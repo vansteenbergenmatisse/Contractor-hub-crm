@@ -10,7 +10,7 @@ function view(result: CalendarResult | null): TileView {
   const label = "Appointments";
   if (!result) return { label, value: null, sub: "", aria: "Appointments: loading. Open the calendar", busy: true };
   const day = todayCalendar(result);
-  if (!day?.proven) return { label, value: null, sub: "", aria: "Appointments: not available yet. Open the calendar" };
+  if (!day?.proven || day.noCalendars) return { label, value: null, sub: "", aria: "Appointments: not available yet. Open the calendar" };
   const week = `${day.week} this week`;
   return { label, value: day.stops.length, unit: "today", sub: week, aria: `Appointments: ${day.stops.length} today, ${week}. Open the calendar` };
 }

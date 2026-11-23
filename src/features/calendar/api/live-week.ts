@@ -112,7 +112,7 @@ export function toStops(events: readonly CalendarEventRow[], range: WeekRange, t
       const start = Math.min(Math.max(Math.floor((startMinute - FIRST_MINUTE) / 30), 0), GRID_ROWS - 1);
       const endRow = Math.min(Math.max(Math.ceil((endMinute - FIRST_MINUTE) / 30), start + 1), GRID_ROWS);
       stops.push({
-        id: `${event.id}:${day}`, eventId: event.id, day, start, startMinute, len: endRow - start, lane: 0, lanes: 1,
+        id: `${event.id}:${day}`, eventId: event.id, day, start, startMinute, startedEarlier: event.startMs < dayStart, len: endRow - start, lane: 0, lanes: 1,
         name: event.title ?? "Appointment", service: event.calendarName ?? "", address: event.address ?? "",
         statusLabel: STATUS_LABELS[event.status?.toLowerCase() ?? ""] ?? "",
         startLabel: minuteLabel(startMinute), endLabel: minuteLabel(endMinute), past: event.endMs <= nowMs,

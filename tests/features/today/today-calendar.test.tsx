@@ -14,7 +14,7 @@ import { chunkLabel, chunkSpan } from "@/features/pipeline";
 // All values are fake.
 const week: CalendarWeekInfo = { timeZone: "UTC", weekStart: "2026-03-01", prevWeek: "2026-02-22", nextWeek: "2026-03-08", todayDay: 3, rangeLabel: "", days: [] };
 const stop = (id: string, day: number, past = false, startMinute = 540): LiveStop => ({
-  id, eventId: id, day, start: 0, startMinute, len: 1, lane: 0, lanes: 1, name: `Stop ${id}`, service: "", address: "1 Test St",
+  id, eventId: id, day, start: 0, startMinute, startedEarlier: false, len: 1, lane: 0, lanes: 1, name: `Stop ${id}`, service: "", address: "1 Test St",
   statusLabel: "Confirmed", startLabel: "9:00 AM", endLabel: "10:00 AM", past,
 });
 const ready = (stops: LiveStop[], over: Partial<Extract<CalendarResult, { state: "ready" }>> = {}): CalendarResult => ({
@@ -69,6 +69,7 @@ describe("the Appointments tile", () => {
     ["with left-out rows", ready([stop("a", 3)], { dropped: 1 })],
     ["unavailable", { state: "unavailable" } as CalendarResult],
     ["reconnect", { state: "reconnect" } as CalendarResult],
+    ["no calendar exists", { state: "empty", week, reason: "no-calendars" } as CalendarResult],
   ])("shows no number when %s", (_name, result) => {
     const out = tile(result);
     expect(out).toContain("Not available yet");
@@ -110,6 +111,14 @@ describe("Today's calendar card", () => {
     const out = card(ready([stop("late", 3, false, 495), stop("early", 3, false, 480)]));
     expect(out.indexOf("Stop early")).toBeLessThan(out.indexOf("Stop late"));
     expect(out.match(/fd-stop is-next[\s\S]*?<b>([^<]+)/)?.[1]).toBe("Stop early");
+  });
+
+  it("never marks a job that began on an earlier day as next", () => {
+    const job = { ...stop("job", 3, false, 0), startedEarlier: true, startLabel: "12:00 AM" };
+    const out = card(ready([job, stop("real", 3, false, 840)]));
+    expect(out.match(/fd-stop is-next[\s\S]*?<b>([^<]+)/)?.[1]).toBe("Stop real");
+    expect(out).toContain("Continues");
+    expect(out).not.toContain("12:00 AM");
   });
 
   it("warns on a partial day and claims no next appointment", () => {
