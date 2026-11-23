@@ -1,6 +1,7 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useRef, useState } from "react";
+import { inviteErrorMessage } from "../api/invite-errors";
 import { announceViewChange } from "../api/view-channel";
 import type { ClientRow } from "../types";
 
@@ -10,40 +11,63 @@ export function ClientsTable({ clients }: { clients: ClientRow[] }) {
   const [message, setMessage] = useState<{ tenantId: string; text: string } | null>(null);
   const [inviteFor, setInviteFor] = useState<string | null>(null);
   const [email, setEmail] = useState("");
+  const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
+  // The ref blocks a second click that lands before React has rendered the disabled button.
+  const pendingRef = useRef(new Set<string>());
+
+  async function withRow(tenantId: string, action: () => Promise<void>) {
+    if (pendingRef.current.has(tenantId)) return;
+    pendingRef.current.add(tenantId);
+    setPending(new Set(pendingRef.current));
+    setMessage(null);
+    try {
+      await action();
+    } catch {
+      setMessage({ tenantId, text: "Could not reach the server. Check your connection and try again." });
+    } finally {
+      pendingRef.current.delete(tenantId);
+      setPending(new Set(pendingRef.current));
+    }
+  }
 
   async function post(url: string, body: unknown): Promise<Response> {
     return fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   }
 
-  async function setLogin(tenantId: string, disabled: boolean) {
-    setMessage(null);
-    const response = await post(`/api/admin/clients/${encodeURIComponent(tenantId)}/login`, { disabled });
-    if (!response.ok) return setMessage({ tenantId, text: "Could not change login. Try again." });
-    setRows((current) =>
-      current.map((row) => (row.tenantId === tenantId && row.login !== "no users" ? { ...row, login: disabled ? "off" : "on" } : row)),
-    );
+  function setLogin(tenantId: string, disabled: boolean) {
+    return withRow(tenantId, async () => {
+      const response = await post(`/api/admin/clients/${encodeURIComponent(tenantId)}/login`, { disabled });
+      if (!response.ok) return setMessage({ tenantId, text: "Could not change login. Try again." });
+      setRows((current) =>
+        current.map((row) => (row.tenantId === tenantId && row.login !== "no users" ? { ...row, login: disabled ? "off" : "on" } : row)),
+      );
+    });
   }
 
-  async function invite(tenantId: string) {
-    setMessage(null);
-    const response = await post("/api/admin/invites", { tenantId, email, role: "owner" });
-    if (!response.ok) return setMessage({ tenantId, text: "The invite was not created. Check the email and that the client is connected." });
-    const { link } = (await response.json()) as { link: string };
-    setMessage({ tenantId, text: `Invite link (send it to the owner, it works once for 72 hours): ${link}` });
-    setInviteFor(null);
-    setEmail("");
+  function invite(tenantId: string) {
+    return withRow(tenantId, async () => {
+      const response = await post("/api/admin/invites", { tenantId, email, role: "owner" });
+      const body = (await response.json().catch(() => null)) as { link?: string; error?: string } | null;
+      if (!response.ok) return setMessage({ tenantId, text: inviteErrorMessage(body?.error) });
+      setInviteFor(null);
+      setEmail("");
+      // The invite exists at this point, so a retry would create a second live one.
+      if (!body?.link) return setMessage({ tenantId, text: "The invite was created, but its link could not be shown." });
+      setMessage({ tenantId, text: `Invite link (send it to the owner, it works once for 72 hours): ${body.link}` });
+    });
   }
 
-  async function viewClient(tenantId: string) {
-    setMessage(null);
-    try {
-      const response = await fetch(`/api/admin/clients/${encodeURIComponent(tenantId)}/view`, { method: "POST" });
-      if (!response.ok) return setMessage({ tenantId, text: "Could not open this client. Try again." });
-      announceViewChange();
-      window.location.assign("/");
-    } catch {
-      setMessage({ tenantId, text: "Could not open this client. Try again." });
-    }
+  function viewClient(tenantId: string) {
+    return withRow(tenantId, async () => {
+      try {
+        const response = await fetch(`/api/admin/clients/${encodeURIComponent(tenantId)}/view`, { method: "POST" });
+        if (!response.ok) return setMessage({ tenantId, text: "Could not open this client. Try again." });
+        announceViewChange();
+        window.location.assign("/");
+      } catch {
+        setMessage({ tenantId, text: "Could not open this client. Try again." });
+      }
+    });
   }
 
   async function copyLink(tenantId: string, path: string) {
@@ -68,6 +92,7 @@ export function ClientsTable({ clients }: { clients: ClientRow[] }) {
       {message && !rows.some((row) => row.tenantId === message.tenantId) ? <p role="status">{message.text}</p> : null}
       {rows.length === 0 ? <p>No clients yet. A client appears here after the app is installed on their sub-account.</p> : null}
       {rows.length > 0 ? (
+        <div role="region" aria-label="Clients table" tabIndex={0} style={{ overflowX: "auto" }}>
         <table style={{ borderSpacing: "16px 8px" }}>
           <thead>
             <tr>
@@ -108,11 +133,12 @@ export function ClientsTable({ clients }: { clients: ClientRow[] }) {
                           value={email}
                           onChange={(event) => setEmail(event.target.value)}
                         />
-                        <button type="button" onClick={() => invite(row.tenantId)} disabled={email.trim() === ""}>
-                          Create invite
+                        <button type="button" onClick={() => invite(row.tenantId)} disabled={email.trim() === "" || pending.has(row.tenantId)}>
+                          {pending.has(row.tenantId) ? "Creating invite..." : "Create invite"}
                         </button>
                         <button
                           type="button"
+                          disabled={pending.has(row.tenantId)}
                           onClick={() => {
                             setEmail("");
                             setInviteFor(null);
@@ -124,12 +150,13 @@ export function ClientsTable({ clients }: { clients: ClientRow[] }) {
                     ) : (
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
                         {row.status !== "Uninstalled" ? (
-                          <button type="button" aria-label={`View ${row.name} as client, read-only`} onClick={() => viewClient(row.tenantId)}>
+                          <button type="button" aria-label={`View ${row.name} as client, read-only`} disabled={pending.has(row.tenantId)} onClick={() => viewClient(row.tenantId)}>
                             View client
                           </button>
                         ) : null}
                         <button
                           type="button"
+                          disabled={pending.has(row.tenantId)}
                           onClick={() => {
                             setEmail("");
                             setInviteFor(row.tenantId);
@@ -138,9 +165,9 @@ export function ClientsTable({ clients }: { clients: ClientRow[] }) {
                           Invite owner
                         </button>
                         {row.login === "off" ? (
-                          <button type="button" onClick={() => setLogin(row.tenantId, false)}>Turn on login</button>
+                          <button type="button" disabled={pending.has(row.tenantId)} onClick={() => setLogin(row.tenantId, false)}>Turn on login</button>
                         ) : (
-                          <button type="button" onClick={() => setLogin(row.tenantId, true)} disabled={row.login === "no users"}>
+                          <button type="button" onClick={() => setLogin(row.tenantId, true)} disabled={row.login === "no users" || pending.has(row.tenantId)}>
                             Turn off login
                           </button>
                         )}
@@ -159,6 +186,7 @@ export function ClientsTable({ clients }: { clients: ClientRow[] }) {
             ))}
           </tbody>
         </table>
+        </div>
       ) : null}
     </main>
   );
