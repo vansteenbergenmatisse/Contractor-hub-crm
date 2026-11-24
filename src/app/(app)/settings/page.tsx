@@ -1,7 +1,7 @@
 import { hitRateLimit } from "@/features/auth";
 import { getTenantCustomValues, getTenantCustomValuesReadOnly } from "@/features/brand";
 import { createTenantPhoneNumbersReader } from "@/features/highlevel";
-import { SettingsPage, loadSettingsValues, sectionFromParam, type AccountLayout, type PhoneNumbersView } from "@/features/settings";
+import { SettingsPage, loadSettingsValues, sectionFromParam, type AccountLayout, type LoadStatus, type PhoneNumbersView } from "@/features/settings";
 import { SettingsWriteBackPage, freshValuesReader, isMediaReplaceEnabled, isWriteBackEnabled } from "@/features/settings-write-back";
 import { getRequestUser } from "../../session";
 
@@ -28,16 +28,23 @@ export default async function Page({ searchParams }: Props = {}) {
   const read = user?.viewing ? getTenantCustomValuesReadOnly : canSave ? freshValuesReader(getTenantCustomValues) : getTenantCustomValues;
   // Not awaited: the row gets the pending read, so a slow or failed read only changes that row.
   const phoneNumbers = readPhones(user);
-  const loaded: { layout?: AccountLayout } = {};
-  const values = await loadSettingsValues(user?.tenantId, read, (layout) => {
-    loaded.layout = layout;
-  });
+  const loaded: { layout?: AccountLayout; status?: LoadStatus } = {};
+  const values = await loadSettingsValues(
+    user?.tenantId,
+    read,
+    (layout) => {
+      loaded.layout = layout;
+    },
+    (status) => {
+      loaded.status = status;
+    },
+  );
   const section = sectionFromParam((await searchParams)?.section) ?? undefined;
   return user?.viewing ? (
-    <SettingsPage initialValues={values} initialSection={section} account={loaded.layout} phoneNumbers={phoneNumbers} readOnly />
+    <SettingsPage initialValues={values} initialSection={section} account={loaded.layout} loadStatus={loaded.status} phoneNumbers={phoneNumbers} readOnly />
   ) : canSave ? (
-    <SettingsWriteBackPage initialValues={values} initialSection={section} account={loaded.layout} phoneNumbers={phoneNumbers} mediaReplace={isMediaReplaceEnabled(user?.tenantId ?? "")} />
+    <SettingsWriteBackPage initialValues={values} initialSection={section} account={loaded.layout} loadStatus={loaded.status} phoneNumbers={phoneNumbers} mediaReplace={isMediaReplaceEnabled(user?.tenantId ?? "")} />
   ) : (
-    <SettingsPage initialValues={values} initialSection={section} account={loaded.layout} phoneNumbers={phoneNumbers} />
+    <SettingsPage initialValues={values} initialSection={section} account={loaded.layout} loadStatus={loaded.status} phoneNumbers={phoneNumbers} />
   );
 }

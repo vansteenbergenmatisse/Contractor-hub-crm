@@ -74,7 +74,7 @@ export type {
   WebhookEventInput,
 } from "./types";
 export { searchUsersWithRetry } from "./api/search-users";
-export { listCustomValuesWithRetry } from "./api/custom-values";
+export { CustomValuesNotConnectedError, listCustomValuesWithRetry } from "./api/custom-values";
 export {
   CONTACTS_PAGE_SIZE,
   CONTACTS_READS_PER_MINUTE,
