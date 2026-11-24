@@ -4,13 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { useRouter } from "next/navigation";
 import { PAGE_PATH, PageAction, useRowFocus, useSearchRows } from "@/features/app-shell";
 import {
-  addLeadMode, filterCounts, firstNeedId, hasWaitData, sourceCounts, summarize, tiles, visibleAdded, visibleLeads, weekKnown, withReceived,
+  addLeadMode, filterCounts, firstNeedId, hasWaitData, summarize, tiles, visibleAdded, visibleLeads, weekKnown, withReceived,
 } from "../api/leads-logic";
 import { liveSearchRows } from "../api/search-rows";
 import { isPhoneNow, useIsPhone } from "../hooks/use-is-phone";
 import { useLeads, useOpenAddFromUrl, useRevealLead } from "../hooks/use-leads";
+import { DEFAULT_ORIGIN, ORIGIN_LABEL } from "../api/lead-sources";
 import { useTimeZone } from "../hooks/use-time-zone";
-import type { Lead } from "../types";
+import type { Lead, LeadOrigin } from "../types";
 import { AddLeadPanel } from "./AddLeadPanel";
 import { AddedLeadRow } from "./AddedLeadRow";
 import { ChannelIcon } from "./ChannelIcon";
@@ -40,6 +41,7 @@ export function LeadsReady({ leads: loaded, loadedAt, complete, dropped, locatio
     else setFocusTick((n) => n + 1);
   }, [dispatch]);
   useOpenAddFromUrl(openAdd);
+  const [origin, setOrigin] = useState<LeadOrigin>(DEFAULT_ORIGIN);
 
   // Phone: when the sheet closes, the cursor goes back to the "Add a lead" button in the action bar.
   // That button is mounted again by the shell after the sheet closes, so its ref takes the focus.
@@ -154,6 +156,7 @@ export function LeadsReady({ leads: loaded, loadedAt, complete, dropped, locatio
           {dropped > 0 && <p className="fd-pns">{dropped === 1 ? "1 lead" : `${dropped} leads`} could not be shown.</p>}
         </div>
         <div className="fd-side2">
+          {weekKnown(leads, loadedAt, complete, dropped, timeZone) && <SourcesPanel nAdded={state.nAdd} leads={leads} loadedAt={loadedAt} timeZone={timeZone} complete={complete} dropped={dropped} />}
           <AddLeadPanel
             sheet={state.sheet}
             phone={phone}
@@ -162,10 +165,11 @@ export function LeadsReady({ leads: loaded, loadedAt, complete, dropped, locatio
             errors={state.errors}
             focus={state.focus}
             onField={(field, value) => dispatch({ type: "field", field, value })}
-            onSubmit={() => dispatch({ type: "submit" })}
+            onSubmit={() => dispatch({ type: "submit", origin: origin === "you" ? undefined : ORIGIN_LABEL[origin] })}
             onClose={() => dispatch({ type: "closeAdd" })}
+            origin={origin}
+            onOrigin={setOrigin}
           />
-          {weekKnown(leads, loadedAt, complete, dropped, timeZone) && <SourcesPanel nAdded={state.nAdd} counts={sourceCounts(leads, loadedAt, timeZone)} />}
         </div>
       </div>
     </>

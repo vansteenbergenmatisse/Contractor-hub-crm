@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useOptimistic, useRef, useState, useSyncExternalStore, useTransition, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { requestNewLead } from "@/shared/lib/new-lead-event";
 import { BrandLogo } from "@/shared/ui/brand-logo";
 import { MENU_GROUPS, PAGE_PATH, PAGE_TITLE, TAB_PAGES, pageFromPath } from "../nav";
 import { addToOverride, dropExpiredOverride, nextOverrideExpiry, patchBusiness, settleOverride, type BusinessOverride } from "../api/business";
@@ -160,7 +161,7 @@ export function ShellFrame({ business: serverBusiness, searchRows, initialInboxC
         router.push(PAGE_PATH.settings);
       } else if (action === "newLead") {
         event.preventDefault();
-        router.push(`${PAGE_PATH.leads}?add=1`);
+        if (!requestNewLead()) router.push(`${PAGE_PATH.leads}?add=1`);
       } else if (action === "undo") {
         const registered = undo.top();
         const button = registered ? null : findUndo(document.querySelector(`[data-pg="${now.page}"]`));
@@ -176,6 +177,11 @@ export function ShellFrame({ business: serverBusiness, searchRows, initialInboxC
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [drawerBack, gestures, router, undo, setSaid]);
+
+  // The form opens over the current page. Without it mounted, the Leads page opens it.
+  const openNewLead = () => {
+    if (!requestNewLead()) router.push(`${PAGE_PATH.leads}?add=1`);
+  };
 
   const openDrawer = () => {
     setFeedback(false);
@@ -353,13 +359,13 @@ export function ShellFrame({ business: serverBusiness, searchRows, initialInboxC
             <button type="button" className="fd-ibtn fd-menub" aria-label="Open menu" aria-expanded={drawer} onClick={openDrawer}><Icon name="menu" size={21} strokeWidth={2} /><span>Menu</span></button>
             <span className="fd-bname">{business.name}</span>
             <span className="fx-mttl" aria-hidden="true">{PAGE_TITLE[page]}</span>
-            <span className="fd-tools"><button type="button" className="fd-ibtn fd-callb" aria-label="Call a customer, not available yet" title="Not available yet" disabled data-fx-noact="1"><Icon name="call" size={20} /><span>Call</span></button></span>
+            <span className="fd-tools"><button type="button" className="fd-ibtn fd-callb" aria-label="Call a customer, not available yet" title="Not available yet" disabled data-fx-noact="1"><Icon name="call" size={20} /><span>Call</span></button><button type="button" className="fd-ibtn" aria-label="New lead" onClick={openNewLead}><Icon name="plus" size={20} strokeWidth={2.2} /><span>New lead</span></button></span>
           </header>
           <header className="fd-top">
             <button type="button" className="fd-search" aria-label="Search customers" aria-keyshortcuts="Meta+F" onClick={api.openSearch}><Icon name="search" size={18} /><span className="fx-sph">Search</span><kbd className="fx-kbd" aria-hidden="true">{mac ? "⌘F" : "Ctrl F"}</kbd></button>
             <span className="fd-tools">
               <button type="button" className="fd-btn is-plain fd-callb" aria-label="Call a customer, not available yet" title="Not available yet" disabled data-fx-noact="1"><Icon name="call" size={16} strokeWidth={2} />Call</button>
-              <button type="button" className="fd-btn is-plain" onClick={() => router.push(`${PAGE_PATH.leads}?add=1`)}><Icon name="plus" size={16} strokeWidth={2.2} />New lead</button>
+              <button type="button" className="fd-btn is-plain" onClick={openNewLead}><Icon name="plus" size={16} strokeWidth={2.2} />New lead</button>
             </span>
           </header>
           <div key={page} ref={viewRef} className={viewClass(page, isPushed, entered)} data-pg={page} onAnimationEnd={(event) => { if (event.target === event.currentTarget) setEntered(true); }}>{children}</div>

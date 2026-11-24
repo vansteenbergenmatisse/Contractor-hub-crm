@@ -210,3 +210,16 @@ export {
   type ContactTagRequests,
   type ContactTagState,
 } from "./api/contact-tag";
+export {
+  EXPORT_MAX_PAGES,
+  createContactCreateAdapter,
+  createContactCreateRequests,
+  createTenantContactCreateAdapter,
+  toE164,
+  type ContactCreateDeps,
+  type ContactCreateOutcome,
+  type ContactCreateRequests,
+  type ContactExportRead,
+  type ContactExportRow,
+  type NewContact,
+} from "./api/contact-create";

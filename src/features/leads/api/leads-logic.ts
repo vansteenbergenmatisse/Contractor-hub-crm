@@ -131,7 +131,7 @@ export function leadsReducer(state: LeadsState, action: LeadsAction): LeadsState
       const added: AddedLead = {
         id: `added-${state.nAdd + 1}`,
         name: f.name.trim(),
-        sub: [f.need.trim() || "New lead", f.phone.trim(), f.email.trim(), f.addr.trim()].filter(Boolean).join(" · "),
+        sub: [f.need.trim() || "New lead", action.origin ?? "", f.phone.trim(), f.email.trim(), f.addr.trim()].filter(Boolean).join(" · "),
       };
       return {
         // The list keeps the newest 3 hand-added leads (design logic 804 `.slice(0, 3)`).

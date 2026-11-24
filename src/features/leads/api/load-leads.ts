@@ -1,10 +1,13 @@
 import { joinParts } from "@/shared/lib/join-parts";
 import type { Lead, LeadContact, LeadContactsReader, LeadsResult } from "../types";
+import { extraOrigin } from "./lead-sources";
 import { sourceKey } from "./leads-logic";
 
 function toLead(contact: LeadContact): Lead {
   const place = joinParts([contact.city, joinParts([contact.state, contact.postalCode], " ")], ", ");
+  const origin = extraOrigin(contact.source);
   return {
+    ...(origin ? { origin } : {}),
     id: contact.id,
     name: contact.name ?? "Unnamed lead",
     source: sourceKey(contact.source),
