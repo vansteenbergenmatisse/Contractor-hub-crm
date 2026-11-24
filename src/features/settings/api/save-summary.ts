@@ -9,6 +9,7 @@ const SENTENCE: Partial<Record<SaveStatus, (labels: string) => string>> = {
   missing: (labels) => `${labels} does not exist in your account yet, so it was not saved.`,
   duplicate: (labels) => `${labels} is listed twice in your account, so it was not saved. Ask Forge Forward to fix it.`,
   denied: (labels) => `${labels} cannot be changed here.`,
+  locked: (labels) => `${labels} is locked by Forge Forward. Ask us to change it.`,
   rejected: (labels) => `Your account refused ${labels}.`,
   permission: (labels) => `${labels} did not save. Your account connection needs attention.`,
   retry: (labels) => `${labels} did not save. Try again.`,

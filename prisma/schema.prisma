@@ -33,6 +33,7 @@ model Tenant {
   invites       Invite[]
   syncState     TenantSyncState?
   loginLock     TenantLoginLock?
+  valueLocks    CustomValueLock[]
 }
 
 // "Turn off login" for a whole client. A row means login is off; no row (the default) means on.
@@ -297,6 +298,22 @@ model CustomValueSaveLock {
   tenantId  String   @id
   holder    String
   expiresAt DateTime
+}
+
+// ---- feature: settings-write-back (custom value locks) ----
+// A key Forge Forward locked for one client. A row means locked: the owner sees the value read-only
+// ("Locked by Forge Forward") and the owner's save refuses it on the server. Admins change it from the
+// admin values page and lock or unlock it there. Secret-looking keys need no row: they never reach
+// the owner at all. A separate table, so the Tenant table is not altered.
+model CustomValueLock {
+  id              String   @id @default(cuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  key             String
+  lockedByAdminId String
+  lockedAt        DateTime @default(now())
+
+  @@unique([tenantId, key])
 }
 
 // ---- feature: routes ----

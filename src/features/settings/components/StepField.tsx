@@ -19,9 +19,12 @@ type Props = {
   imageControl?: (field: Field, saved: string, dirty: boolean) => ReactNode;
   // The value is too long to send to the page: listed by name, read-only.
   long?: boolean;
+  // Forge Forward locked this key: shown read-only, the server refuses it on save.
+  locked?: boolean;
 };
 
 export const TOO_LONG_NOTE = "Too long to edit here. Change it in HighLevel";
+export const LOCKED_NOTE = "Locked by Forge Forward. Ask us to change it.";
 export const PAGE_TEXT_NOTE = "Website page text. Change it in HighLevel";
 
 const OUR_WORK: ReadonlySet<string> = new Set(OUR_WORK_KEYS);
@@ -35,8 +38,11 @@ function helpersOf(key: string, value: string): string[] {
 }
 
 // One value on a step: the field, its image preview and its Change image control.
-export function StepField({ fieldKey: key, value, saved, error, readOnly, imageHosts = DEFAULT_IMAGE_HOSTS, onChange, imageControl, long = false }: Props) {
+export function StepField({ fieldKey: key, value, saved, error, readOnly, imageHosts = DEFAULT_IMAGE_HOSTS, onChange, imageControl, long = false, locked = false }: Props) {
   const field = { key, label: labelOfKey(key) };
+  if (locked && !long) {
+    return <ValueField field={field} value={saved} saved={saved} invalid={false} readOnly helpers={[LOCKED_NOTE]} onChange={onChange} />;
+  }
   // A page's text or address outside a protected folder: shown as plain text, never edited here.
   if (long || isPageTextKey(key)) {
     return <ValueField field={field} value={long ? "" : value} saved={long ? "" : saved} invalid={false} readOnly helpers={[long ? TOO_LONG_NOTE : PAGE_TEXT_NOTE]} onChange={onChange} />;
@@ -56,7 +62,7 @@ export function StepField({ fieldKey: key, value, saved, error, readOnly, imageH
       onChange={onChange}
     >
       {hasImage ? <ImagePreview src={previewSrc(value, imageHosts, key === BACKGROUND_KEY)} label={field.label} /> : null}
-      {imageControl?.(field, saved, value.trim() !== saved.trim())}
+      {locked ? null : imageControl?.(field, saved, value.trim() !== saved.trim())}
     </ValueField>
   );
 }

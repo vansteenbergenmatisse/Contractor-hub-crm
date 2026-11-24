@@ -46,6 +46,15 @@ export function useSettings(
   // Keys with a value too long to send are listed by name, read-only (see settingsReadFrom).
   const longJoined = (account?.longKeys ?? []).join("|");
   const longKeys = useMemo(() => new Set(longJoined ? longJoined.split("|") : []), [longJoined]);
+  // Keys Forge Forward locked: shown read-only (the server refuses them on save too).
+  const lockedJoined = (account?.lockedKeys ?? []).join("|");
+  const lockedKeys = useMemo(() => new Set(lockedJoined ? lockedJoined.split("|") : []), [lockedJoined]);
+  // A kept draft on a key that is locked now is dropped: the field shows the saved value, so a hidden
+  // draft would keep the step dirty with nothing the owner can see or undo.
+  const lockedDrafts = [...lockedKeys].filter((key) => (state.draft[key] ?? "").trim() !== (state.values[key] ?? "").trim()).join("|");
+  useEffect(() => {
+    if (lockedDrafts) dispatch({ type: "revert", keys: lockedDrafts.split("|") });
+  }, [lockedDrafts, dispatch]);
   const extras = useMemo(() => [...extraKeys(state.values), ...[...longKeys].filter((key) => !Object.hasOwn(state.values, key))], [state.values, longKeys]);
   // No key at all: the read failed or the account holds none of these values. A key with an empty
   // value is still a key, so a new client's blank account does not count.
@@ -134,5 +143,5 @@ export function useSettings(
     else updateRef.current?.(patch);
   }, [state.ok, state.values, live]);
 
-  return { state, dispatch, filter, extras, longKeys, phone, choicesAvailable, notLoaded };
+  return { state, dispatch, filter, extras, longKeys, lockedKeys, phone, choicesAvailable, notLoaded };
 }

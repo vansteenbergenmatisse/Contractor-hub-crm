@@ -6,7 +6,9 @@ export { SAVE_OFF_FOR_OFFICE, SAVE_OFF_FOR_OWNER, SAVE_OFF_NOT_CONNECTED, SAVE_O
 export { saveCustomValues } from "./api/write-back";
 export type { AuditOutcome, AuditStart, SaveDeps } from "./api/write-back";
 export { handleSaveValues, saveFailure } from "./api/save-route";
-export { freshValuesReader, saveTenantValues } from "./api/save-instance";
+export { freshValuesReader, loadLockedKeys, saveTenantValues } from "./api/save-instance";
+// Custom value locks (Wave E): Forge Forward locks a key; the owner's save refuses it.
+export { lockedKeysOf, lockValue, unlockValue } from "./db/value-locks";
 export { isMediaReplaceEnabled } from "./api/media-flag";
 export { replaceImage } from "./api/media-replace";
 export type { CheckedImage, MediaDeps } from "./api/media-replace";

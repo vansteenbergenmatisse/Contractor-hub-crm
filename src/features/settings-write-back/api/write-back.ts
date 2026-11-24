@@ -1,5 +1,5 @@
 import type { CustomValueDetail, CustomValueRead, CustomValueWriteOutcome } from "@/features/highlevel";
-import { MAX_VALUE_LENGTH, isClearableKey, isSecretValue, isSettingsKeyAllowed, validateValues, writeGuardOf, type CustomValues, type SaveResult, type SaveStatus, type ValueChange } from "@/features/settings";
+import { MAX_VALUE_LENGTH, classifyKey, isClearableKey, isSecretValue, isSettingsKeyAllowed, validateValues, writeGuardOf, type CustomValues, type SaveResult, type SaveStatus, type ValueChange } from "@/features/settings";
 import { isSafeToWrite } from "./value-rules";
 
 const UNITS_AT_ONCE = 3;
@@ -26,11 +26,24 @@ export type SaveDeps = {
   now: () => number;
   // Pause between confirming reads. Without it there is one confirming read.
   wait?: (ms: number) => Promise<void>;
+  // The tenant's locked keys (Forge Forward locked them). Read once per owner save, after the lease.
+  // A failed read writes nothing. Not read on an admin save.
+  locks?: (tenantId: string) => Promise<ReadonlySet<string>>;
 };
 
 // `unlocked`: the protected folder this save was made in (see writeGuardOf). Without it a protected
 // folder's keys are refused.
-type Input = { tenantId: string; actorId: string; changes: readonly ValueChange[]; unlocked?: string };
+// `scope: "admin"`: a Forge Forward admin's save from the admin values page. It may write every key,
+// secret-looking ones included, and is not stopped by locks. Every other rule (conflict, long value,
+// duplicate, missing key, value rules, lease, audit, read-back) still applies.
+type Input = { tenantId: string; actorId: string; changes: readonly ValueChange[]; unlocked?: string; scope?: "owner" | "admin" };
+
+const HIDDEN = "[hidden: secret-looking value]";
+// The audit keeps a shown value so the change can be undone; a secret-looking one is not copied into
+// another table (same rule as the template copy).
+const isSecretKeyOrValue = (key: string, ...values: string[]) => classifyKey(key) === "secret" || values.some((v) => isSecretValue(v));
+const auditOf = (key: string, previous: string, next: string) =>
+  isSecretKeyOrValue(key, previous, next) ? { previousValue: previous === "" ? "" : HIDDEN, newValue: next === "" ? "" : HIDDEN } : { previousValue: previous, newValue: next };
 
 // The key's guard lets this save write it.
 function guardAllows(key: string, unlocked: string | undefined): boolean {
@@ -71,7 +84,7 @@ async function writeAudited(input: Input, candidate: Candidate, deps: SaveDeps):
   try {
     auditId = await deps.begin({
       tenantId: input.tenantId, actorId: input.actorId, key: candidate.key,
-      previousValue: candidate.previous, newValue: candidate.value,
+      ...auditOf(candidate.key, candidate.previous, candidate.value),
     });
   } catch {
     console.error("Settings save failed: step=audit-start");
@@ -99,7 +112,7 @@ async function restore(input: Input, written: Written, deps: SaveDeps): Promise<
   try {
     written.restoreAuditId = await deps.begin({
       tenantId: input.tenantId, actorId: input.actorId, key: candidate.key,
-      previousValue: candidate.value, newValue: candidate.previous,
+      ...auditOf(candidate.key, candidate.value, candidate.previous),
     });
   } catch {
     console.error("Settings save failed: step=audit-start");
@@ -269,6 +282,16 @@ function stillClean(unit: readonly Candidate[], rows: readonly CustomValueDetail
 async function runSave(input: Input, deps: SaveDeps, startedAt?: number): Promise<{ results: SaveResult[]; keepLease: boolean }> {
   const { tenantId, changes } = input;
   const started = startedAt ?? deps.now();
+  const admin = input.scope === "admin";
+  let locked: ReadonlySet<string> = new Set();
+  if (!admin && deps.locks) {
+    try {
+      locked = await deps.locks(tenantId);
+    } catch {
+      console.error("Settings save failed: step=locks");
+      return { results: changes.map(({ key }) => ({ key, status: "retry" as const })), keepLease: false };
+    }
+  }
   const read = await safeRead(tenantId, deps);
   if (!read.ok) {
     const status = read.reason;
@@ -284,7 +307,9 @@ async function runSave(input: Input, deps: SaveDeps, startedAt?: number): Promis
     const value = change.value.trim();
     // The allowlist comes first, so the answer never reveals whether a denied key exists.
     // So is the guard: a protected folder's key needs that folder's unlock, page text elsewhere is never written.
-    if (!isSettingsKeyAllowed(key) || !guardAllows(key, input.unlocked)) out.set(key, { key, status: "denied" });
+    if (!admin && (!isSettingsKeyAllowed(key) || !guardAllows(key, input.unlocked))) out.set(key, { key, status: "denied" });
+    // A key Forge Forward locked: only an admin changes it.
+    else if (locked.has(key)) out.set(key, { key, status: "locked" });
     else if (listedTwice.has(key)) out.set(key, { key, status: "duplicate" });
     else {
       const target = byKey.get(key);
@@ -292,9 +317,10 @@ async function runSave(input: Input, deps: SaveDeps, startedAt?: number): Promis
       if (!target || now === undefined) out.set(key, { key, status: "missing" });
       // What the page never got stays on the server: a value too long to send, or one that looks
       // secret. Refused before the conflict check, so the answer never carries it.
-      else if (target.value.length > MAX_VALUE_LENGTH || isSecretValue(target.value)) out.set(key, { key, status: "denied" });
-      // A secret-looking new value (a token, a webhook link) is never written to a shown key.
-      else if (value && isSecretValue(value)) out.set(key, { key, status: "invalid" });
+      // An admin sees secret-looking values, so only the length rule applies to an admin save.
+      else if (target.value.length > MAX_VALUE_LENGTH || (!admin && isSecretValue(target.value))) out.set(key, { key, status: "denied" });
+      // A secret-looking new value (a token, a webhook link) is never written to a shown key by the owner.
+      else if (!admin && value && isSecretValue(value)) out.set(key, { key, status: "invalid" });
       // Empty only with the review step's mark, never for a required value; a mark on a real value is refused.
       else if (value ? change.clear === true || !isSafeToWrite(key, value) : change.clear !== true || !isClearableKey(key)) out.set(key, { key, status: "invalid" });
       else if (now === value) out.set(key, { key, status: "unchanged" });

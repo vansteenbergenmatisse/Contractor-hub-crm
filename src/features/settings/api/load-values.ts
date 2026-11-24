@@ -6,7 +6,8 @@ type Row = { key: string; value: string | null | undefined };
 
 // What the page needs to arrange a loaded account: the hosts an image preview may load from, and
 // the shown keys whose value is too long to edit here (names only, never their values).
-export type AccountLayout = { imageHosts: string[]; longKeys?: string[] };
+// `lockedKeys`: keys Forge Forward locked; read-only on the page, refused by the server on save.
+export type AccountLayout = { imageHosts: string[]; longKeys?: string[]; lockedKeys?: string[] };
 
 // How the read went. `ok`: values arrived (blank ones count). `empty`: HighLevel answered, but with no
 // key Settings shows. `failed`: the read or the filter failed. `not-connected`: no tenant, or the

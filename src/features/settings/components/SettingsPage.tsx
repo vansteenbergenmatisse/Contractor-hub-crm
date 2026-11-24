@@ -65,7 +65,7 @@ const scrollToCard = (id: string) => document.getElementById(`s-card-${id}`)?.sc
 export function SettingsPage({ initial, initialValues, initialSection, account, loadStatus, phoneNumbers, readOnly = false, saveValues, saveDisabledReason, uploadImage, prepareImage = prepareImageFile }: Props) {
   const live = !!saveValues && !readOnly;
   const saveOff = !live && !readOnly && saveDisabledReason ? saveDisabledReason : null;
-  const { state, dispatch, filter, extras, longKeys, notLoaded } = useSettings(initial, initialValues, initialSection, UNKNOWN_CONNECTIONS, live, account);
+  const { state, dispatch, filter, extras, longKeys, lockedKeys, notLoaded } = useSettings(initial, initialValues, initialSection, UNKNOWN_CONNECTIONS, live, account);
   const remote = useSaveValues(state, dispatch, saveValues);
   const signOut = useSignOut();
   const [signOutFailed, setSignOutFailed] = useState(false);
@@ -226,9 +226,9 @@ export function SettingsPage({ initial, initialValues, initialSection, account, 
   }, [uploadImage, readOnly, live, prepareImage, dispatch]);
 
   const context = useMemo<StepContext>(() => ({
-    live, readOnly, blocked: live && loadFailed, imageHosts: account?.imageHosts, longKeys,
+    live, readOnly, blocked: live && loadFailed, imageHosts: account?.imageHosts, longKeys, lockedKeys,
     onEdit, onSave: requestSave, onConfirmClear, onKeep, onCancel: revert, imageControl,
-  }), [live, readOnly, loadFailed, account?.imageHosts, longKeys, onEdit, requestSave, onConfirmClear, onKeep, revert, imageControl]);
+  }), [live, readOnly, loadFailed, account?.imageHosts, longKeys, lockedKeys, onEdit, requestSave, onConfirmClear, onKeep, revert, imageControl]);
 
   // A link such as ?section=colors lands on its step.
   useEffect(() => {
@@ -305,6 +305,7 @@ export function SettingsPage({ initial, initialValues, initialSection, account, 
                   values={values}
                   draft={draft}
                   longKeys={longKeys}
+                  lockedKeys={lockedKeys}
                   mode={folder?.id === step.id ? folder.mode : "locked"}
                   error={errorFor(keys[step.id])}
                   problem={!state.saving && state.saveStep === step.id ? state.saveProblem : null}

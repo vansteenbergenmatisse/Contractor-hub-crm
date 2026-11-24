@@ -184,6 +184,8 @@ async function pointValueAt(input: Input, url: string, started: number, deps: Me
     case "rejected":
     case "busy":
       return stopped(result.status);
+    case "locked":
+      return stopped("locked");
     case "invalid":
     case "denied":
       return stopped("rejected");
@@ -252,8 +254,22 @@ async function failAfterUpload(input: Input, run: Run, target: Target, started: 
   return removed ? run : { ...run, answer: { ...run.answer, leftover: true } };
 }
 
+// Forge Forward locked the key: checked under the lease, before anything is uploaded. The save below
+// checks again, so a lock that lands during the upload still stops the write. A failed read stops.
+async function lockStop(input: Input, deps: MediaDeps): Promise<Run | null> {
+  if (!deps.locks) return null;
+  try {
+    return (await deps.locks(input.tenantId)).has(input.key) ? stopped("locked") : null;
+  } catch {
+    console.error("Settings image failed: step=locks");
+    return stopped("retry");
+  }
+}
+
 async function run(input: Input, deps: MediaDeps): Promise<Run> {
   const started = deps.now();
+  const lockedNow = await lockStop(input, deps);
+  if (lockedNow) return lockedNow;
   const read = await deps.read(input.tenantId).catch(() => ({ ok: false as const, reason: "retry" as const }));
   if (!read.ok) return stopped(read.reason === "permission" ? "connection" : "retry");
   if ((read.duplicates ?? []).some((row) => row.key === input.key)) return stopped("duplicate");
