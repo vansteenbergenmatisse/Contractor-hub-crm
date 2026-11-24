@@ -27,7 +27,7 @@
 .ga-handoff summary{min-height:32px;color:var(--main-hover-color);font-weight:600;cursor:pointer}
 .ga-handoff ol{margin-top:4px;padding-left:18px;list-style:decimal}
 .sv-crl{display:flex;flex-direction:column}
-.ga-card .ga-rv{display:flex;margin-top:18px}
+.ga-card .ga-rv{display:flex;margin-top:18px;scroll-margin-top:16px}
 .sv-app .fd-cvf{display:flex;flex-direction:column;gap:6px;min-width:0}
 .sv-app .fd-cvf.is-wide{grid-column:1 / -1}
 .sv-app .fd-ll{font-size:0.9375rem;font-weight:600;line-height:1.25rem}

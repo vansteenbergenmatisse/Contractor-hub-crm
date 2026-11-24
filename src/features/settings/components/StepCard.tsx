@@ -67,7 +67,7 @@ function StepCardView({ step, number, total, keys, shownKeys, values, draft, err
       ) : <p className="ga-none">Nothing is empty here.</p>}
       {cleared.length > 0 ? (
         <div className="ga-rv is-on" role="group" aria-labelledby={`s-r-${step.id}`}>
-          <p className="ga-rt" id={`s-r-${step.id}`}>Check before you clear</p>
+          <p className="ga-rt" id={`s-r-${step.id}`} tabIndex={-1}>Check before you clear</p>
           <p className="ga-rl">These will be empty in your account:</p>
           <ul className="ga-dl">{cleared.map((key) => <li key={key}>{labelOfKey(key)}: {values[key]}</li>)}</ul>
           <div className="ga-ga">

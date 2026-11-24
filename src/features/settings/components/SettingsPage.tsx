@@ -63,6 +63,9 @@ export function SettingsPage({ initial, initialValues, initialSection, account, 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [jumpTo, setJumpTo] = useState<{ id: string } | null>(null);
   const [reviewStep, setReviewStep] = useState<string | null>(null);
+  // A new object on every press, so pressing Save again shows the waiting review again.
+  const [reviewShown, setReviewShown] = useState<{ id: string } | null>(null);
+  const reviewOpener = useRef<HTMLButtonElement | null>(null);
   const [folder, setFolder] = useState<{ id: ProtectedId; mode: FolderMode } | null>(null);
   const { values, draft, err } = state;
   const tab = tabOf(state.sec);
@@ -82,6 +85,7 @@ export function SettingsPage({ initial, initialValues, initialSection, account, 
   const runSave = useCallback(async (id: string, allowClear: boolean) => {
     const { keys: all, live: isLive, remote: saver } = latest.current;
     const stepKeys = all[id as keyof typeof all] ?? [];
+    reviewOpener.current = null;
     setReviewStep(null);
     if (isLive) return saver.save({ step: id, keys: stepKeys, allowClear });
     dispatch({ type: "save", keys: stepKeys, step: id });
@@ -94,8 +98,9 @@ export function SettingsPage({ initial, initialValues, initialSection, account, 
     const cleared = clearedKeys(stepKeys, now.values, now.draft);
     // A required value left empty goes to the normal check, which names it.
     if (isLive && cleared.length > 0 && cleared.every(isClearableKey)) {
+      if (document.activeElement instanceof HTMLButtonElement) reviewOpener.current = document.activeElement;
       setReviewStep(id);
-      scrollToCard(id);
+      setReviewShown({ id });
       return;
     }
     void runSave(id, false);
@@ -104,12 +109,20 @@ export function SettingsPage({ initial, initialValues, initialSection, account, 
   const revert = useCallback((id: string) => {
     const { keys: all } = latest.current;
     dispatch({ type: "revert", keys: all[id as keyof typeof all] ?? [] });
+    reviewOpener.current = null;
     setReviewStep((step) => (step === id ? null : step));
   }, [dispatch]);
 
   const onEdit = useCallback((key: string, value: string) => dispatch({ type: "edit", key, value }), [dispatch]);
   const onConfirmClear = useCallback((id: string) => { void runSave(id, true); }, [runSave]);
-  const onKeep = useCallback(() => setReviewStep(null), []);
+  // Focus moves before the panel closes, so it is never lost with the Go back button.
+  const onKeep = useCallback((id: string) => {
+    const opener = reviewOpener.current;
+    reviewOpener.current = null;
+    const target = opener?.isConnected ? opener : document.querySelector<HTMLElement>(`#s-card-${id} .ga-nx`);
+    target?.focus();
+    setReviewStep(null);
+  }, []);
   const onFolderMode = useCallback((id: ProtectedId, mode: FolderMode) => setFolder(mode === "locked" ? null : { id, mode }), []);
   const onFolderLock = useCallback((id: ProtectedId) => { revert(id); setFolder(null); }, [revert]);
   const onFolderSave = useCallback((id: ProtectedId) => {
@@ -125,6 +138,14 @@ export function SettingsPage({ initial, initialValues, initialSection, account, 
     heading?.setAttribute("tabindex", "-1");
     heading?.focus({ preventScroll: true });
   }, [jumpTo]);
+
+  // Runs once the panel is on the page. It sits below the fields, so a tall card would hide it.
+  useEffect(() => {
+    if (!reviewShown) return;
+    const heading = document.getElementById(`s-r-${reviewShown.id}`);
+    heading?.focus({ preventScroll: true });
+    heading?.closest(".ga-rv")?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }, [reviewShown]);
 
   const imageControl = useCallback((f: Field, saved: string, dirty: boolean) => {
     const kind = imageKindOf(f.key);
