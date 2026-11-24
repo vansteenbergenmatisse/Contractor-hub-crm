@@ -63,9 +63,3 @@ export async function listTenantAccounts(tenantId: string): Promise<Array<Accoun
   }
   return out;
 }
-
-// A new link replaces the older ones: only the newest set-password link of this person works.
-// Better Auth stores these as `reset-password:<token>` with the user id as the value.
-export async function deleteResetTokens(userId: string): Promise<void> {
-  await getPrisma().verification.deleteMany({ where: { identifier: { startsWith: "reset-password:" }, value: userId } });
-}

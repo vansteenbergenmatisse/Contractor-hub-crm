@@ -30,6 +30,7 @@ export { accountState, createSignInLinkService } from "./api/sign-in-link";
 export type { AccountState, MailOutcome, SignInLinkDeps, SignInLinkResult, SignInLinkService, TenantAccount } from "./api/sign-in-link";
 export { handleListSignInAccounts, handleSendSignInEmail } from "./api/sign-in-link-routes";
 export { getSignInLinkService } from "./api/instance";
+export { createResetTokenStore } from "./api/reset-token-store";
 export { setPasswordEmail, SET_PASSWORD_LINK_HOURS } from "./api/set-password-email";
 export type { CreatedInvite } from "./api/invites";
 export { SignInForm } from "./components/SignInForm";

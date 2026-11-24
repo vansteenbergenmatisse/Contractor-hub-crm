@@ -25,7 +25,9 @@ export type TenantAccount = {
 
 // "held": the email guard kept the mail back (log mode, or allowlist and the address is not listed).
 // "capped": the client's daily budget of these mails is used up. "failed": the provider refused it.
-export type MailOutcome = "sent" | "held" | "capped" | "failed";
+// "unknown": the daily budget could not be read, so this step did not send the mail; the admin is told
+// the email status is unknown rather than that the limit was reached.
+export type MailOutcome = "sent" | "held" | "capped" | "failed" | "unknown";
 
 export type SignInLinkResult = { userId: string; email: string; link: string; expiresAt: Date; mail: MailOutcome };
 
@@ -43,8 +45,9 @@ export type SignInLinkDeps = {
   emailSender: EmailSender;
   checkEligibility: (tenant: InviteTenant, email: string) => Promise<InviteEligibility>;
   newToken: () => string;
-  // Runs `send` only when the client's daily mail budget allows it (the onboarding mail cap). Left out,
-  // the mail is not counted.
+  // Runs `send` only when the client's daily mail budget allows it (the onboarding mail cap), resolves
+  // without sending over the cap, and rejects when the budget cannot be read. Left out, the mail is not
+  // counted.
   mailBudget?: (tenantId: string, send: () => Promise<void>) => Promise<void>;
   store: {
     findTenant(tenantId: string): Promise<InviteTenant | null>;
@@ -54,6 +57,9 @@ export type SignInLinkDeps = {
     listTenantAccounts(tenantId: string): Promise<Array<AccountRow & { snapshot: AccountSnapshot }>>;
     // Removes the person's older set-password links, then stores the new one (Better Auth's format).
     replaceResetToken(userId: string, token: string, expiresAt: Date): Promise<void>;
+    // Removes every set-password link of the person: used when the account turns out to be in use
+    // right after the link was stored. Left out, such a link is not withdrawn (the issue still fails).
+    deleteResetTokens?(userId: string): Promise<void>;
   };
 };
 
@@ -73,14 +79,26 @@ const isClientRole = (role: Role): role is "owner" | "office" => role === "owner
 
 export function createSignInLinkService(deps: SignInLinkDeps) {
   // The account is in this tenant; HighLevel was already asked (the caller did it).
-  async function issue(tenant: InviteTenant, user: AccountRow): Promise<SignInLinkResult> {
-    const state = accountState(await deps.store.readSnapshot(user.id), tenant.id);
+  async function refuseUnlessUnused(tenant: InviteTenant, userId: string): Promise<void> {
+    const state = accountState(await deps.store.readSnapshot(userId), tenant.id);
     if (state === "login_off") throw new InviteError("account_disabled");
     if (state !== "never_signed_in") throw new InviteError("already_active");
+  }
+
+  async function issue(tenant: InviteTenant, user: AccountRow): Promise<SignInLinkResult> {
+    await refuseUnlessUnused(tenant, user.id);
 
     const token = deps.newToken();
     const expiresAt = new Date(deps.now().getTime() + SET_PASSWORD_LINK_HOURS * 3600_000);
     await deps.store.replaceResetToken(user.id, token, expiresAt);
+    // Checked again now that the link exists: a sign-in, password change or block that landed between
+    // the first check and the write withdraws the link before anyone sees it, and nothing is mailed.
+    try {
+      await refuseUnlessUnused(tenant, user.id);
+    } catch (error) {
+      await deps.store.deleteResetTokens?.(user.id);
+      throw error;
+    }
     const link = `${deps.appUrl.replace(/\/+$/, "")}/reset-password?token=${encodeURIComponent(token)}`;
 
     const message = setPasswordEmail({ to: user.email, tenantName: tenant.name, link, appUrl: deps.appUrl, expiresAt });
@@ -93,7 +111,10 @@ export function createSignInLinkService(deps: SignInLinkDeps) {
       }
     };
     if (deps.mailBudget) {
-      await deps.mailBudget(tenant.id, send).catch(() => {});
+      await deps.mailBudget(tenant.id, send).catch(() => {
+        // The budget could not be read (the send did not run): never claim the limit was reached.
+        if (mail === "capped") mail = "unknown";
+      });
     } else {
       await send();
     }
