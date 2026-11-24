@@ -129,11 +129,11 @@ describe("POST /api/settings/media: what it accepts", () => {
     expect(called).toBe(false);
   });
 
-  it("requires an SVG for the logo and favicon", async () => {
+  // User decision 2026-11-24: the logo and favicon take a checked photo as well as an SVG.
+  it("takes a photo as well as an SVG for the logo and favicon", async () => {
     for (const key of ["business_logo", "business_favicon_url"]) {
-      const { response, called } = await replaceCalled(form({ key, expected: "", file: webp() }));
-      expect(await response.json()).toEqual({ error: "invalid", reason: "svg_required" });
-      expect(called).toBe(false);
+      const { called } = await replaceCalled(form({ key, expected: "", file: webp() }));
+      expect(called).toBe(true);
     }
   });
 

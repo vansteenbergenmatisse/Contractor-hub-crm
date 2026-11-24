@@ -60,11 +60,12 @@ describe("Change image: only when it can work", () => {
     expect(screen.queryByRole("group", { name: "Change Business name" })).toBeNull();
   });
 
-  it("offers SVG only on the logo", () => {
+  // User decision 2026-11-24: the logo also takes a photo (compressed to WebP); an SVG stays SVG.
+  it("offers an SVG or a photo on the logo", () => {
     show({ uploadImage: vi.fn(), prepareImage: prepareOk() });
     const input = within(logoGroup()).getByLabelText(/choose/i, { selector: "input" }) as HTMLInputElement;
-    expect(input.accept).toBe(".svg,image/svg+xml");
-    expect(within(logoGroup()).getByText(/SVG file, up to 512 KB/)).toBeTruthy();
+    expect(input.accept).toBe(".svg,image/svg+xml,image/*");
+    expect(within(logoGroup()).getByText(/SVG file up to 512 KB, or a photo/)).toBeTruthy();
   });
 
   it("asks to finish a typed link first instead of showing a control that would clash", async () => {

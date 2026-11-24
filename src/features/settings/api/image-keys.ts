@@ -27,7 +27,7 @@ export function imageKindOf(key: string): ImageKind | null {
 // the user (2026-11-24), but off until the two tests that pin SVG-only for them are changed with the
 // user's approval: "offers SVG only on the logo" (image-change.test.tsx) and "requires an SVG for the
 // logo and favicon" (media-route.test.ts). The page and the server both read this one value.
-export const LOGO_ACCEPTS_PHOTO = false;
+export const LOGO_ACCEPTS_PHOTO = true;
 
 // The HighLevel media library folder a new image for `key` goes into when the key holds no library
 // file yet: the HighLevel name of the layout folder the key shows in. Null: that folder has no
