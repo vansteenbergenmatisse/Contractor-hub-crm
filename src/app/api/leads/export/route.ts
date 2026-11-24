@@ -1,7 +1,7 @@
 import { getGuards, hitRateLimit } from "@/features/auth";
 import { loadBusiness } from "@/features/brand";
 import { createTenantContactCreateAdapter, createTenantLocationZoneReader } from "@/features/highlevel";
-import { handleLeadsExport } from "@/features/leads";
+import { exportFailure, handleLeadsExport } from "@/features/leads";
 import { parseEnv } from "@/shared/config";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +23,6 @@ export async function POST(request: Request): Promise<Response> {
       readZone: async (tenantId) => (await createTenantLocationZoneReader(hitRateLimit)(tenantId)) ?? null,
     });
   } catch {
-    return new Response(JSON.stringify({ error: "failed" }), { status: 500, headers: { "cache-control": "no-store", "content-type": "application/json" } });
+    return exportFailure(request);
   }
 }

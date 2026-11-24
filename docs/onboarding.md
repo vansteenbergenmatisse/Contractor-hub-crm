@@ -42,6 +42,11 @@ Built 2026-11-22. Source of the facts: HighLevel's OpenAPI files and webhook doc
 ## Migration
 `prisma/migrations/20261122000000_onboarding_tables` creates `GhlUserLink` and `MissingAppAlert` (new tables only). `prisma/migrations/20261122120000_tenant_sync_state` creates `TenantSyncState` (new table only; the on-visit sync stays off until it is applied). `prisma/migrations/20261122180000_unused_account_marker` creates `UnusedAccountMarker` (new table only, NOT applied yet; until it is, no account can be proven unused, so nothing moves and sign-in works as before). On develop: `set -a; . ./.env.local; set +a; pnpm exec prisma migrate deploy`. Staging and production: CI runs it on merge.
 
+## Leads export
+- **Foreign rows:** if any row in a HighLevel answer names another location, the export stops and no file is made. Phone and email come only from the row that passed the location check.
+- **Delimiters:** the file is comma-separated (RFC 4180). A cell holding `;` or a tab is quoted, and a formula character after `;`, a tab or a line break gets a `'` in front, so opening the file with another delimiter does not create a formula cell. Not checked in real Excel or Sheets.
+- **Failures:** the export is a native form post. A failure redirects to `/leads?export=<reason>`, and refused access gets a small page with a link back. Open gap: that navigation reloads the page, so hand-added leads and drafts are still lost, and the button has no pending state or double-submit guard. An in-page submit needs `fetch`, which `tests/features/leads/leads-page.test.tsx` forbids in the Leads feature, so it waits for the user's decision.
+
 ## Runbook notes
 - **Rotate `CRON_SECRET`:** set the new value in Vercel (the cron picks it up on the next deploy); until then the sync answers 401.
 - **Sync stuck or failing:** read the `Sync:` log lines (counts and step names only). `failures` counts steps that threw; `conflicts` and `capped` and `suspicious` show skipped users.

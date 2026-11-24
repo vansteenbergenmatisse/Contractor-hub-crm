@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto";
 import { parseEnv } from "@/shared/config";
 import { readLocationState } from "../db/token-store";
-import { parseContactSearch } from "./contacts";
+import { parseContactExportPage } from "./contacts";
 import { getTokenService } from "./routes";
 
 // Create one contact by hand, and read contacts for an export. Contract from HighLevel's OpenAPI file
@@ -82,7 +82,9 @@ function readMatch(json: unknown): Match {
   return typeof contact === "object" && typeof (contact as { id?: unknown }).id === "string" ? "found" : "unsure";
 }
 
-const text = (value: unknown): string | null => (typeof value === "string" && value.trim() ? value.trim() : null);
+// A row naming another location means the answer cannot be trusted, so the whole export stops.
+const namesAnotherLocation = (row: unknown, locationId: string) =>
+  typeof row === "object" && row !== null && (row as { locationId?: unknown }).locationId !== undefined && (row as { locationId?: unknown }).locationId !== locationId;
 
 export function createContactCreateAdapter(deps: ContactCreateDeps) {
   async function lookup(tenantId: string, query: { locationId: string; number?: string; email?: string }): Promise<Match> {
@@ -150,25 +152,29 @@ export function createContactCreateAdapter(deps: ContactCreateDeps) {
           return { ok: false };
         }
         const json = await readJson(response);
-        const parsed = parseContactSearch(json, locationId, EXPORT_PAGE_SIZE, ownEmail);
+        const parsed = parseContactExportPage(json, locationId, EXPORT_PAGE_SIZE, ownEmail);
         const received = (json as { contacts: unknown[] }).contacts;
-        const raw = new Map<string, Record<string, unknown>>();
+        if (received.some((row) => namesAnotherLocation(row, locationId))) {
+          console.error("Lead export stopped: a row named another location.");
+          return { ok: false };
+        }
+        const pageIds = new Set<string>();
         for (const row of received) {
-          if (typeof row === "object" && row !== null && typeof (row as { id?: unknown }).id === "string") raw.set((row as { id: string }).id.trim(), row as Record<string, unknown>);
+          if (typeof row === "object" && row !== null && typeof (row as { id?: unknown }).id === "string") pageIds.add((row as { id: string }).id.trim());
         }
         dropped += parsed.dropped;
         let fresh = 0;
-        for (const id of raw.keys()) {
+        for (const id of pageIds) {
           if (receivedIds.has(id)) continue;
           receivedIds.add(id);
           fresh += 1;
         }
-        withoutId += received.length - raw.size;
+        withoutId += received.length - pageIds.size;
         for (const c of parsed.contacts) {
           if (seen.has(c.id)) continue;
           const place = [c.city, [c.state, c.postalCode].filter(Boolean).join(" ")].filter(Boolean).join(", ");
           seen.set(c.id, {
-            name: c.name, source: c.source, dateAdded: c.dateAdded, phone: text(raw.get(c.id)?.phone), email: text(raw.get(c.id)?.email),
+            name: c.name, source: c.source, dateAdded: c.dateAdded, phone: c.phone, email: c.email,
             address: [c.address, place].filter(Boolean).join(", ") || null,
           });
         }

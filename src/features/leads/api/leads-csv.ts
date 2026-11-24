@@ -3,13 +3,18 @@ export type ExportRow = { name: string; source: string; date: string; phone: str
 
 const FORMULA_START = /^[\s ]*[=+\-@\t\r\n]/;
 
+// A reader using ; or tab as its delimiter, or splitting lines first, ignores this file's quotes, so
+// text after one of those characters can become its own cell. The guard goes right before the trigger.
+const FORMULA_AFTER_DELIMITER = /([;\t\r\n]\s*)(?=[=+\-@])/g;
+
 export function neutralize(value: string): string {
-  return FORMULA_START.test(value) ? `'${value}` : value;
+  const inner = value.replace(FORMULA_AFTER_DELIMITER, "$1'");
+  return FORMULA_START.test(value) ? `'${inner}` : inner;
 }
 
 export function csvCell(value: string): string {
   const safe = neutralize(value);
-  return /[",\r\n]/.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe;
+  return /[",;\t\r\n]/.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe;
 }
 
 // US numbers read as (614) 555-0100, which no spreadsheet treats as a formula or a number. Any other

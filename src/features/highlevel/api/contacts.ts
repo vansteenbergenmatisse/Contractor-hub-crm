@@ -52,17 +52,19 @@ function isOwnContact(raw: unknown, own: string): boolean {
   return [row.email, row.contactName, row.name].some((value) => text(value)?.toLowerCase() === own);
 }
 
+type AcceptedRow = { contact: HighLevelContact; raw: Record<string, unknown> };
+
 // Unknown fields are ignored; a malformed row is dropped and counted. Throws when the answer has no
 // contacts list. `total` (or `count`) and `hasMore` tell whether anything lies beyond this page.
 // Only the first `pageLimit` rows are read; an answer with more counts as cut off.
-export function parseContactSearch(json: unknown, locationId: string, pageLimit: number, ownEmail?: string | null): ContactsPage {
+function readAcceptedRows(json: unknown, locationId: string, pageLimit: number, ownEmail?: string | null): { accepted: AcceptedRow[]; dropped: number; complete: boolean } {
   const own = text(ownEmail)?.toLowerCase() ?? null;
   if (typeof json !== "object" || json === null || Array.isArray(json)) {
     throw new Error("HighLevel contact search returned an unexpected response.");
   }
   const body = json as Record<string, unknown>;
   if (!Array.isArray(body.contacts)) throw new Error("HighLevel contact search returned an unexpected response.");
-  const contacts: HighLevelContact[] = [];
+  const accepted: AcceptedRow[] = [];
   const seen = new Set<string>();
   let dropped = 0;
   for (const raw of body.contacts.slice(0, pageLimit)) {
@@ -71,13 +73,24 @@ export function parseContactSearch(json: unknown, locationId: string, pageLimit:
     if (!row || seen.has(row.id)) dropped += 1;
     else {
       seen.add(row.id);
-      contacts.push(row);
+      accepted.push({ contact: row, raw: raw as Record<string, unknown> });
     }
   }
   const received = body.contacts.length;
   const total = typeof body.total === "number" ? body.total : typeof body.count === "number" ? body.count : null;
   const more = received > pageLimit || body.hasMore === true || (total !== null ? total > received : body.hasMore !== false && received >= pageLimit);
-  return { contacts, dropped, complete: !more };
+  return { accepted, dropped, complete: !more };
+}
+
+export function parseContactSearch(json: unknown, locationId: string, pageLimit: number, ownEmail?: string | null): ContactsPage {
+  const { accepted, dropped, complete } = readAcceptedRows(json, locationId, pageLimit, ownEmail);
+  return { contacts: accepted.map((row) => row.contact), dropped, complete };
+}
+
+// For the owner's export only: phone and email come from the same row that passed the location check.
+export function parseContactExportPage(json: unknown, locationId: string, pageLimit: number, ownEmail?: string | null) {
+  const { accepted, dropped } = readAcceptedRows(json, locationId, pageLimit, ownEmail);
+  return { contacts: accepted.map(({ contact, raw }) => ({ ...contact, phone: text(raw.phone), email: text(raw.email) })), dropped };
 }
 
 type Deps = {
