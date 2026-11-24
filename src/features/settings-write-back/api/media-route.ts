@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { imageKindOf, isSettingsKeyAllowed, LOGO_ACCEPTS_PHOTO, MAX_VALUE_LENGTH, UNLOCK_ID, writeGuardOf, type ImageAnswer } from "@/features/settings";
+import { isMigrationPendingError } from "@/shared/lib/migration-pending";
 import type { CheckedImage } from "./media-replace";
 import { checkJpeg, checkPng, isJpeg, isPng } from "./raster-check";
 import { inspectSvg, type SvgProblem } from "./svg-check";
@@ -149,7 +150,12 @@ export async function handleMediaReplace(request: Request, deps: MediaRouteDeps)
     let locked: boolean;
     try {
       locked = await deps.isLocked(tenantId, fields.key);
-    } catch {
+    } catch (error) {
+      // The lock table is not in this database yet: nothing is uploaded, and trying again cannot help.
+      if (isMigrationPendingError(error)) {
+        console.error(`Settings save failed: step=locks reason=migration_pending migration=${error.migration}`);
+        return reply(200, { status: "pending_update" });
+      }
       console.error("Settings image failed: step=locks");
       return reply(200, { status: "retry" });
     }

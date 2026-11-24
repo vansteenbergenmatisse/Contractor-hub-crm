@@ -130,6 +130,7 @@ export function ClientsTable({ clients, templateCopy, editValues = false }: { cl
         <span>In production, select all sub-accounts so new clients connect automatically.</span>
       </p>
       <CheckSubAccountsButton />
+      {editValues ? <p><a href="/admin/migrations">Database migrations</a></p> : null}
       {message && !rows.some((row) => row.tenantId === message.tenantId) ? <p role="status">{message.text}</p> : null}
       {rows.length === 0 ? <p>No clients yet. A client appears here after the app is installed on their sub-account.</p> : null}
       {rows.length > 0 ? (

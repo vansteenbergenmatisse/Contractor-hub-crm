@@ -2,6 +2,8 @@ import type { SaveResult, SaveStatus } from "../types";
 import { labelOfKey } from "./fields";
 
 export const SAVE_FAILED = "Could not save. Nothing new was confirmed. Try again.";
+// The database is missing an update this save needs. Not a "try again now": the page never retries it.
+export const SAVE_PENDING_UPDATE = "Database update pending. Your change was not saved. Forge Forward is finishing an update; try again later.";
 export const SAVE_LIMITED = "Too many saves. Try again later.";
 
 const SENTENCE: Partial<Record<SaveStatus, (labels: string) => string>> = {
@@ -14,6 +16,7 @@ const SENTENCE: Partial<Record<SaveStatus, (labels: string) => string>> = {
   permission: (labels) => `${labels} did not save. Your account connection needs attention.`,
   retry: (labels) => `${labels} did not save. Try again.`,
   unknown: (labels) => `We could not confirm ${labels}. Reload this page to see what your account holds.`,
+  pending_update: () => SAVE_PENDING_UPDATE,
   busy: (labels) => `${labels} did not save because another save is running. Try again in a moment.`,
 };
 

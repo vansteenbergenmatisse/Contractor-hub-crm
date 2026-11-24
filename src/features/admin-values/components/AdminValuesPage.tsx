@@ -70,6 +70,10 @@ function ValueRow({ row, tenantId, writable }: { row: AdminValueRow; tenantId: s
     patch({ pending: true, message: undefined });
     try {
       const response = await post(tenantId, { action, key: row.key });
+      if (response.status === 409) {
+        const body = (await response.json().catch(() => ({}))) as { error?: string; migration?: string };
+        if (body.error === "pending_update") return patch({ message: `Not ${action}ed. Database update pending: ${body.migration ?? "a migration"} is not applied on this environment.` });
+      }
       if (!response.ok) return patch({ message: `Could not ${action}. Try again.` });
       patch({ locked: action === "lock", message: action === "lock" ? "Locked. The owner sees it read-only." : "Unlocked. The owner can change it." });
     } catch {
@@ -129,7 +133,9 @@ export function AdminValuesPage({ view }: { view: AdminValuesView }) {
       {view.writable ? null : (
         <p role="note"><strong>Saving to this client is off</strong> (write-back is off or this client is excluded). Values are read-only here. Locks still work.</p>
       )}
-      {view.loadError ? <p role="alert">{LOAD_ERROR[view.loadError]}</p> : null}
+      {view.loadError === "pending_update" ? (
+        <p role="alert">Database update pending: {view.pendingMigration} is not applied on this environment. <a href="/admin/migrations">See migrations</a></p>
+      ) : view.loadError ? <p role="alert">{LOAD_ERROR[view.loadError]}</p> : null}
       {view.folders.map((folder) => (
         <section key={folder.id} aria-labelledby={`af-${folder.id}`}>
           <h2 id={`af-${folder.id}`}>{folder.title}</h2>

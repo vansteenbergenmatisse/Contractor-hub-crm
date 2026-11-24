@@ -9,6 +9,9 @@ export { handleSaveValues, saveFailure } from "./api/save-route";
 export { freshValuesReader, loadLockedKeys, saveTenantValues } from "./api/save-instance";
 // Custom value locks (Wave E): Forge Forward locks a key; the owner's save refuses it.
 export { lockedKeysOf, lockValue, unlockValue } from "./db/value-locks";
+// A database without the lock table (migration not applied there): callers answer "update pending".
+export { CUSTOM_VALUE_LOCK_MIGRATION } from "./db/value-locks";
+export { MigrationPendingError, isMigrationPendingError } from "@/shared/lib/migration-pending";
 export { isMediaReplaceEnabled } from "./api/media-flag";
 export { replaceImage } from "./api/media-replace";
 export type { CheckedImage, MediaDeps } from "./api/media-replace";

@@ -1,4 +1,5 @@
 import { MAX_VALUE_LENGTH, classifyKey, type SaveResult, type ValueChange } from "@/features/settings";
+import { isMigrationPendingError } from "@/shared/lib/migration-pending";
 import { ADMIN_KEY } from "./view";
 
 // POST /api/admin/clients/[tenantId]/values. Admin only, same Origin, JSON only, refused during View
@@ -110,8 +111,16 @@ export async function handleAdminValues(request: Request, tenantId: string, deps
     audit("admin_value_saved", { by: admin, tenantId, key: change.key, status: answer.results[0]?.status ?? "none" });
     return reply(200, answer);
   }
-  if (body.action === "lock") await deps.lock(tenantId, body.key, admin);
-  else await deps.unlock(tenantId, body.key);
+  try {
+    if (body.action === "lock") await deps.lock(tenantId, body.key, admin);
+    else await deps.unlock(tenantId, body.key);
+  } catch (error) {
+    // The lock table is not in this database yet: nothing changed, and trying again cannot help.
+    // Any other error still goes to the caller's 500.
+    if (!isMigrationPendingError(error)) throw error;
+    console.error(`Admin value ${body.action} failed: reason=migration_pending migration=${error.migration}`);
+    return reply(409, { error: "pending_update", migration: error.migration });
+  }
   audit(`admin_value_${body.action}`, { by: admin, tenantId, key: body.key });
   return reply(200, { key: body.key, locked: body.action === "lock" });
 }
