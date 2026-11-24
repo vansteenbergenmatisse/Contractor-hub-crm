@@ -148,6 +148,8 @@ The old "Install your app" guide (a page on `sites.leadconnectorhq.com`) was the
 
 **Fallback, another device:** in the CRM menu, **Open on my phone or laptop** makes a single-use, 5-minute link to copy (owner and office users). Opening it on the other device and tapping **Continue** signs that device in. There is no QR code yet (no QR library in the project; the sheet says so).
 
+Before **Continue**, `/device-sign-in` says who and which business the link signs in ("This link signs in j•••@gmail.com at <business>.", masked email, business name from the client's tenant record). If someone else is already signed in on that device it warns "You are signed in as m•••@outlook.com on this device. Continue signs you in as j•••@gmail.com instead." with **Continue as j•••@gmail.com** and **Stay signed in as m•••@outlook.com**. The check (`POST /api/auth/device-sign-in-preview`) does not use the link up; only Continue does. An expired or used link shows the expired message and no Continue.
+
 **Only owners and office users** of a connected client get a handoff or pairing link. Forge Forward admins sign in with email and password.
 
 ### Who gets in, and what they see (2026-11-24)

@@ -3,6 +3,8 @@ import { APIError, createAuthEndpoint, getSessionFromCtx } from "better-auth/api
 import { setSessionCookie } from "better-auth/cookies";
 import type { BetterAuthPlugin } from "better-auth";
 import { audit } from "./invite-routes";
+import { maskEmail } from "./email-sender";
+import { maskEmailHint } from "./sign-in-hint";
 
 // Sign a phone or laptop in with the HighLevel login (user decision 2026-11-24, "one login").
 // Two kinds of single-use token, both bound to one CRM user and one tenant:
@@ -10,6 +12,8 @@ import { audit } from "./invite-routes";
 //   from the frame to the full-screen CRM.
 // - "pairing": made by a signed-in person ("Open on my phone or laptop"), lives 5 minutes, opened on the
 //   other device by QR code or link.
+// Before the tap, POST /api/auth/device-sign-in-preview names the masked person and the business a token
+// signs in, without spending it, so a link someone else sent cannot silently switch accounts.
 // Both are redeemed by POST /api/auth/device-sign-in from the /device-sign-in page, which starts a
 // normal first-party session (SameSite=Lax, Secure, HttpOnly, the long keep-me-signed-in lifetime).
 //
@@ -40,7 +44,20 @@ type Grant = { kind: DeviceTokenKind; userId: string; tenantId: string };
 type InternalAdapter = {
   createVerificationValue(data: { identifier: string; value: string; expiresAt: Date }): Promise<unknown>;
   consumeVerificationValue(identifier: string): Promise<{ value: string; expiresAt: Date } | null>;
+  findVerificationValue(identifier: string): Promise<{ value: string; expiresAt: Date } | null>;
 };
+
+// A stored row back to a grant: null when it is missing, expired or not what issueDeviceToken wrote.
+function grantFromRow(row: { value: string; expiresAt: Date } | null): Grant | null {
+  if (!row || new Date(row.expiresAt).getTime() <= Date.now()) return null;
+  try {
+    const grant = JSON.parse(row.value) as Partial<Grant>;
+    if ((grant.kind !== "handoff" && grant.kind !== "pairing") || typeof grant.userId !== "string" || typeof grant.tenantId !== "string") return null;
+    return { kind: grant.kind, userId: grant.userId, tenantId: grant.tenantId };
+  } catch {
+    return null;
+  }
+}
 
 // Stores a new token for this user and tenant and returns it (the caller hands it to the browser once).
 export async function issueDeviceToken(adapter: InternalAdapter, grant: Grant, now: Date = new Date()): Promise<{ token: string; expiresAt: Date }> {
@@ -53,16 +70,16 @@ export async function issueDeviceToken(adapter: InternalAdapter, grant: Grant, n
 // Single use: the row is gone after this call whatever the outcome. Expired, unknown and used tokens
 // all give null.
 export async function consumeDeviceToken(adapter: InternalAdapter, token: string): Promise<Grant | null> {
-  const row = await adapter.consumeVerificationValue(IDENTIFIER_PREFIX + hashDeviceToken(token)).catch(() => null);
-  if (!row || new Date(row.expiresAt).getTime() <= Date.now()) return null;
-  try {
-    const grant = JSON.parse(row.value) as Partial<Grant>;
-    if ((grant.kind !== "handoff" && grant.kind !== "pairing") || typeof grant.userId !== "string" || typeof grant.tenantId !== "string") return null;
-    return { kind: grant.kind, userId: grant.userId, tenantId: grant.tenantId };
-  } catch {
-    return null;
-  }
+  return grantFromRow(await adapter.consumeVerificationValue(IDENTIFIER_PREFIX + hashDeviceToken(token)).catch(() => null));
 }
+
+// Read only: the row stays, so only the redeem ever spends a token.
+export async function peekDeviceToken(adapter: InternalAdapter, token: string): Promise<Grant | null> {
+  return grantFromRow(await adapter.findVerificationValue(IDENTIFIER_PREFIX + hashDeviceToken(token)).catch(() => null));
+}
+
+// What the /device-sign-in page may show before the tap. No full email, no ids, no token.
+export type DeviceSignInPreview = { kind: DeviceTokenKind; person: string; business: string | null; sameAsCurrent: boolean | null };
 
 type ClientUser = { id: string; role?: unknown; tenantId?: unknown; disabledAt?: unknown };
 
@@ -78,6 +95,8 @@ export type DeviceSignInOptions = {
   appOrigin: string;
   // True when the tenant was uninstalled or its login is off. A throw counts as blocked.
   isTenantBlocked?: (tenantId: string) => Promise<boolean>;
+  // The business name the preview shows (null or a throw: no name is shown).
+  describeTenant?: (tenantId: string) => Promise<string | null>;
 };
 
 export function deviceSignInPlugin(options: DeviceSignInOptions): BetterAuthPlugin {
@@ -89,7 +108,7 @@ export function deviceSignInPlugin(options: DeviceSignInOptions): BetterAuthPlug
       return true;
     }
   };
-  const isRateLimited = (path: string) => path === "/device-sign-in" || path === "/device-pairing";
+  const isRateLimited = (path: string) => path === "/device-sign-in" || path === "/device-sign-in-preview" || path === "/device-pairing";
   return {
     id: "device-sign-in",
     rateLimit: [{ pathMatcher: isRateLimited, window: RATE_WINDOW_SECONDS, max: RATE_MAX_REQUESTS }],
@@ -120,6 +139,38 @@ export function deviceSignInPlugin(options: DeviceSignInOptions): BetterAuthPlug
         await setSessionCookie(ctx, { session, user: user as never }, false);
         audit("device_sign_in", { outcome: "ok", kind: grant.kind, userId: grant.userId, tenantId: grant.tenantId });
         return ctx.json({ ok: true });
+      }),
+      // Who and which business a token signs in, before the tap. Same checks as the redeem, nothing spent,
+      // no cookie set. The same fixed 403 for every failure.
+      deviceSignInPreview: createAuthEndpoint("/device-sign-in-preview", { method: "POST" }, async (ctx) => {
+        ctx.setHeader("cache-control", "no-store");
+        const refuse = (reason: string, kind?: DeviceTokenKind) => {
+          audit("device_sign_in_preview", { outcome: "denied", reason, ...(kind ? { kind } : {}) });
+          return new APIError("FORBIDDEN", { message: "Forbidden" });
+        };
+        if (ctx.request?.headers.get("origin") !== options.appOrigin) throw refuse("origin");
+        const token = (ctx.body as { token?: unknown } | null)?.token;
+        if (!isDeviceToken(token)) throw refuse("bad_request");
+        const grant = await peekDeviceToken(ctx.context.internalAdapter as unknown as InternalAdapter, token);
+        if (!grant) throw refuse("invalid_or_used");
+        const user = (await ctx.context.internalAdapter.findUserById(grant.userId).catch(() => null)) as (ClientUser & { email: string }) | null;
+        if (!user) throw refuse("no_user", grant.kind);
+        if (clientTenant(user) !== grant.tenantId) throw refuse("wrong_user", grant.kind);
+        if (await blocked(grant.tenantId)) throw refuse("tenant_blocked", grant.kind);
+        let business: string | null = null;
+        if (options.describeTenant) {
+          try {
+            const name = await options.describeTenant(grant.tenantId);
+            business = typeof name === "string" && name.trim().length > 0 ? name.trim() : null;
+          } catch {
+            business = null; // the page then names the person only
+          }
+        }
+        const current = await getSessionFromCtx(ctx).catch(() => null);
+        const sameAsCurrent = current ? current.user.id === grant.userId : null;
+        const body: DeviceSignInPreview = { kind: grant.kind, person: maskEmailHint(user.email) ?? maskEmail(user.email), business, sameAsCurrent };
+        audit("device_sign_in_preview", { outcome: "ok", kind: grant.kind, userId: grant.userId, tenantId: grant.tenantId, sameAsCurrent: String(sameAsCurrent) });
+        return ctx.json(body);
       }),
       // A signed-in client person asks for a pairing link for another device.
       devicePairing: createAuthEndpoint("/device-pairing", { method: "POST" }, async (ctx) => {

@@ -29,7 +29,8 @@ export type CreateAuthOptions = {
   isTenantBlocked?: (tenantId: string) => Promise<boolean>;
   // Removes the "never used" marker before a session is created. A failure never blocks sign-in.
   clearUnusedMarker?: (userId: string) => Promise<void>;
-  // The business name for the set-password mail. Left out, or failing, the mail names no business.
+  // The business name for the set-password mail and the /device-sign-in preview. Left out, or failing,
+  // they name no business.
   tenantName?: (tenantId: string) => Promise<string | null>;
   // Where people sign in (the mail names it). Defaults to baseURL.
   appUrl?: string;
@@ -93,7 +94,7 @@ export function createAuth(options: CreateAuthOptions) {
       ...(options.embedLogin
         ? [embedLoginPlugin({ handoff: options.deviceSignIn === true, ...options.embedLogin, appOrigin: new URL(options.baseURL).origin })]
         : []),
-      ...(options.deviceSignIn ? [deviceSignInPlugin({ appOrigin: new URL(options.baseURL).origin, isTenantBlocked: options.isTenantBlocked })] : []),
+      ...(options.deviceSignIn ? [deviceSignInPlugin({ appOrigin: new URL(options.baseURL).origin, isTenantBlocked: options.isTenantBlocked, describeTenant: options.tenantName })] : []),
     ],
     emailAndPassword: {
       enabled: true,
