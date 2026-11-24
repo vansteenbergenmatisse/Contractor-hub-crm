@@ -14,13 +14,13 @@ Source: the user's rules in `CLAUDE.md` and the decisions recorded in `PROGRESS.
 
 ## Code
 7. Change the smallest area that solves the ticket. No unrelated refactors.
-8. Do not install a dependency or edit the lockfile without the user's approval. Approved so far: Better Auth (user, 2026-11-21; plus a Prisma adapter if Better Auth needs one, exact versions logged in `PROGRESS.md`). Any other dependency: stop and ask.
+8. Do not install a dependency or edit the lockfile without the user's approval. Approved so far: Better Auth (user, 2026-11-21; plus a Prisma adapter if Better Auth needs one, exact versions logged in `PROGRESS.md`) and `stripe` (user, 2026-11-23). Any other dependency: stop and ask.
 9. One package manager: pnpm.
 10. Frontend design stays as in `docs/greenlane/greenlane-dashboard.html`. Only wire it up.
 11. The browser never holds a HighLevel token. Tenant and `locationId` come from the server session only.
 
 ## JCR Landscaping (real client, the only test sub-account)
-12. Code that touches JCR only reads. No texts, no emails to the JCR owner, no contact changes, no custom-value writes, no workflow publish. Settings write-back stays off. One exception (user, 2026-11-22): the first real write-back test may change ONE harmless custom value on JCR, through the Settings save as a signed-in JCR owner, after the user names the key and value. Second exception (user, 2026-11-23): on dev, Settings may replace JCR's logo with the user's file, after a backup of the current logo.
+12. Code that touches JCR only reads. No texts, no emails to the JCR owner, no contact changes, no custom-value writes, no workflow publish. Settings write-back stays off. One exception (user, 2026-11-22): the first real write-back test may change ONE harmless custom value on JCR, through the Settings save as a signed-in JCR owner, after the user names the key and value. Second exception (user, 2026-11-23): on dev, Settings may replace JCR's logo with the user's file, after a backup of the current logo. Third exception (user, 2026-11-23): on dev, a signed-in JCR owner may save several Settings fields at once and clear a field after a review step. All other JCR writes stay forbidden.
 13. Test invites go to the user's own email, never to the JCR owner.
 
 ## Stops
