@@ -39,8 +39,14 @@ describe("frameHeaders", () => {
     expect(header("/apiary", "X-Frame-Options")).toBeUndefined();
   });
 
-  it("allows only the two HighLevel hosts the build prompt names", () => {
-    expect(HIGHLEVEL_FRAME_ANCESTORS).toEqual(["https://app.gohighlevel.com", "https://app.leadconnectorhq.com"]);
+  // The two hosts the build prompt names, plus the agency's white-label host where clients log in
+  // (user, 2026-11-24). Nothing else, and every entry is https.
+  it("allows only the HighLevel hosts and the agency's white-label host", () => {
+    expect(HIGHLEVEL_FRAME_ANCESTORS).toEqual([
+      "https://app.gohighlevel.com",
+      "https://app.leadconnectorhq.com",
+      "https://app.forgeforward.io",
+    ]);
     expect(FRAME_DENIED_PATHS).toEqual(expect.arrayContaining(["sign-in", "admin", "api", "invite"]));
   });
 });

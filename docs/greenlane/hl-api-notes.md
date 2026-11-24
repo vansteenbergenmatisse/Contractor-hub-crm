@@ -175,7 +175,7 @@ Sources read in this session: help.gohighlevel.com article 48001185767 (custom m
 
 **Live findings on dev (2026-11-24, user's browser session, one try each):**
 - An agency custom menu link (Embedded Page) to `/embed` does NOT answer `REQUEST_USER_DATA`: "Signing you in…", then "HighLevel did not answer" after the 10-second limit. Tested as the agency admin on `app.gohighlevel.com`. So the CRM item must be the marketplace app's Custom Page (its answer is still not proven live).
-- Addresses seen: agency link `https://app.gohighlevel.com/v2/location/<locationId>/custom-menu-link/<uuid>`; app Custom Page `https://app.gohighlevel.com/v2/location/<locationId>/custom-page-link/<24-hex id>`. Whether the Custom Page id is the same in every sub-account and whether `app.forgeforward.io` uses the same path: not checked.
+- Addresses seen: agency link `https://app.gohighlevel.com/v2/location/<locationId>/custom-menu-link/<uuid>`; app Custom Page `https://app.gohighlevel.com/v2/location/<locationId>/custom-page-link/<24-hex id>`. The user confirmed (2026-11-24) that the Custom Page id is the same on JCR and the test sub-account, and that `app.forgeforward.io` uses the same path.
 - The developer portal's webhook event list has no INSTALL/UNINSTALL switch, yet `INSTALL` events arrived for each selected sub-account.
 - "Install to more sub-accounts" (app already installed for the agency) did not redirect to our callback; the browser stayed on `marketplace.leadconnectorhq.com/v2/oauth/chooselocation`.
 
