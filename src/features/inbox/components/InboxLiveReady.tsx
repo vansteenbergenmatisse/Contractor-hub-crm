@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useTransition } from "react";
+import { useMemo, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { usePushed, useSearchRows, type SearchRow } from "@/features/app-shell";
+import { useKeyboardInset } from "../hooks/use-keyboard-inset";
 import type { InboxResult } from "../types";
 import { InboxHeader } from "./InboxHeader";
 import { LiveConversationRow } from "./LiveConversationRow";
@@ -21,6 +22,8 @@ export function InboxLiveReady({ result }: { result: Extract<InboxResult, { stat
   const current = conversations.find((c) => c.id === selectedId) ?? null;
   const isOpen = !!current;
   usePushed(isOpen);
+  const root = useRef<HTMLDivElement>(null);
+  useKeyboardInset(root);
   const rows = useMemo<SearchRow[]>(
     () => conversations.map((c) => ({ id: `inbox-${c.id}`, page: "inbox", name: c.name, sub: `${c.channel ?? "Message"} · ${c.snippet}`, href: "/inbox" })),
     [conversations],
@@ -29,7 +32,7 @@ export function InboxLiveReady({ result }: { result: Extract<InboxResult, { stat
   const go = (href: string) => startTransition(() => router.push(href));
 
   return (
-    <div className={`fd-ix${isOpen ? " is-open" : ""}`}>
+    <div ref={root} className={`fd-ix${isOpen ? " is-open" : ""}`}>
       <InboxHeader />
       <div className="fd-ixg fd-in" style={{ "--i": 1 } as React.CSSProperties}>
         <section className="fd-il" aria-label="Conversations" aria-busy={pending}>
@@ -47,7 +50,7 @@ export function InboxLiveReady({ result }: { result: Extract<InboxResult, { stat
             <>
               <header className="fd-thh">
                 <button type="button" className="fd-link fd-tback" onClick={() => go("/inbox")}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="m9 6 6 6-6 6" /></svg>Communications
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="m9 6 6 6-6 6" /></svg><span className="fd-tbl">Communications</span>
                 </button>
                 <span className="fd-av" aria-hidden="true"><span className="fd-h">{initialsOf(current.name)}</span></span>
                 <div className="fd-thx">

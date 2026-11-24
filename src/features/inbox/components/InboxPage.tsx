@@ -7,6 +7,7 @@ import { toSearchRows } from "../api/search-rows";
 import { bookingLinkOf, fillText } from "../api/text";
 import { waitLabel, waitLevelClass } from "../api/wait";
 import { useInbox } from "../hooks/use-inbox";
+import { useKeyboardInset } from "../hooks/use-keyboard-inset";
 import { MOCK_CONVERSATIONS, MOCK_QUICK_REPLIES } from "../mock";
 import type { TextBusiness } from "../types";
 import { ConversationRow } from "./ConversationRow";
@@ -49,6 +50,8 @@ export function InboxPage({ row = null }: { row?: string | null } = {}) {
   const inputRef = useRef<HTMLInputElement>(null);
   const threadRef = useRef<HTMLDivElement>(null);
   const rowsRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  useKeyboardInset(rootRef);
   // Where focus goes after the next render: the reply box (opened from the keyboard) or the open row
   // (Escape on a phone took the owner back to the list).
   const focusNext = useRef<"" | "composer" | "row">("");
@@ -146,7 +149,7 @@ export function InboxPage({ row = null }: { row?: string | null } = {}) {
   }
 
   return (
-    <div className={`fd-ix${state.open ? " is-open" : ""}`}>
+    <div ref={rootRef} className={`fd-ix${state.open ? " is-open" : ""}`}>
       <section className="fd-phd fd-in" style={{ "--i": 0 } as React.CSSProperties}>
         <h1 className="fd-pt">Communications</h1>
         <p className="fd-pw"><span className="fd-wd">Every text, call, email, Facebook and Instagram message in one place. The ones that wait on you sit on top.</span><span className="fd-wm">Every message in one place. The ones that wait on you sit on top.</span></p>
@@ -182,7 +185,7 @@ export function InboxPage({ row = null }: { row?: string | null } = {}) {
         <section className="fd-th" aria-label="The open conversation">
           <header className="fd-thh">
             <button type="button" className="fd-link fd-tback" onClick={() => dispatch({ type: "toList" })}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="m9 6 6 6-6 6" /></svg>Communications
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d="m9 6 6 6-6 6" /></svg><span className="fd-tbl">Communications</span>
             </button>
             <span className="fd-av" aria-hidden="true"><span className="fd-h">{current.initials}</span></span>
             <div className="fd-thx">
