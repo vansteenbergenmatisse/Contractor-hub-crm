@@ -20,11 +20,15 @@ type Props = {
   onClose: () => void;
   origin?: LeadOrigin;
   onOrigin?: (origin: LeadOrigin) => void;
+  canSave?: boolean;
+  addressSearch?: boolean;
+  pending?: boolean;
+  problem?: string | null;
 };
 
 // "Add a lead by hand": a bottom sheet on a phone, a panel beside the list on a computer.
-// Local only: it adds a row on this screen and writes nothing, and the panel says so.
-export function AddLeadPanel({ sheet, phone, focusTick, form, errors, focus, onField, onSubmit, onClose, origin, onOrigin }: Props) {
+// With saving off it adds a row on this screen and writes nothing, and the panel says so.
+export function AddLeadPanel({ sheet, phone, focusTick, form, errors, focus, onField, onSubmit, onClose, origin, onOrigin, canSave, addressSearch, pending, problem }: Props) {
   const panelRef = useRef<HTMLElement | null>(null);
   const nameRef = useRef<HTMLInputElement | null>(null);
   const phoneRef = useRef<HTMLInputElement | null>(null);
@@ -75,7 +79,7 @@ export function AddLeadPanel({ sheet, phone, focusTick, form, errors, focus, onF
       <button type="button" className={`fx-addscrim${sheet ? " is-on" : ""}`} aria-label="Close" tabIndex={sheet ? 0 : -1} onClick={onClose} />
       <section ref={panelRef} className={`fd-pnl fx-addp${sheet ? " is-sheet" : ""}`} aria-labelledby="fd-ld-h" role={dialog ? "dialog" : undefined} aria-modal={dialog ? true : undefined} onKeyDown={onKey}>
         <h2 className="fd-pnh" id="fd-ld-h">Add a lead by hand</h2>
-        <p className="fd-pns">For a lead you met in person. It stays on this screen and is not saved.</p>
+        <p className="fd-pns">{canSave ? "For a lead you met in person. It is saved to your CRM." : "For a lead you met in person. It stays on this screen and is not saved."}</p>
         <LeadForm
           idPrefix="fd-ld"
           form={form}
@@ -85,8 +89,11 @@ export function AddLeadPanel({ sheet, phone, focusTick, form, errors, focus, onF
           emailRef={emailRef}
           origin={origin}
           onOrigin={onOrigin}
-          originFirst={!dialog}
           fill={sheet}
+          canSave={canSave}
+          addressSearch={addressSearch}
+          pending={pending}
+          problem={problem}
           onField={onField}
           onSubmit={onSubmit}
           onCancel={onClose}

@@ -4,6 +4,7 @@ export { LeadsSkeleton } from "./components/LeadsSkeleton";
 export { loadLeads } from "./api/load-leads";
 export { NewLeadDialog } from "./components/NewLeadDialog";
 export { isLeadsCreateEnabled } from "./api/create-flag";
+export { leadFormAccess, type LeadFormAccess } from "./api/form-access";
 export { DEFAULT_ORIGIN, ORIGIN_CHOICES, ORIGIN_LABEL, ORIGIN_ORDER, extraOrigin, inPeriod, originFromRaw, originOf, sourceBreakdown } from "./api/lead-sources";
 export { buildLeadsCsv, csvCell, formatPhone, neutralize } from "./api/leads-csv";
 export { exportFailure, handleAddressSearch, handleLeadCreate, handleLeadsExport } from "./api/lead-routes";

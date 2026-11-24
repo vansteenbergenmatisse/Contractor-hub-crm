@@ -34,7 +34,7 @@ export function SourcesPanel({ nAdded, addedBy, leads, loadedAt, timeZone, compl
   const unknown = data.rows.find((r) => r.key === "unknown")?.count ?? 0;
   const unlabelled = unknown ? ` ${unknown} ${unknown === 1 ? "has" : "have"} no clear source.` : "";
   const head = !data.proven
-    ? `From your newest ${data.loaded} leads. There may be more.`
+    ? `From your newest ${data.loaded === 1 ? "lead" : `${data.loaded} leads`}. There may be more.`
     : period === "all" ? `All ${data.total} leads.` : `The ${data.total} leads ${PHRASE[period]}.`;
   return (
     <section className="fd-pnl" aria-labelledby="fd-ld-s">

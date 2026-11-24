@@ -120,6 +120,10 @@ export function leadsReducer(state: LeadsState, action: LeadsAction): LeadsState
       return { ...state, sheet: false, errors: { ...NO_ERRORS } };
     case "field":
       return { ...state, form: { ...state.form, [action.field]: action.value } };
+    case "saved":
+      return { ...state, sheet: false, filter: "all", form: { ...EMPTY_FORM }, errors: { ...NO_ERRORS }, focus: null };
+    case "fieldError":
+      return { ...state, errors: { ...state.errors, [action.field]: action.message }, focus: { field: action.field, tick: (state.focus?.tick ?? 0) + 1 } };
     case "toggleAuto":
       return { ...state, auto: !state.auto };
     case "old":

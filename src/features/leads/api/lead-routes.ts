@@ -91,13 +91,21 @@ async function readExportJson(request: Request): Promise<{ includeContact: boole
 }
 
 const isFormPost = (request: Request) => contentType(request).startsWith("application/x-www-form-urlencoded");
-const backToLeads = (reason: "busy" | "failed") => new Response(null, { status: 303, headers: { "cache-control": "no-store", location: `/leads?export=${reason}` } });
+const backToLeads = (reason: "busy" | "failed" | "forbidden") => new Response(null, { status: 303, headers: { "cache-control": "no-store", location: `/leads?export=${reason}` } });
 
 // A form post without JavaScript lands on this answer, so it must be a page with a way back.
 const FORBIDDEN_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Export not available</title></head><body><h1>Export not available</h1><p>This account cannot export leads from here.</p><p><a href="/leads">Back to Leads</a></p></body></html>`;
 const forbidden = (request: Request) => isFormPost(request)
   ? new Response(FORBIDDEN_PAGE, { status: 403, headers: { "cache-control": "no-store", "content-type": "text/html; charset=utf-8", "x-content-type-options": "nosniff" } })
   : reply(403, { error: "forbidden" });
+
+// The page's own form marks itself. Inside HighLevel's iframe a page under /api is blocked from
+// framing, so a refused post from that form goes back to Leads, which can show the reason.
+async function refused(request: Request): Promise<Response> {
+  if (!isFormPost(request) || wantsStay(request)) return forbidden(request);
+  const raw = await readText(request);
+  return raw !== null && new URLSearchParams(raw).get("from") === "leads" ? backToLeads("forbidden") : forbidden(request);
+}
 
 // The answer when the export throws, also used by the route for a failure before the handler runs.
 export function exportFailure(request: Request): Response {
@@ -123,7 +131,7 @@ async function runLeadsExport(request: Request, deps: LeadsExportDeps): Promise<
   const fail = (status: number, error: string, reason: "busy" | "failed" = "failed") => (isForm ? backToLeads(reason) : reply(status, { error }));
   const user = await deps.currentUser(request);
   if (!user) return fail(401, "unauthorized");
-  if (!canExportLeads({ role: user.role, viewing: user.viewing, hasTenant: !!user.tenantId }) || !user.tenantId) return forbidden(request);
+  if (!canExportLeads({ role: user.role, viewing: user.viewing, hasTenant: !!user.tenantId }) || !user.tenantId) return refused(request);
   // The same kill switch as the Leads page, checked before the limiter and any read.
   if (isLeadsReadDisabled()) return fail(503, "unavailable");
   const tenantId = user.tenantId;

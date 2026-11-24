@@ -2,8 +2,14 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
+import { afterPause } from "@/shared/lib/after-pause";
 import { exportAnswer } from "../api/export-answer";
 import { RESULT_COOKIE, RESULT_COOKIE_ATTRIBUTES, resultFromCookie, STAY_ACTION } from "../api/export-stay";
+
+// Longer than the route's 60-second limit. A stopped or lost download sends no result cookie, so the
+// button comes back on its own after this.
+const GIVE_UP_MS = 75_000;
+const NO_ANSWER = "We could not confirm the export finished. Check your downloads, or try again.";
 
 type CookieChange = Event & { changed?: readonly { name?: string; value?: string }[] };
 const cookieEvents = () => (globalThis as { cookieStore?: EventTarget }).cookieStore;
@@ -36,6 +42,7 @@ export function ExportPanel() {
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const pending = useRef(false);
+  const cancelGiveUp = useRef<(() => void) | null>(null);
   const message = failure ?? (retried ? null : exportAnswer(code));
 
   useEffect(() => {
@@ -45,12 +52,14 @@ export function ExportPanel() {
       const result = (event as CookieChange).changed?.find((c) => c.name === RESULT_COOKIE);
       if (!result || !pending.current) return;
       pending.current = false;
+      cancelGiveUp.current?.();
       setBusy(false);
       setFailure(exportAnswer(resultFromCookie(result.value)));
     };
     store.addEventListener("change", onChange);
     return () => store.removeEventListener("change", onChange);
   }, []);
+  useEffect(() => () => cancelGiveUp.current?.(), []);
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     if (pending.current) {
@@ -69,6 +78,12 @@ export function ExportPanel() {
     submitter.setAttribute("formaction", STAY_ACTION);
     pending.current = true;
     setBusy(true);
+    cancelGiveUp.current = afterPause(() => {
+      if (!pending.current) return;
+      pending.current = false;
+      setBusy(false);
+      setFailure(NO_ANSWER);
+    }, GIVE_UP_MS);
   }
 
   return (
@@ -76,6 +91,7 @@ export function ExportPanel() {
       <h2 className="fd-pnh" id="fd-ld-x">Export leads</h2>
       <p className="fd-pns">Name, source and date. A long list may hold only your newest leads, and the file name then says partial.</p>
       <form method="post" action="/api/leads/export" onSubmit={onSubmit}>
+        <input type="hidden" name="from" value="leads" />
         <label style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 44 }}>
           <input type="checkbox" name="includeContact" value="1" />
           <span>Include phone, email and address</span>

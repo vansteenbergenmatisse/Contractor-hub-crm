@@ -69,6 +69,9 @@ export type LeadsAction =
   | { type: "closeAdd" }
   | { type: "field"; field: FormField; value: string }
   | { type: "submit"; origin?: string; channel?: LeadOrigin }
+  // The CRM has the lead: the form empties and no on-screen row is added.
+  | { type: "saved" }
+  | { type: "fieldError"; field: FocusField; message: string }
   | { type: "toggleAuto" }
   | { type: "old"; to: OldState }
   | { type: "sync"; leads: readonly Lead[] };

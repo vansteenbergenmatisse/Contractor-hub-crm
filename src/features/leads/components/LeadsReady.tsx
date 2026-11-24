@@ -4,17 +4,20 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { useRouter } from "next/navigation";
 import { PAGE_PATH, PageAction, useRowFocus, useSearchRows } from "@/features/app-shell";
 import {
-  addLeadMode, filterCounts, firstNeedId, hasWaitData, summarize, tiles, validateLead, visibleAdded, visibleLeads, weekKnown, withReceived,
+  addLeadMode, filterCounts, firstNeedId, hasWaitData, summarize, tiles, visibleAdded, visibleLeads, withReceived,
 } from "../api/leads-logic";
 import { liveSearchRows } from "../api/search-rows";
 import { isPhoneNow, useIsPhone } from "../hooks/use-is-phone";
+import { useLeadFormAccess } from "../hooks/use-lead-form-access";
+import { useLeadSubmit } from "../hooks/use-lead-submit";
 import { useLeads, useOpenAddFromUrl, useRevealLead } from "../hooks/use-leads";
-import { DEFAULT_ORIGIN, ORIGIN_LABEL } from "../api/lead-sources";
+import { DEFAULT_ORIGIN } from "../api/lead-sources";
 import { useTimeZone } from "../hooks/use-time-zone";
 import type { Lead, LeadOrigin } from "../types";
 import { AddLeadPanel } from "./AddLeadPanel";
 import { AddedLeadRow } from "./AddedLeadRow";
 import { ChannelIcon } from "./ChannelIcon";
+import { ExportNotice } from "./ExportNotice";
 import { ExportPanel } from "./ExportPanel";
 import { FilterControl } from "./FilterControl";
 import { LeadRow } from "./LeadRow";
@@ -26,9 +29,10 @@ const rise = (i: number) => ({ "--i": i }) as CSSProperties;
 
 type Props = { leads: readonly Lead[]; loadedAt: string; complete: boolean; dropped: number; locationZone?: string | null; canExport?: boolean };
 
-// The list of real leads. Read-only toward the CRM: nothing here sends or saves. A hand-added lead
-// stays on this screen; call, reply and booking buttons are off on real contacts.
+// The list of real leads. The form saves to the CRM only when the server allows it; otherwise a
+// hand-added lead stays on this screen. Call, reply and booking buttons are off on real contacts.
 export function LeadsReady({ leads: loaded, loadedAt, complete, dropped, locationZone, canExport }: Props) {
+  const access = useLeadFormAccess();
   const viewerZone = useTimeZone();
   const timeZone = locationZone ?? viewerZone;
   const leads = useMemo(() => withReceived(loaded, loadedAt, timeZone), [loaded, loadedAt, timeZone]);
@@ -92,11 +96,12 @@ export function LeadsReady({ leads: loaded, loadedAt, complete, dropped, locatio
   useSearchRows("leads", found);
 
   // After a good submit the source goes back, so the next lead is not counted under the last one.
-  const submitLead = () => {
-    const valid = !validateLead(state.form).focus;
-    dispatch({ type: "submit", origin: origin === "you" ? undefined : ORIGIN_LABEL[origin], channel: origin });
-    if (valid) setOrigin(DEFAULT_ORIGIN);
-  };
+  const [savedNote, setSavedNote] = useState(false);
+  const saver = useLeadSubmit({
+    canSave: access.canSave, form: state.form, origin, dispatch,
+    onLocal: () => setOrigin(DEFAULT_ORIGIN),
+    onSaved: () => { setOrigin(DEFAULT_ORIGIN); setSavedNote(true); router.refresh(); },
+  });
 
   const go = () => {
     if (!summary.target) return;
@@ -133,6 +138,7 @@ export function LeadsReady({ leads: loaded, loadedAt, complete, dropped, locatio
               <ChannelIcon name="plus" size={16} strokeWidth={2.2} />Add a lead
             </button>
           </div>
+          {savedNote && <p className="fd-pns" role="status">Lead saved to your CRM.</p>}
           {(waitData || state.added.length > 0) && <WaitSummary summary={summary} onGo={go} />}
           {rows.length + added.length === 0 && (
             <div className="fd-none fx-none">
@@ -164,7 +170,7 @@ export function LeadsReady({ leads: loaded, loadedAt, complete, dropped, locatio
           {dropped > 0 && <p className="fd-pns">{dropped === 1 ? "1 lead" : `${dropped} leads`} could not be shown.</p>}
         </div>
         <div className="fd-side2">
-          {weekKnown(leads, loadedAt, complete, dropped, timeZone) && <SourcesPanel nAdded={state.nAdd} addedBy={state.addedBy} leads={leads} loadedAt={loadedAt} timeZone={timeZone} complete={complete} dropped={dropped} />}
+          <SourcesPanel nAdded={state.nAdd} addedBy={state.addedBy} leads={leads} loadedAt={loadedAt} timeZone={timeZone} complete={complete} dropped={dropped} />
           <AddLeadPanel
             sheet={state.sheet}
             phone={phone}
@@ -172,13 +178,17 @@ export function LeadsReady({ leads: loaded, loadedAt, complete, dropped, locatio
             form={state.form}
             errors={state.errors}
             focus={state.focus}
-            onField={(field, value) => dispatch({ type: "field", field, value })}
-            onSubmit={submitLead}
-            onClose={() => dispatch({ type: "closeAdd" })}
+            onField={(field, value) => { saver.clearProblem(); setSavedNote(false); dispatch({ type: "field", field, value }); }}
+            onSubmit={saver.submit}
+            onClose={() => { if (!saver.pending) dispatch({ type: "closeAdd" }); }}
             origin={origin}
             onOrigin={setOrigin}
+            canSave={access.canSave}
+            addressSearch={access.addressSearch}
+            pending={saver.pending}
+            problem={saver.problem}
           />
-          {canExport && <ExportPanel />}
+          {canExport ? <ExportPanel /> : <ExportNotice only="forbidden" />}
         </div>
       </div>
     </>

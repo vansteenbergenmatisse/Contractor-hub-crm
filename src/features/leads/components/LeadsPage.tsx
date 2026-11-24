@@ -11,6 +11,6 @@ import { LeadsStatus } from "./LeadsStatus";
 // `viewer`: from the server session. It only decides what is shown; the export route checks again.
 export function LeadsPage({ result, timeZone, viewer }: { result: LeadsResult; timeZone?: string | null; viewer?: LeadsViewer | null }) {
   // A failed export can return here while leads cannot load, and the owner still needs the reason.
-  if (result.state !== "ready") return <><LeadsStatus state={result.state} />{canExportLeads(viewer) && <ExportNotice />}</>;
+  if (result.state !== "ready") return <><LeadsStatus state={result.state} />{canExportLeads(viewer) ? <ExportNotice /> : <ExportNotice only="forbidden" />}</>;
   return <LeadsReady leads={result.leads} loadedAt={result.loadedAt} complete={result.complete} dropped={result.dropped} locationZone={timeZone} canExport={canExportLeads(viewer)} />;
 }
