@@ -838,6 +838,37 @@ a.fd-lead:focus-visible{outline:3px solid var(--main-color);outline-offset:-3px}
   .fd-cin,.fd-send{min-height:48px}
 }
 
+/* ===== Inbox and Pipeline on every screen =====
+   The reply box stays on screen, above the keyboard and the home bar; content clears the notch in landscape. */
+@media (min-width: 1024px){
+  .fd-app .fd-ixg{height:clamp(480px,calc(100dvh - 214px),800px)}
+}
+@media (max-width: 1023px){
+  .fd-app .fd-ix:not(.is-open),.fd-app .fd-kb{padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
+  .fd-app .fd-kb .fd-snav{margin-left:calc(-16px - env(safe-area-inset-left,0px));margin-right:calc(-16px - env(safe-area-inset-right,0px));padding-left:calc(16px + env(safe-area-inset-left,0px));padding-right:calc(16px + env(safe-area-inset-right,0px))}
+  .fd-app .fd-ix.is-open .fd-th{padding-bottom:var(--fd-kb,0px)}
+  .fd-app .fd-ix.is-open .fd-thh{padding-left:calc(12px + env(safe-area-inset-left,0px));padding-right:calc(16px + env(safe-area-inset-right,0px))}
+  .fd-app .fd-ix.is-open .fd-tm{padding-left:calc(16px + env(safe-area-inset-left,0px));padding-right:calc(16px + env(safe-area-inset-right,0px))}
+  .fd-app .fd-ix.is-open .fd-cmp{bottom:calc(-20px + var(--fd-kb,0px));padding-left:calc(16px + env(safe-area-inset-left,0px));padding-right:calc(16px + env(safe-area-inset-right,0px));padding-bottom:calc(10px + env(safe-area-inset-bottom,0px))}
+  .fd-app .fd-ix.is-open[data-kb] .fd-cmp{padding-bottom:10px}
+  .fd-app .fd-qr{overflow-x:auto;scrollbar-width:none;margin:-3px -3px 3px;padding:3px}
+  .fd-app .fd-qb{flex:none}
+  .fd-app .fd-sti:focus-visible{outline-offset:-3px}
+}
+@media (max-width: 479px){
+  .fd-app .fd-tback{justify-content:center;min-width:44px;min-height:44px;margin-right:0}
+  .fd-tbl{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+}
+/* a phone on its side has little height: the headers scroll away and the open keyboard leaves just the reply row */
+@media (max-width: 1023px) and (max-height: 500px){
+  .fd-app .fd-ix.is-open .fd-thh,.fd-app .fd-kb .fd-snav{position:static}
+  .fd-app .fd-ix.is-open[data-kb] .fd-clb{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+  .fd-app .fd-ix.is-open .fd-cin,.fd-app .fd-ix.is-open .fd-send{min-height:44px}
+}
+@media (max-width: 1023px),(pointer: coarse){ .fd-app .fd-ix .fd-wsgo{min-height:44px} .fd-app .fd-ix .fd-wsb{height:44px} }
+.fd-app .fd-kb nav a:focus-visible{outline:3px solid var(--main-color);outline-offset:2px}
+.fd-app .fd-kwrap:focus-visible{outline:3px solid var(--main-color);outline-offset:-3px}
+
 /* ===== Inbox, calmer (round 5) =====
    A row holds four things: where it came from (a colored tile with a plain icon), who, how long they wait, and one line of the last message.
    The wait chip sits where the time sat, so the eye finds urgency in one fixed spot. A conversation that needs no reply shows the time there.
