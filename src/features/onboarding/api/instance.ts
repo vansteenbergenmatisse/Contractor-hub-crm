@@ -1,5 +1,5 @@
 import { after } from "next/server";
-import { createEmailSenderFromEnv, deactivateGhlUser, getProvisionDeps, hitRateLimit, listActiveLinks, provisionGhlUser } from "@/features/auth";
+import { clearRateLimit, createEmailSenderFromEnv, deactivateGhlUser, getProvisionDeps, hitRateLimit, listActiveLinks, provisionGhlUser } from "@/features/auth";
 import { getBrandService } from "@/features/brand";
 import {
   CRON_RENEWAL_WINDOW_MS,
@@ -163,6 +163,7 @@ export async function syncRoute(request: Request): Promise<Response> {
         send: (message) => sender.send(message),
         // Under a day, so a mail that failed is tried again by the next daily run.
         claimAgencyAlert: (companyId, now) => hitRateLimit(`agency-token-alert:${companyId}`, 1, 20 * 3600_000, now),
+        releaseAgencyAlert: (companyId) => clearRateLimit(`agency-token-alert:${companyId}`),
         startedAt,
         startOffset: (length) => Math.floor(Math.random() * length),
       };
