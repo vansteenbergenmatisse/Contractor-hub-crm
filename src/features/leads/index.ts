@@ -7,6 +7,7 @@ export { isLeadsCreateEnabled } from "./api/create-flag";
 export { DEFAULT_ORIGIN, ORIGIN_CHOICES, ORIGIN_LABEL, ORIGIN_ORDER, extraOrigin, inPeriod, originFromRaw, originOf, sourceBreakdown } from "./api/lead-sources";
 export { buildLeadsCsv, csvCell, formatPhone, neutralize } from "./api/leads-csv";
 export { handleAddressSearch, handleLeadCreate, handleLeadsExport } from "./api/lead-routes";
+export { canExportLeads, type LeadsViewer } from "./api/export-access";
 export { createPlacesSearch } from "@/shared/lib/places-search";
 export { leadSearchRows, liveSearchRows } from "./api/search-rows";
 export {

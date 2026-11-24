@@ -131,12 +131,16 @@ export function createContactCreateAdapter(deps: ContactCreateDeps) {
   }
 
   // Pages through contacts. Whether HighLevel honors `page` is not documented, so a page that brings
-  // only ids already seen stops the read and the export is marked as not complete.
+  // only ids already seen stops the read and the export is marked as not complete. Complete needs
+  // proof: a total that was reached, hasMore false, or a short or empty last page nothing contradicts.
   async function readForExport(tenantId: string, ownEmail?: string | null): Promise<ContactExportRead> {
     try {
       const locationId = await deps.readLocationId(tenantId);
       if (!locationId) return { ok: false };
       const seen = new Map<string, ContactExportRow>();
+      const receivedIds = new Set<string>();
+      let withoutId = 0;
+      let promisedMore = false;
       let dropped = 0;
       let complete = false;
       for (let page = 1; page <= EXPORT_MAX_PAGES; page += 1) {
@@ -153,22 +157,38 @@ export function createContactCreateAdapter(deps: ContactCreateDeps) {
           if (typeof row === "object" && row !== null && typeof (row as { id?: unknown }).id === "string") raw.set((row as { id: string }).id.trim(), row as Record<string, unknown>);
         }
         dropped += parsed.dropped;
-        let added = 0;
+        let fresh = 0;
+        for (const id of raw.keys()) {
+          if (receivedIds.has(id)) continue;
+          receivedIds.add(id);
+          fresh += 1;
+        }
+        withoutId += received.length - raw.size;
         for (const c of parsed.contacts) {
           if (seen.has(c.id)) continue;
-          added += 1;
           const place = [c.city, [c.state, c.postalCode].filter(Boolean).join(" ")].filter(Boolean).join(", ");
           seen.set(c.id, {
             name: c.name, source: c.source, dateAdded: c.dateAdded, phone: text(raw.get(c.id)?.phone), email: text(raw.get(c.id)?.email),
             address: [c.address, place].filter(Boolean).join(", ") || null,
           });
         }
-        // An empty or short page is the last one. On page 1 the answer's own total also says so.
-        if (received.length === 0 || (page === 1 && parsed.complete) || (added > 0 && received.length < EXPORT_PAGE_SIZE)) {
+        const { total: rawTotal, count, hasMore } = json as { total?: unknown; count?: unknown; hasMore?: unknown };
+        const declared = rawTotal ?? count ?? null;
+        const loaded = receivedIds.size + withoutId;
+        const total = typeof declared === "number" && Number.isInteger(declared) && declared >= loaded ? declared : null;
+        // A total that cannot be true, or more rows than asked for, proves nothing: stop as not complete.
+        if ((declared !== null && total === null) || received.length > EXPORT_PAGE_SIZE) break;
+        const more = hasMore === true || (total !== null && total > loaded);
+        if (received.length === 0) {
+          complete = !more && !promisedMore;
+          break;
+        }
+        if (fresh === 0) break;
+        if (!more && (total !== null || hasMore === false || received.length < EXPORT_PAGE_SIZE)) {
           complete = true;
           break;
         }
-        if (added === 0) break;
+        promisedMore = more;
       }
       return { ok: true, contacts: [...seen.values()], complete, dropped };
     } catch {

@@ -3,6 +3,7 @@ import { isOrigin, ORIGIN_LABEL, originFromRaw } from "./lead-sources";
 import type { AddressSuggestion } from "@/shared/lib/places-search";
 import { buildLeadsCsv, type ExportRow } from "./leads-csv";
 import { isLeadsReadDisabled } from "./read-flag";
+import { canExportLeads } from "./export-access";
 
 // HTTP handlers for Leads. Tenant and user come from the session only. Logs and audit lines hold ids
 // and counts, never a name, phone, email, address or search text.
@@ -20,8 +21,10 @@ const MAX_BODY_BYTES = 4096;
 const reply = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { "cache-control": "no-store", "content-type": "application/json" } });
 
-async function readBody(request: Request): Promise<Record<string, unknown> | null> {
-  if (!(request.headers.get("content-type") ?? "").toLowerCase().startsWith("application/json") || !request.body) return null;
+const contentType = (request: Request) => (request.headers.get("content-type") ?? "").toLowerCase();
+
+async function readText(request: Request): Promise<string | null> {
+  if (!request.body) return "";
   const reader = request.body.getReader();
   const decoder = new TextDecoder();
   let size = 0;
@@ -36,8 +39,15 @@ async function readBody(request: Request): Promise<Record<string, unknown> | nul
     }
     raw += decoder.decode(value, { stream: true });
   }
+  return raw + decoder.decode();
+}
+
+async function readBody(request: Request): Promise<Record<string, unknown> | null> {
+  if (!contentType(request).startsWith("application/json") || !request.body) return null;
+  const raw = await readText(request);
+  if (raw === null) return null;
   try {
-    const json: unknown = JSON.parse(raw + decoder.decode());
+    const json: unknown = JSON.parse(raw);
     return typeof json === "object" && json !== null && !Array.isArray(json) ? (json as Record<string, unknown>) : null;
   } catch {
     return null;
@@ -65,22 +75,39 @@ function dateIn(iso: string, timeZone: string): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(Date.parse(iso));
 }
 
+// The page's form sends one optional box. Null when the body is too large or the box has another value.
+async function readExportForm(request: Request): Promise<{ includeContact: boolean } | null> {
+  const raw = await readText(request);
+  if (raw === null) return null;
+  const value = new URLSearchParams(raw).get("includeContact");
+  return value === null || value === "1" ? { includeContact: value === "1" } : null;
+}
+
+async function readExportJson(request: Request): Promise<{ includeContact: boolean } | null> {
+  const body = await readBody(request);
+  if (!body || (body.includeContact !== undefined && typeof body.includeContact !== "boolean")) return null;
+  return { includeContact: body.includeContact === true };
+}
+
 export async function handleLeadsExport(request: Request, deps: LeadsExportDeps): Promise<Response> {
   if (request.headers.get("origin") !== deps.appOrigin) return reply(403, { error: "forbidden" });
+  // A form post lands on this response, so a failure goes back to Leads with a reason to show.
+  const isForm = contentType(request).startsWith("application/x-www-form-urlencoded");
+  const fail = (status: number, error: string, reason: "busy" | "failed" = "failed") =>
+    isForm ? new Response(null, { status: 303, headers: { "cache-control": "no-store", location: `/leads?export=${reason}` } }) : reply(status, { error });
   const user = await deps.currentUser(request);
-  if (!user) return reply(401, { error: "unauthorized" });
-  // Owners only. An admin in View as client has the admin role and never passes.
-  if (user.viewing || user.role !== "owner" || !user.tenantId) return reply(403, { error: "forbidden" });
+  if (!user) return fail(401, "unauthorized");
+  if (!canExportLeads({ role: user.role, viewing: user.viewing, hasTenant: !!user.tenantId }) || !user.tenantId) return reply(403, { error: "forbidden" });
   // The same kill switch as the Leads page, checked before the limiter and any read.
-  if (isLeadsReadDisabled()) return reply(503, { error: "unavailable" });
+  if (isLeadsReadDisabled()) return fail(503, "unavailable");
   const tenantId = user.tenantId;
-  const body = await readBody(request);
-  if (!body || (body.includeContact !== undefined && typeof body.includeContact !== "boolean")) return reply(400, { error: "invalid" });
-  const includeContact = body.includeContact === true;
+  const options = await (isForm ? readExportForm(request) : readExportJson(request));
+  if (!options) return fail(400, "invalid");
+  const { includeContact } = options;
   const now = deps.now();
-  if (!(await allowed(deps.hit, `leads-export:${tenantId}`, EXPORTS_PER_HOUR, HOUR_MS, now))) return reply(429, { error: "rate_limited" });
+  if (!(await allowed(deps.hit, `leads-export:${tenantId}`, EXPORTS_PER_HOUR, HOUR_MS, now))) return fail(429, "rate_limited", "busy");
   const answer = await deps.read(tenantId).catch((): ExportRead => ({ ok: false }));
-  if (!answer.ok) return reply(502, { error: "unavailable" });
+  if (!answer.ok) return fail(502, "unavailable");
   const zone = await deps.readZone(tenantId).catch(() => null);
   const rows: ExportRow[] = answer.contacts.map((c) => ({
     name: c.name ?? "Unnamed lead", source: ORIGIN_LABEL[originFromRaw(c.source)], date: dateIn(c.dateAdded, zone ?? "UTC"),
@@ -89,12 +116,15 @@ export async function handleLeadsExport(request: Request, deps: LeadsExportDeps)
   const csv = buildLeadsCsv(rows, includeContact, zone ? "Date" : "Date (UTC)");
   const complete = answer.complete && answer.dropped === 0;
   audit("leads_export", { by: user.id, tenantId, rows: rows.length, dropped: answer.dropped, complete, contactFields: includeContact });
+  // The name travels with a saved file, so a partial list still says it is one.
+  const day = now.toISOString().slice(0, 10);
+  const filename = complete ? `leads-${day}.csv` : `leads-partial-newest-${rows.length}-${day}.csv`;
   return new Response(csv, {
     status: 200,
     headers: {
       "cache-control": "no-store",
       "content-type": "text/csv; charset=utf-8",
-      "content-disposition": `attachment; filename="leads-${now.toISOString().slice(0, 10)}.csv"`,
+      "content-disposition": `attachment; filename="${filename}"`,
       "x-content-type-options": "nosniff",
       "x-leads-rows": String(rows.length),
       "x-leads-complete": complete ? "1" : "0",

@@ -21,7 +21,8 @@ async function LeadsData() {
     loadLeads(user?.tenantId, reader),
     readZone(user?.tenantId).catch(() => null),
   ]);
-  return <LeadsPage result={result} timeZone={timeZone} />;
+  const viewer = user ? { role: user.role, viewing: user.viewing, hasTenant: !!user.tenantId } : null;
+  return <LeadsPage result={result} timeZone={timeZone} viewer={viewer} />;
 }
 
 // Thin page. Suspense covers the data and useSearchParams (?add=1).
