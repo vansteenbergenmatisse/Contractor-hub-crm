@@ -1,8 +1,8 @@
-type FlagEnv = Record<string, string | undefined>;
+import { isTenantFlagOn, type FlagEnv } from "./tenant-flag";
 
-// Off unless both server flags say so: SETTINGS_MEDIA_REPLACE_ENABLED is exactly "true" (the kill
-// switch) and SETTINGS_MEDIA_REPLACE_TENANTS names this exact tenant id. There is no wildcard.
+// Off unless SETTINGS_MEDIA_REPLACE_ENABLED is exactly "true" (the kill switch). Then on for the tenant
+// ids in SETTINGS_MEDIA_REPLACE_TENANTS (exact match, no wildcard), or for every tenant when
+// SETTINGS_MEDIA_REPLACE_ALL is exactly "true". An id in SETTINGS_MEDIA_REPLACE_EXCLUDE always stays off.
 export function isMediaReplaceEnabled(tenantId: string, env: FlagEnv = process.env): boolean {
-  if (env.SETTINGS_MEDIA_REPLACE_ENABLED !== "true") return false;
-  return (env.SETTINGS_MEDIA_REPLACE_TENANTS ?? "").split(",").map((id) => id.trim()).filter(Boolean).includes(tenantId);
+  return isTenantFlagOn("SETTINGS_MEDIA_REPLACE", tenantId, env);
 }

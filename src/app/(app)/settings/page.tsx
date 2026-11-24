@@ -2,7 +2,7 @@ import { hitRateLimit } from "@/features/auth";
 import { getTenantCustomValues, getTenantCustomValuesReadOnly } from "@/features/brand";
 import { createTenantPhoneNumbersReader } from "@/features/highlevel";
 import { SettingsPage, loadSettingsValues, sectionFromParam, type AccountLayout, type LoadStatus, type PhoneNumbersView } from "@/features/settings";
-import { SettingsWriteBackPage, freshValuesReader, isMediaReplaceEnabled, isWriteBackEnabled } from "@/features/settings-write-back";
+import { SettingsWriteBackPage, freshValuesReader, isMediaReplaceEnabled, isWriteBackEnabled, saveOffReason } from "@/features/settings-write-back";
 import { getRequestUser } from "../../session";
 
 export const dynamic = "force-dynamic";
@@ -45,6 +45,6 @@ export default async function Page({ searchParams }: Props = {}) {
   ) : canSave ? (
     <SettingsWriteBackPage initialValues={values} initialSection={section} account={loaded.layout} loadStatus={loaded.status} phoneNumbers={phoneNumbers} mediaReplace={isMediaReplaceEnabled(user?.tenantId ?? "")} />
   ) : (
-    <SettingsPage initialValues={values} initialSection={section} account={loaded.layout} loadStatus={loaded.status} phoneNumbers={phoneNumbers} />
+    <SettingsPage initialValues={values} initialSection={section} account={loaded.layout} loadStatus={loaded.status} phoneNumbers={phoneNumbers} saveDisabledReason={saveOffReason(user?.role, !!user?.tenantId)} />
   );
 }

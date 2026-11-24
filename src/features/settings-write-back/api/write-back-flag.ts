@@ -1,9 +1,8 @@
-type FlagEnv = Record<string, string | undefined>;
+import { isTenantFlagOn, type FlagEnv } from "./tenant-flag";
 
-// Off unless both server flags say so: SETTINGS_WRITE_BACK_ENABLED is exactly "true" (the kill switch)
-// and SETTINGS_WRITE_BACK_TENANTS names this tenant id. There is no wildcard, so turning it on for one
-// sub-account never turns it on for all.
+// Off unless SETTINGS_WRITE_BACK_ENABLED is exactly "true" (the kill switch). Then on for the tenant ids
+// in SETTINGS_WRITE_BACK_TENANTS (exact match, no wildcard), or for every tenant when
+// SETTINGS_WRITE_BACK_ALL is exactly "true". An id in SETTINGS_WRITE_BACK_EXCLUDE always stays off.
 export function isWriteBackEnabled(tenantId: string, env: FlagEnv = process.env): boolean {
-  if (env.SETTINGS_WRITE_BACK_ENABLED !== "true") return false;
-  return (env.SETTINGS_WRITE_BACK_TENANTS ?? "").split(",").map((id) => id.trim()).filter(Boolean).includes(tenantId);
+  return isTenantFlagOn("SETTINGS_WRITE_BACK", tenantId, env);
 }

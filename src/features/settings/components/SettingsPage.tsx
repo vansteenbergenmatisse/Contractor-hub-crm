@@ -40,6 +40,9 @@ type Props = {
   readOnly?: boolean;
   // Given only when this owner may save to the sub-account. Without it Save lasts for this visit.
   saveValues?: SaveValues;
+  // From the server when this user's save cannot reach HighLevel (write-back off for the business, or
+  // not the owner). Save then changes nothing and shows this instead of a visit-only change.
+  saveDisabledReason?: string;
   // Given only when the server flags allow Change image for this owner.
   uploadImage?: ImageUploader;
   prepareImage?: PrepareImage;
@@ -59,8 +62,9 @@ const scrollToCard = (id: string) => document.getElementById(`s-card-${id}`)?.sc
 
 // Page content for /settings, inside the app shell: three tabs, seven steps that save on their own,
 // and the protected Services and areas.
-export function SettingsPage({ initial, initialValues, initialSection, account, loadStatus, phoneNumbers, readOnly = false, saveValues, uploadImage, prepareImage = prepareImageFile }: Props) {
+export function SettingsPage({ initial, initialValues, initialSection, account, loadStatus, phoneNumbers, readOnly = false, saveValues, saveDisabledReason, uploadImage, prepareImage = prepareImageFile }: Props) {
   const live = !!saveValues && !readOnly;
+  const saveOff = !live && !readOnly && saveDisabledReason ? saveDisabledReason : null;
   const { state, dispatch, filter, extras, notLoaded } = useSettings(initial, initialValues, initialSection, UNKNOWN_CONNECTIONS, live, account);
   const remote = useSaveValues(state, dispatch, saveValues);
   const signOut = useSignOut();
@@ -96,15 +100,20 @@ export function SettingsPage({ initial, initialValues, initialSection, account, 
   const topMessage = (errShown ? null : err?.message) ?? (loadFailed ? failText : null);
 
   // Handlers read the newest state through a ref, so they stay stable and memoized cards do not redraw.
-  const latest = useRef({ state, keys, live, remote });
-  useEffect(() => { latest.current = { state, keys, live, remote }; });
+  const latest = useRef({ state, keys, live, remote, saveOff });
+  useEffect(() => { latest.current = { state, keys, live, remote, saveOff }; });
 
   const runSave = useCallback(async (id: string, allowClear: boolean) => {
-    const { state: now, keys: all, live: isLive, remote: saver } = latest.current;
+    const { state: now, keys: all, live: isLive, remote: saver, saveOff: off } = latest.current;
     const stepKeys = all[id as keyof typeof all] ?? [];
     reviewOpener.current = null;
     setReviewStep(null);
     if (isLive) return saver.save({ step: id, keys: stepKeys, allowClear });
+    // Nothing can reach HighLevel: never mark the values saved or apply them to this session.
+    if (off) {
+      dispatch({ type: "saveOff", step: id, reason: off });
+      return false;
+    }
     const bad = prepareSave(now, stepKeys).problem;
     dispatch({ type: "save", keys: stepKeys, step: id });
     return !bad;
@@ -242,7 +251,7 @@ export function SettingsPage({ initial, initialValues, initialSection, account, 
 
       <p className={`fd-lerr fd-ste${topMessage ? "" : " is-off"}`} id="fd-st-err" role="alert">{topMessage ?? ""}</p>
       {readOnly ? <p className="ga-note">You are viewing this account. Nothing can be changed here.</p> : null}
-      {!live && !readOnly ? <p className="ga-note">Changes last until you close or reload this page.</p> : null}
+      {saveOff ? <p className="ga-note">{saveOff}</p> : !live && !readOnly ? <p className="ga-note">Changes last until you close or reload this page.</p> : null}
 
       <div className="ga-grid" hidden={tab !== "det"}>
         <StepRail keys={keys} values={values} dirtyKeys={dirtyKeys} current={current} sheetOpen={sheetOpen} onlyEmpty={onlyEmpty} onOnlyEmpty={() => setOnlyEmpty((on) => !on)} onJump={jump} onCloseSheet={closeSheet} />

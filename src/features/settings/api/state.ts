@@ -43,6 +43,8 @@ export type SettingsAction =
   | { type: "imageValue"; key: string; value: string; saved: boolean }
   | { type: "saveStart"; step?: string }
   | { type: "saveEnd"; problem: string | null }
+  // Saving is off for this user: nothing is marked saved, the edit stays a draft and the step says why.
+  | { type: "saveOff"; step: string; reason: string }
   | { type: "loaded"; values: CustomValues }
   | { type: "serverValues"; values: CustomValues }
   | { type: "toggleCols" }
@@ -167,6 +169,8 @@ export function settingsReducer(s: SettingsState, a: SettingsAction): SettingsSt
       return { ...s, saving: true, saveProblem: null, saveStep: a.step ?? s.saveStep };
     case "saveEnd":
       return { ...s, saving: false, saveProblem: a.problem };
+    case "saveOff":
+      return { ...s, saving: false, ok: false, saveStep: a.step, saveProblem: a.reason };
     case "loaded": {
       // The values arrived after a failed read. What the owner typed meanwhile stays in the fields.
       const typed = Object.fromEntries(Object.entries(s.draft).filter(([, v]) => v.trim() !== ""));
@@ -201,7 +205,8 @@ export function settingsReducer(s: SettingsState, a: SettingsAction): SettingsSt
       const values = { ...s.values };
       for (const result of a.results) {
         if (isSaved(result.status)) values[result.key] = a.submitted[result.key] ?? "";
-        else if (result.status === "conflict" && result.current !== undefined) values[result.key] = result.current;
+        // An unconfirmed save that reads back a third value: that is what the account holds now.
+        else if ((result.status === "conflict" || result.status === "unknown") && result.current !== undefined) values[result.key] = result.current;
       }
       return { ...s, values, ok: a.results.some((result) => isSaved(result.status)) };
     }

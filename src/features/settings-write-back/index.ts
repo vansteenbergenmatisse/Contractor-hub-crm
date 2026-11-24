@@ -1,7 +1,8 @@
 // Public API of the settings-write-back feature. Other code imports from "@/features/settings-write-back" only.
-// Saves Settings values to the tenant's HighLevel custom values. Off unless both server flags allow the tenant.
+// Saves Settings values to the tenant's HighLevel custom values. Off unless the server flags allow the tenant.
 export { SettingsWriteBackPage } from "./components/SettingsWriteBackPage";
 export { isWriteBackEnabled } from "./api/write-back-flag";
+export { SAVE_OFF_FOR_OFFICE, SAVE_OFF_FOR_OWNER, SAVE_OFF_NOT_CONNECTED, SAVE_OFF_NOT_OWNER, saveOffReason } from "./api/save-off";
 export { saveCustomValues } from "./api/write-back";
 export type { AuditOutcome, AuditStart, SaveDeps } from "./api/write-back";
 export { handleSaveValues, saveFailure } from "./api/save-route";
