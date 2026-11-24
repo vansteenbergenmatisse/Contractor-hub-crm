@@ -221,35 +221,52 @@ export type ContactOnceDeps = {
   secret: string;
   claim: (key: string) => Promise<boolean>;
   create: (tenantId: string, input: NewContact) => Promise<ContactCreateOutcome>;
+  release?: (key: string) => Promise<void>;
 };
 
-// Closes the gap between the duplicate search and the create. The claim is atomic and is never
-// released early: it outlives the create, so a retry after a lost answer cannot double the contact.
+// These answers prove no contact was made, so the owner's retry may go through.
+const DEFINITE_NON_CREATE: ReadonlySet<ContactCreateOutcome["status"]> = new Set(["failed", "duplicate", "invalid_phone"]);
+
+// Closes the gap between the duplicate search and the create. The claim is atomic and outlives the
+// create, so a retry after a lost answer cannot double the contact. It is given back only when no
+// contact was made, and only for keys this call holds.
 export async function createContactOnce(tenantId: string, input: NewContact, deps: ContactOnceDeps): Promise<ContactCreateOutcome> {
   const keys = contactClaimKeys(deps.secret, tenantId, input.phone, input.email);
   if (!keys) return { status: "invalid_phone" };
+  const held: string[] = [];
+  const releaseHeld = async () => {
+    await Promise.all(held.map((key) => deps.release?.(key))).catch(() => console.error("Lead create claim release failed."));
+  };
   try {
     for (const key of keys) {
-      if (!(await deps.claim(key))) return { status: "in_progress" };
+      if (!(await deps.claim(key))) {
+        await releaseHeld();
+        return { status: "in_progress" };
+      }
+      held.push(key);
     }
   } catch {
     console.error("Lead create claim failed.");
+    await releaseHeld();
     return { status: "failed" };
   }
-  return deps.create(tenantId, input);
+  const outcome = await deps.create(tenantId, input);
+  if (DEFINITE_NON_CREATE.has(outcome.status)) await releaseHeld();
+  return outcome;
 }
 
 // Proposal, not a measured number: longer than the searches, the create and a token renewal together.
 export const CONTACT_CLAIM_MS = 120_000;
 type ClaimHit = (key: string, limit: number, windowMs: number, now: Date) => Promise<boolean>;
 
-export function createTenantContactCreator(hit: ClaimHit) {
+export function createTenantContactCreator(hit: ClaimHit, release: (key: string) => Promise<void>) {
   const env = parseEnv("highlevel");
   const adapter = createTenantContactCreateAdapter();
   return (tenantId: string, input: NewContact) => createContactOnce(tenantId, input, {
     secret: env.TOKEN_ENCRYPTION_KEY,
     claim: (key) => hit(key, 1, CONTACT_CLAIM_MS, new Date()),
     create: adapter.createContact,
+    release,
   });
 }
 

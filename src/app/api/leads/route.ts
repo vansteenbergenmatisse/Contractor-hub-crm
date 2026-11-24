@@ -1,4 +1,4 @@
-import { getGuards, hitRateLimit } from "@/features/auth";
+import { clearRateLimit, getGuards, hitRateLimit } from "@/features/auth";
 import { createTenantContactCreator } from "@/features/highlevel";
 import { handleLeadCreate, isLeadsCreateEnabled } from "@/features/leads";
 import { parseEnv } from "@/shared/config";
@@ -15,7 +15,7 @@ export async function POST(request: Request): Promise<Response> {
       hit: hitRateLimit,
       now: () => new Date(),
       isEnabled: (tenantId) => isLeadsCreateEnabled(tenantId),
-      create: (tenantId, input) => createTenantContactCreator(hitRateLimit)(tenantId, input),
+      create: (tenantId, input) => createTenantContactCreator(hitRateLimit, clearRateLimit)(tenantId, input),
     });
   } catch {
     return new Response(JSON.stringify({ error: "failed" }), { status: 500, headers: { "cache-control": "no-store", "content-type": "application/json" } });
