@@ -8,7 +8,9 @@ import { applyClientView, clientViewCookieName } from "./client-view";
 import { createGuards } from "./guards";
 import { readSession } from "./session";
 import { checkInviteEligibility } from "./invite-check";
-import { createInviteService, newInviteCode } from "./invites";
+import { createInviteService, newInviteCode, type InviteTenant } from "./invites";
+import { createSignInLinkService, type SignInLinkDeps } from "./sign-in-link";
+import { deleteResetTokens, findAccountByEmail, findAccountById, listTenantAccounts } from "../db/sign-in-link";
 import { hitRateLimit } from "../db/rate-limit";
 import { isTenantLoginBlocked, isTenantLoginOff, isTenantUninstalled } from "../db/tenant-status";
 import {
@@ -21,7 +23,7 @@ import {
   insertInvite,
   releaseInvite,
 } from "../db/invites";
-import { createEmailSenderFromEnv, createLogEmailSender } from "./email-sender";
+import { createEmailSenderFromEnv } from "./email-sender";
 import { findLink, findLinkByUserId, findUserByEmail, findUserById, insertLink, relinkUser, setLinkDeleted } from "../db/ghl-links";
 import { prismaAuthDatabase } from "../db/auth-database";
 import { createMoveStore } from "../db/account-move";
@@ -136,6 +138,8 @@ export function getAuth(): Auth {
       },
       isTenantBlocked: isTenantLoginBlocked,
       clearUnusedMarker: (userId) => createMoveStore().clearMarker(userId),
+      tenantName: async (tenantId) => (await findTenantForInvite(tenantId))?.name ?? null,
+      appUrl: env.APP_URL,
     });
   }
   return instance;
@@ -161,23 +165,59 @@ export function getGuards() {
   return createGuards({ getSession: sessionFromRequest, isTenantUninstalled: isTenantLoginBlocked });
 }
 
-// Invites, built per call (cheap). The log-only sender means no real email goes out for now.
+// HighLevel's live user list for one sub-account: is this email a user there?
+const checkEligibility = (tenant: InviteTenant, email: string) =>
+  checkInviteEligibility(
+    { email, companyId: tenant.companyId as string, locationId: tenant.locationId }, // callers refuse a tenant with no companyId
+    { searchUsers: (query) => searchLocationUsers(tenant.id, query) },
+  );
+
+// Invites, built per call (cheap). Mail goes through the delivery guard (createEmailSenderFromEnv):
+// with EMAIL_DELIVERY_MODE unset or "log", or an address outside the allowlist, nothing is sent and
+// the admin page says so; the link is always shown there.
 export function getInviteService() {
   const env = parseEnv("auth");
   const auth = getAuth();
+  const signInLinks = getSignInLinkService();
   return createInviteService({
     now: () => new Date(),
     newCode: newInviteCode,
     appUrl: env.APP_URL,
-    emailSender: createLogEmailSender(),
-    checkEligibility: (tenant, email) =>
-      checkInviteEligibility(
-        { email, companyId: tenant.companyId as string, locationId: tenant.locationId }, // createInvite refuses a tenant with no companyId
-        { searchUsers: (query) => searchLocationUsers(tenant.id, query) },
-      ),
+    emailSender: createEmailSenderFromEnv(),
+    checkEligibility,
     createUser: (input) => createInvitedUser(auth, input),
+    existingAccount: (tenant, email) => signInLinks.issueForEmail(tenant, email),
     links: { find: findLink, insert: insertLink },
     store: { findTenant: findTenantForInvite, emailTaken, insertInvite, findInviteByCodeHash, claimInvite, releaseInvite, deleteInvite },
+  });
+}
+
+// A fresh set-password link for a never-used account (admin's "Send sign-in email", and "Invite
+// owner" for an email the sync already gave an account). `mailBudget` is the client's daily mail cap.
+export function getSignInLinkService(options: { mailBudget?: SignInLinkDeps["mailBudget"] } = {}) {
+  const env = parseEnv("auth");
+  const auth = getAuth();
+  const moves = createMoveStore();
+  return createSignInLinkService({
+    now: () => new Date(),
+    appUrl: env.APP_URL,
+    emailSender: createEmailSenderFromEnv(),
+    checkEligibility,
+    newToken: () => randomBytes(24).toString("base64url"),
+    mailBudget: options.mailBudget,
+    store: {
+      findTenant: findTenantForInvite,
+      findUserByEmail: findAccountByEmail,
+      findUserById: findAccountById,
+      readSnapshot: moves.readSnapshot,
+      listTenantAccounts,
+      async replaceResetToken(userId, token, expiresAt) {
+        await deleteResetTokens(userId);
+        const context = await auth.$context;
+        // Better Auth's own format, so its reset endpoint accepts the token.
+        await context.internalAdapter.createVerificationValue({ identifier: `reset-password:${token}`, value: userId, expiresAt });
+      },
+    },
   });
 }
 
@@ -216,6 +256,9 @@ const LIMITS: Record<string, { limit: number; windowMs: number }> = {
   "invite-accept": { limit: 20, windowMs: 60_000 },
   "tenant-login": { limit: 60, windowMs: 3600_000 },
   "client-view": { limit: 60, windowMs: 3600_000 },
+  // Per admin. The per-client daily mail cap applies on top of "sign-in-email".
+  "sign-in-email": { limit: 30, windowMs: 3600_000 },
+  "sign-in-users": { limit: 120, windowMs: 3600_000 },
 };
 
 export function getInviteLimiter() {

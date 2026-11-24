@@ -24,6 +24,9 @@ const STATUS: Partial<Record<InviteError["code"], number>> = {
   invalid_invite: 404,
   weak_password: 400,
   invalid_name: 400,
+  already_active: 409,
+  account_disabled: 409,
+  not_found: 404,
 };
 
 // Client address for rate limiting: Vercel's header first (not forgeable by the client), then the
@@ -95,8 +98,13 @@ export async function handleCreateInvite(
   }
   try {
     const created = await deps.service.createInvite({ tenantId, email, role: role as InviteRole, createdById: admin });
+    if (created.kind === "set_password") {
+      // The email already had a never-used account in this client: a set-password link instead.
+      audit("sign_in_link_issued", { by: admin, tenantId, userId: created.userId, mail: created.mail, via: "invite" });
+      return reply(200, { kind: "set_password", link: created.link, email: created.email, mail: created.mail, expiresAt: created.expiresAt.toISOString() });
+    }
     audit("invite_created", { by: admin, tenantId, inviteId: created.inviteId });
-    return reply(200, { link: created.link, email: created.email });
+    return reply(200, created.mail ? { link: created.link, email: created.email, mail: created.mail } : { link: created.link, email: created.email });
   } catch (error) {
     audit("invite_create_failed", { by: admin, tenantId, reason: error instanceof InviteError ? error.code : "error" });
     return failure(error);

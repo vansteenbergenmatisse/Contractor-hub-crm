@@ -2,6 +2,7 @@ import { betterAuth } from "better-auth";
 import type { EmailSender } from "./email-sender";
 import { embedLoginPlugin, type EmbedLoginOptions } from "./embed-login";
 import { normalizeEmail } from "./invite-check";
+import { SET_PASSWORD_LINK_HOURS, setPasswordEmail } from "./set-password-email";
 import { isRole, MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, type Role } from "../types";
 
 // Better Auth, email and password only, invite only: the public sign-up endpoint is closed and a
@@ -11,7 +12,7 @@ import { isRole, MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, type Role } from "../
 // onboarding and stays signed in. Browsers cap a cookie's lifetime at about 400 days.
 const LONG_SESSION_SECONDS = 60 * 60 * 24 * 365;
 // 24 hours: the same link is the "set your password" mail a new user gets.
-const RESET_TOKEN_SECONDS = 60 * 60 * 24;
+const RESET_TOKEN_SECONDS = 60 * 60 * SET_PASSWORD_LINK_HOURS;
 
 export type CreateAuthOptions = {
   // A Better Auth database adapter: the Prisma adapter in production, the memory adapter in tests.
@@ -25,6 +26,10 @@ export type CreateAuthOptions = {
   isTenantBlocked?: (tenantId: string) => Promise<boolean>;
   // Removes the "never used" marker before a session is created. A failure never blocks sign-in.
   clearUnusedMarker?: (userId: string) => Promise<void>;
+  // The business name for the set-password mail. Left out, or failing, the mail names no business.
+  tenantName?: (tenantId: string) => Promise<string | null>;
+  // Where people sign in (the mail names it). Defaults to baseURL.
+  appUrl?: string;
 };
 
 export function createAuth(options: CreateAuthOptions) {
@@ -44,13 +49,27 @@ export function createAuth(options: CreateAuthOptions) {
       requireEmailVerification: false, // the invite already proved the email is a HighLevel user
       resetPasswordTokenExpiresIn: RESET_TOKEN_SECONDS,
       revokeSessionsOnPasswordReset: true,
+      // Forgot password and the onboarding sync's set-password mail. Through the injected sender, which
+      // in production is the delivery guard (createEmailSenderFromEnv).
       sendResetPassword: async ({ user, url }) => {
-        await options.emailSender.send({
-          kind: "password_reset",
-          to: user.email,
-          subject: "Set your password",
-          text: `Open this link within 24 hours to choose your password:\n${url}\n\nIf you did not ask for this, ignore this message.`,
-        });
+        const tenantId = (user as { tenantId?: string | null }).tenantId;
+        let tenantName: string | null = null;
+        if (tenantId && options.tenantName) {
+          try {
+            tenantName = await options.tenantName(tenantId);
+          } catch {
+            tenantName = null; // the mail still goes, without the business name
+          }
+        }
+        await options.emailSender.send(
+          setPasswordEmail({
+            to: user.email,
+            tenantName,
+            link: url,
+            appUrl: options.appUrl ?? options.baseURL,
+            expiresAt: new Date(Date.now() + RESET_TOKEN_SECONDS * 1000),
+          }),
+        );
       },
     },
     user: {
