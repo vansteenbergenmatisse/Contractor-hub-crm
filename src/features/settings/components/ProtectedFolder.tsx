@@ -1,4 +1,4 @@
-import { memo, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { labelOfKey } from "../api/fields";
 import { filledCount, type ProtectedId, type Step } from "../api/steps";
 import type { CustomValues, Problem } from "../types";
@@ -27,16 +27,42 @@ type Props = {
 };
 
 const shown = (value: string | undefined) => (value ?? "").trim() || "(empty)";
+const ANNOUNCED: Record<FolderMode, string> = {
+  locked: "Locked.",
+  gate: "Tick the box to unlock.",
+  edit: "Unlocked. You can make changes.",
+  review: "Check your changes.",
+};
 
 function ProtectedFolderView({ step, keys, values, draft, mode, error, problem, readOnly, blocked, saving, anySaving, otherOpen, onMode, onEdit, onLock, onSave }: Props) {
   const [ack, setAck] = useState(false);
   const changed = keys.filter((key) => (draft[key] ?? "").trim() !== (values[key] ?? "").trim());
   const go = (next: FolderMode) => { setAck(false); onMode(step.id, next); };
+  const root = useRef<HTMLDivElement>(null);
+  const status = useRef<HTMLParagraphElement>(null);
+  const lastMode = useRef(mode);
+
+  // Each stage removes the button that was pressed, so focus moves to the start of the new stage.
+  useEffect(() => {
+    if (lastMode.current === mode) return;
+    lastMode.current = mode;
+    const box = root.current;
+    if (!box) return;
+    const pick = (selector: string) => box.querySelector<HTMLElement>(selector);
+    const target = mode === "gate" ? pick('[role="checkbox"]')
+      : mode === "edit" ? pick('input[aria-invalid="true"]:not([readonly])') ?? pick("input:not([readonly])")
+      : mode === "review" ? pick(".ga-rt")
+      : pick("button.ga-pfb:not([disabled])") ?? pick(".ga-pfn");
+    target?.focus();
+    if (status.current) status.current.textContent = ANNOUNCED[mode];
+  }, [mode]);
+
   return (
-    <div className={`ga-pf is-${mode}`} id={`s-card-${step.id}`} data-step={step.id} role="group" aria-labelledby={`s-t-${step.id}`}>
+    <div ref={root} className={`ga-pf is-${mode}`} id={`s-card-${step.id}`} data-step={step.id} role="group" aria-labelledby={`s-t-${step.id}`}>
+      <p ref={status} className="ga-sr" role="status" />
       <div className="ga-pfh">
         <div className="ga-pft">
-          <h3 className="ga-pfn" id={`s-t-${step.id}`}>{step.title}</h3>
+          <h3 className="ga-pfn" id={`s-t-${step.id}`} tabIndex={-1}>{step.title}</h3>
           <div className="ga-meta"><span className="sv-chip">{filledCount(keys, values)} of {keys.length} filled</span></div>
         </div>
         <span className={`ga-pst ${mode === "locked" || mode === "gate" ? "is-lock" : "is-open"}`}>{mode === "locked" || mode === "gate" ? "Locked" : "Unlocked"}</span>
@@ -81,7 +107,7 @@ function ProtectedFolderView({ step, keys, values, draft, mode, error, problem, 
       ) : null}
       {mode === "review" ? (
         <div className="ga-rv" role="group" aria-labelledby={`s-r-${step.id}`}>
-          <p className="ga-rt" id={`s-r-${step.id}`}>Check your changes</p>
+          <p className="ga-rt" id={`s-r-${step.id}`} tabIndex={-1}>Check your changes</p>
           <p className="ga-rl">Your website pages change once you save.</p>
           <ul className="ga-dl">{changed.map((key) => <li key={key}>{labelOfKey(key)}: {shown(values[key])} to {shown(draft[key])}</li>)}</ul>
           <div className="ga-ga">

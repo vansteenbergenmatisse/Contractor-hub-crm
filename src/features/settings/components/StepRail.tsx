@@ -1,4 +1,6 @@
+import { useRef } from "react";
 import { PROTECTED_STEPS, STEPS, filledCount, type StepKeys } from "../api/steps";
+import { useStepSheet } from "../hooks/use-step-sheet";
 import type { CustomValues } from "../types";
 import { RailStep } from "./RailStep";
 
@@ -16,6 +18,8 @@ type Props = {
 
 // The step list with real progress, counted from the saved values. On a phone it is a bottom sheet.
 export function StepRail({ keys, values, dirtyKeys, current, sheetOpen, onlyEmpty, onOnlyEmpty, onJump, onCloseSheet }: Props) {
+  const root = useRef<HTMLDivElement>(null);
+  useStepSheet(root, sheetOpen, onCloseSheet);
   const main = STEPS.filter((step) => keys[step.id].length > 0);
   const locked = PROTECTED_STEPS.filter((step) => keys[step.id].length > 0);
   const total = main.reduce((sum, step) => sum + keys[step.id].length, 0);
@@ -26,9 +30,16 @@ export function StepRail({ keys, values, dirtyKeys, current, sheetOpen, onlyEmpt
     return `${filledCount(keys[id], values)} of ${keys[id].length} filled`;
   };
   return (
-    <aside className={`ga-rail${sheetOpen ? " is-sheet" : ""}`} aria-label="Steps">
+    <div
+      ref={root}
+      className={`ga-rail${sheetOpen ? " is-sheet" : ""}`}
+      role={sheetOpen ? "dialog" : "complementary"}
+      aria-modal={sheetOpen ? true : undefined}
+      aria-labelledby={sheetOpen ? "ga-sheet-title" : undefined}
+      aria-label={sheetOpen ? undefined : "Steps"}
+    >
       <div className="ga-shh">
-        <p className="ga-sht">Jump to a step</p>
+        <p className="ga-sht" id="ga-sheet-title">Jump to a step</p>
         <button type="button" className="ga-x" aria-label="Close" onClick={onCloseSheet}>×</button>
       </div>
       <div className="ga-prog sv-card">
@@ -63,6 +74,6 @@ export function StepRail({ keys, values, dirtyKeys, current, sheetOpen, onlyEmpt
           <span className="sv-onoff">{onlyEmpty ? "On" : "Off"}</span>
         </div>
       </div>
-    </aside>
+    </div>
   );
 }

@@ -61,6 +61,7 @@ export function SettingsPage({ initial, initialValues, initialSection, account, 
   const [signOutFailed, setSignOutFailed] = useState(false);
   const [onlyEmpty, setOnlyEmpty] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [jumpTo, setJumpTo] = useState<{ id: string } | null>(null);
   const [reviewStep, setReviewStep] = useState<string | null>(null);
   const [folder, setFolder] = useState<{ id: ProtectedId; mode: FolderMode } | null>(null);
   const { values, draft, err } = state;
@@ -114,7 +115,16 @@ export function SettingsPage({ initial, initialValues, initialSection, account, 
   const onFolderSave = useCallback((id: ProtectedId) => {
     void runSave(id, true).then((ok) => { if (ok) setFolder(null); else setFolder({ id, mode: "edit" }); });
   }, [runSave]);
-  const jump = useCallback((id: string) => { setSheetOpen(false); scrollToCard(id); }, []);
+  const jump = useCallback((id: string) => { setSheetOpen(false); setJumpTo({ id }); scrollToCard(id); }, []);
+  const closeSheet = useCallback(() => setSheetOpen(false), []);
+
+  // Runs after the sheet has closed and handed focus back, so the chosen step keeps it.
+  useEffect(() => {
+    if (!jumpTo) return;
+    const heading = document.getElementById(`s-t-${jumpTo.id}`);
+    heading?.setAttribute("tabindex", "-1");
+    heading?.focus({ preventScroll: true });
+  }, [jumpTo]);
 
   const imageControl = useCallback((f: Field, saved: string, dirty: boolean) => {
     const kind = imageKindOf(f.key);
@@ -173,8 +183,8 @@ export function SettingsPage({ initial, initialValues, initialSection, account, 
       {!live && !readOnly ? <p className="ga-note">Changes last until you close or reload this page.</p> : null}
 
       <div className="ga-grid" hidden={tab !== "det"}>
-        <StepRail keys={keys} values={values} dirtyKeys={dirtyKeys} current={current} sheetOpen={sheetOpen} onlyEmpty={onlyEmpty} onOnlyEmpty={() => setOnlyEmpty((on) => !on)} onJump={jump} onCloseSheet={() => setSheetOpen(false)} />
-        <div className="ga-stack">
+        <StepRail keys={keys} values={values} dirtyKeys={dirtyKeys} current={current} sheetOpen={sheetOpen} onlyEmpty={onlyEmpty} onOnlyEmpty={() => setOnlyEmpty((on) => !on)} onJump={jump} onCloseSheet={closeSheet} />
+        <div className="ga-stack" inert={sheetOpen}>
           {STEPS.map((step, i) => (keys[step.id].length === 0 ? null : (
             <StepCard
               key={step.id}
