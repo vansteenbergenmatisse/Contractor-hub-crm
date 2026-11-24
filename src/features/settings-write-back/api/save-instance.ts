@@ -1,6 +1,6 @@
 import { getBrandService } from "@/features/brand";
 import { createTenantCustomValueAdapter } from "@/features/highlevel";
-import type { ValueChange } from "@/features/settings";
+import { isSettingsKeyAllowed, type ValueChange } from "@/features/settings";
 import { beginValueChange, finishValueChange } from "../db/value-changes";
 import { claimSaveLock, releaseSaveLock } from "../db/save-lock";
 import { lockedKeysOf } from "../db/value-locks";
@@ -48,7 +48,8 @@ export function freshValuesReader(fallback: (tenantId: string) => Promise<readon
 export async function loadLockedKeys(tenantId: string | null | undefined): Promise<string[]> {
   if (!tenantId) return [];
   try {
-    return [...(await lockedKeysOf(tenantId))].sort();
+    // Only names of keys the owner is shown: a hidden key's name never reaches the browser.
+    return [...(await lockedKeysOf(tenantId))].filter(isSettingsKeyAllowed).sort();
   } catch {
     console.error("Settings locks did not load: step=read");
     return [];
