@@ -4,7 +4,8 @@
 // The HighLevel hosts are the ones the build prompt names; HighLevel's docs name no parent origins and
 // the agency's white-label domain is not known yet (PROGRESS.md, open question).
 export const HIGHLEVEL_FRAME_ANCESTORS = ["https://app.gohighlevel.com", "https://app.leadconnectorhq.com"];
-export const FRAME_DENIED_PATHS = ["sign-in", "forgot-password", "reset-password", "invite", "admin", "api"];
+// `device-sign-in` holds a one-tap sign-in button, so it is never framed either (clickjacking).
+export const FRAME_DENIED_PATHS = ["sign-in", "forgot-password", "reset-password", "invite", "admin", "api", "device-sign-in"];
 
 type HeaderRule = { source: string; headers: { key: string; value: string }[] };
 

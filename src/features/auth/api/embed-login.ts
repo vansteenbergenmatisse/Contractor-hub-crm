@@ -2,6 +2,7 @@ import { APIError, createAuthEndpoint } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
 import type { BetterAuthPlugin } from "better-auth";
 import { audit } from "./invite-routes";
+import { clientTenant, issueDeviceToken } from "./device-sign-in";
 
 // Sign-in from inside HighLevel (build prompt 4.5). The browser sends the encrypted user data it got
 // from HighLevel; an injected resolver decrypts it and names the CRM user (or nobody). The session
@@ -24,6 +25,9 @@ export type EmbedLoginOptions = {
   resolveUserId: (payload: string) => Promise<EmbedResolution>;
   // After the session is inserted: true only if the account is still in that tenant.
   confirmSession?: (input: { userId: string; tenantId: string; sessionToken: string }) => Promise<boolean>;
+  // Also answer with a single-use, 2-minute handoff token (api/device-sign-in.ts), so the framed page
+  // can continue full-screen. Off unless set; a failure to make one never fails the sign-in.
+  handoff?: boolean;
 };
 
 export type EmbedResolution = string | null | { reason: string } | { userId: string; tenantId: string };
@@ -84,6 +88,17 @@ export function embedLoginPlugin(options: EmbedLoginOptions & { appOrigin: strin
         const dontRemember = ctx.context.authCookies.dontRememberToken;
         await ctx.setSignedCookie(dontRemember.name, "true", ctx.context.secret, { ...dontRemember.attributes, sameSite: "none", secure: true });
         audit("embed_login", { outcome: "ok", userId });
+        if (options.handoff) {
+          // Only for the tenant this sign-in was resolved for, and only for a client's person.
+          const tenantId = clientTenant(user as never);
+          if (tenantId && (!bound || bound.tenantId === tenantId)) {
+            const issued = await issueDeviceToken(ctx.context.internalAdapter as never, { kind: "handoff", userId, tenantId }).catch(() => null);
+            if (issued) {
+              audit("device_handoff", { outcome: "issued", userId, tenantId });
+              return ctx.json({ ok: true, handoff: issued.token });
+            }
+          }
+        }
         return ctx.json({ ok: true });
       }),
     },

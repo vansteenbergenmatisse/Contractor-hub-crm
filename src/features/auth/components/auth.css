@@ -3,6 +3,11 @@
 a.fd-btn { text-decoration: none; }
 a.fd-lforgot:not(:hover):not(:focus-visible) { text-decoration: none; }
 
+/* "Sign in with HighLevel" above the email and password form. */
+.fd-lhl { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.fd-lhl .fd-lgo { width: 100%; justify-content: center; text-align: center; }
+.fd-lor { margin: 6px 0 0; font-size: 13px; text-align: center; opacity: 0.75; }
+
 /* A client's own sign-in background, behind the card. Only present on a personal link. */
 .fd-login.has-bg { position: relative; isolation: isolate; }
 .fd-lbg { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; object-fit: cover; }

@@ -14,8 +14,11 @@ export type HandshakeDeps = {
   fetchImpl: (
     url: string,
     init: { method: string; headers: Record<string, string>; body: string; credentials: "same-origin" },
-  ) => Promise<{ ok: boolean; status: number }>;
+  ) => Promise<{ ok: boolean; status: number; json?: () => Promise<unknown> }>;
   onResult: (result: HandshakeResult) => void;
+  // Called before "signed_in" when the server also gave a single-use handoff token (to continue
+  // full-screen). Only a well-formed token is passed on.
+  onHandoff?: (token: string) => void;
   retryEveryMs: number;
   giveUpAfterMs: number;
 };
@@ -50,7 +53,15 @@ export function startHandshake(deps: HandshakeDeps): () => void {
         body: JSON.stringify({ payload: data.payload }),
         credentials: "same-origin",
       })
-      .then((response) => finish(response.ok ? "signed_in" : "no_access"))
+      .then(async (response) => {
+        if (!response.ok) return finish("no_access");
+        if (deps.onHandoff && response.json) {
+          const body = (await response.json().catch(() => null)) as { handoff?: unknown } | null;
+          const token = body?.handoff;
+          if (!finished && typeof token === "string" && /^[A-Za-z0-9_-]{43}$/.test(token)) deps.onHandoff(token);
+        }
+        finish("signed_in");
+      })
       .catch(() => finish("no_access"));
   });
   const retry = setInterval(ask, deps.retryEveryMs);

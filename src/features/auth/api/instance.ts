@@ -29,6 +29,17 @@ import { prismaAuthDatabase } from "../db/auth-database";
 import { createMoveStore } from "../db/account-move";
 import { readSourceUnproven } from "./account-move";
 import type { EmbedResolution } from "./embed-login";
+import { parseSignInSlug, resolveHighLevelSignIn, type HighLevelSignIn } from "./highlevel-sign-in";
+import { findLocationIdBySlug } from "../db/highlevel-sign-in";
+
+// The "Sign in with HighLevel" target for /sign-in (?client= is checked here; a malformed value
+// causes no lookup). HIGHLEVEL_CRM_MENU_URL is read per call so the build needs no env.
+export function loadHighLevelSignIn(client: unknown): Promise<HighLevelSignIn> {
+  return resolveHighLevelSignIn(parseSignInSlug(client), {
+    template: process.env.HIGHLEVEL_CRM_MENU_URL,
+    findLocationId: findLocationIdBySlug,
+  });
+}
 
 // The /embed sign-in: decrypt HighLevel's user data with the shared secret, find the CRM user, and,
 // when the sub-account is installed but the person has no account yet, check with HighLevel that
@@ -140,6 +151,7 @@ export function getAuth(): Auth {
       clearUnusedMarker: (userId) => createMoveStore().clearMarker(userId),
       tenantName: async (tenantId) => (await findTenantForInvite(tenantId))?.name ?? null,
       appUrl: env.APP_URL,
+      deviceSignIn: true,
     });
   }
   return instance;
