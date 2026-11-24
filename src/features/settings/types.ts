@@ -38,7 +38,7 @@ export type SearchFilter = {
 // Saving to the account. The page gets `SaveValues` from outside: this feature makes no network call.
 // `clear`: the owner confirmed emptying this value on a review step. Without it an empty value is refused.
 export type ValueChange = { key: string; expected: string; value: string; clear?: true };
-export type SaveStatus = "saved" | "unchanged" | "conflict" | "invalid" | "missing" | "duplicate" | "denied" | "rejected" | "permission" | "retry" | "unknown" | "busy";
+export type SaveStatus = "saved" | "unchanged" | "conflict" | "invalid" | "missing" | "duplicate" | "denied" | "rejected" | "permission" | "retry" | "unknown" | "busy" | "locked";
 export type SaveResult = { key: string; status: SaveStatus; current?: string };
 export type SaveAnswer = { kind: "results"; results: SaveResult[] } | { kind: "limited" } | { kind: "failed" };
 // `unlocked`: the protected folder this save was made in (after its extra unlock step). The server
@@ -58,7 +58,7 @@ export type ImageKind = "svg" | "photo";
 export type ImageStatus =
   | "saved" | "conflict" | "missing" | "duplicate" | "busy" | "needs_approval" | "connection"
   | "rejected" | "bad_host" | "hash_mismatch" | "unknown" | "retry" | "limited" | "invalid" | "failed"
-  | "not_found" | "ambiguous" | "library_limit" | "format_mismatch";
+  | "not_found" | "ambiguous" | "library_limit" | "format_mismatch" | "locked";
 export type ImageFormat = "webp" | "png" | "jpeg" | "svg";
 // What happened to the old file after the image changed.
 // `unproven`: the new file's name, folder or bytes could not be confirmed. `same`: nothing to change.

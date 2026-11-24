@@ -12,6 +12,8 @@ export type StepContext = {
   imageHosts?: readonly string[];
   // Keys listed by name only, read-only (value too long to send).
   longKeys: ReadonlySet<string>;
+  // Keys Forge Forward locked: read-only with "Locked by Forge Forward".
+  lockedKeys?: ReadonlySet<string>;
   onEdit: (key: string, value: string) => void;
   onSave: (id: string) => void;
   onConfirmClear: (id: string) => void;
@@ -43,14 +45,14 @@ const isDirty = (keys: readonly string[], values: CustomValues, draft: CustomVal
   keys.some((key) => (draft[key] ?? "").trim() !== (values[key] ?? "").trim());
 
 function StepCardView({ step, number, total, keys, shownKeys, values, draft, error, current, saving, anySaving, savedHere, problem, reviewing, context }: Props) {
-  const { live, readOnly, blocked, imageHosts, longKeys, onEdit, onSave, onConfirmClear, onKeep, onCancel, imageControl } = context;
+  const { live, readOnly, blocked, imageHosts, longKeys, lockedKeys, onEdit, onSave, onConfirmClear, onKeep, onCancel, imageControl } = context;
   const dirty = isDirty(keys, values, draft);
   const filled = filledCount(keys, values, longKeys);
   const shownSet = new Set(shownKeys);
   // Sub-groups from the layout; one group on screen needs no heading.
   const groups = step.groups.map((g) => ({ ...g, keys: g.keys.filter((key) => shownSet.has(key)) })).filter((g) => g.keys.length > 0);
   const field = (key: string) => (
-    <StepField key={key} fieldKey={key} value={draft[key] ?? ""} saved={values[key] ?? ""} error={error} readOnly={readOnly} imageHosts={imageHosts} onChange={onEdit} imageControl={imageControl} long={longKeys.has(key)} />
+    <StepField key={key} fieldKey={key} value={draft[key] ?? ""} saved={values[key] ?? ""} error={error} readOnly={readOnly} imageHosts={imageHosts} onChange={onEdit} imageControl={imageControl} long={longKeys.has(key)} locked={lockedKeys?.has(key)} />
   );
   const cleared = reviewing ? clearedKeys(keys, values, draft) : [];
   const verb = live ? "Save" : "Apply";

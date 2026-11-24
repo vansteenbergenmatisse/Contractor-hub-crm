@@ -2,7 +2,7 @@ import { Fragment, memo, useEffect, useRef, useState } from "react";
 import { labelOfKey } from "../api/fields";
 import { filledCount, type ProtectedId, type Step } from "../api/steps";
 import type { CustomValues, Problem } from "../types";
-import { TOO_LONG_NOTE } from "./StepField";
+import { LOCKED_NOTE, TOO_LONG_NOTE } from "./StepField";
 import { ValueField } from "./ValueField";
 
 export type FolderMode = "locked" | "gate" | "edit" | "review";
@@ -14,6 +14,8 @@ type Props = {
   draft: CustomValues;
   // Keys listed by name only, read-only (value too long to send).
   longKeys: ReadonlySet<string>;
+  // Keys Forge Forward locked: read-only even after the unlock step.
+  lockedKeys?: ReadonlySet<string>;
   mode: FolderMode;
   error: Problem | null;
   problem: string | null;
@@ -41,7 +43,7 @@ const ANNOUNCED: Record<FolderMode, string> = {
   review: "Check your changes.",
 };
 
-function ProtectedFolderView({ step, keys, values, draft, longKeys, mode, error, problem, live, saved, readOnly, blocked, saving, anySaving, otherOpen, onMode, onEdit, onLock, onSave }: Props) {
+function ProtectedFolderView({ step, keys, values, draft, longKeys, lockedKeys, mode, error, problem, live, saved, readOnly, blocked, saving, anySaving, otherOpen, onMode, onEdit, onLock, onSave }: Props) {
   const [ack, setAck] = useState(false);
   const inKeys = new Set(keys);
   // Sub-groups from the layout (one per service or area); one group needs no heading.
@@ -108,8 +110,8 @@ function ProtectedFolderView({ step, keys, values, draft, longKeys, mode, error,
                 saved={longKeys.has(key) ? "" : values[key] ?? ""}
                 invalid={error?.key === key}
                 error={error?.key === key ? error.message : undefined}
-                readOnly={readOnly || mode !== "edit" || longKeys.has(key)}
-                helpers={longKeys.has(key) ? [TOO_LONG_NOTE] : undefined}
+                readOnly={readOnly || mode !== "edit" || longKeys.has(key) || !!lockedKeys?.has(key)}
+                helpers={longKeys.has(key) ? [TOO_LONG_NOTE] : lockedKeys?.has(key) ? [LOCKED_NOTE] : undefined}
                 onChange={onEdit}
               />
             ))}
@@ -141,7 +143,7 @@ function ProtectedFolderView({ step, keys, values, draft, longKeys, mode, error,
 }
 
 export const ProtectedFolder = memo(ProtectedFolderView, (a, b) =>
-  a.step === b.step && a.longKeys === b.longKeys && a.mode === b.mode && a.error === b.error && a.problem === b.problem && a.live === b.live && a.saved === b.saved && a.readOnly === b.readOnly &&
+  a.step === b.step && a.longKeys === b.longKeys && a.lockedKeys === b.lockedKeys && a.mode === b.mode && a.error === b.error && a.problem === b.problem && a.live === b.live && a.saved === b.saved && a.readOnly === b.readOnly &&
   a.blocked === b.blocked && a.saving === b.saving && a.anySaving === b.anySaving && a.otherOpen === b.otherOpen &&
   a.onMode === b.onMode && a.onEdit === b.onEdit && a.onLock === b.onLock && a.onSave === b.onSave &&
   a.keys.length === b.keys.length && a.keys.every((key, i) => key === b.keys[i] && a.values[key] === b.values[key] && a.draft[key] === b.draft[key]));

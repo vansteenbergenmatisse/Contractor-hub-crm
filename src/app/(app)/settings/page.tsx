@@ -2,7 +2,7 @@ import { hitRateLimit } from "@/features/auth";
 import { getTenantCustomValues, getTenantCustomValuesReadOnly } from "@/features/brand";
 import { createTenantPhoneNumbersReader } from "@/features/highlevel";
 import { SettingsPage, loadSettingsValues, sectionFromParam, type AccountLayout, type LoadStatus, type PhoneNumbersView } from "@/features/settings";
-import { SettingsWriteBackPage, freshValuesReader, isMediaReplaceEnabled, isWriteBackEnabled, saveOffReason } from "@/features/settings-write-back";
+import { SettingsWriteBackPage, freshValuesReader, isMediaReplaceEnabled, isWriteBackEnabled, loadLockedKeys, saveOffReason } from "@/features/settings-write-back";
 import { getRequestUser } from "../../session";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +29,8 @@ export default async function Page({ searchParams }: Props = {}) {
   // Not awaited: the row gets the pending read, so a slow or failed read only changes that row.
   const phoneNumbers = readPhones(user);
   const loaded: { layout?: AccountLayout; status?: LoadStatus } = {};
+  // Keys Forge Forward locked: read-only on the page (the save route refuses them as well).
+  const locked = loadLockedKeys(user?.tenantId);
   const values = await loadSettingsValues(
     user?.tenantId,
     read,
@@ -39,6 +41,8 @@ export default async function Page({ searchParams }: Props = {}) {
       loaded.status = status;
     },
   );
+  const lockedKeys = await locked;
+  if (loaded.layout && lockedKeys.length > 0) loaded.layout = { ...loaded.layout, lockedKeys };
   const section = sectionFromParam((await searchParams)?.section) ?? undefined;
   return user?.viewing ? (
     <SettingsPage initialValues={values} initialSection={section} account={loaded.layout} loadStatus={loaded.status} phoneNumbers={phoneNumbers} readOnly />

@@ -31,6 +31,7 @@ const MESSAGES: Record<Exclude<ImageStatus, "saved">, string> = {
   ambiguous: "This image is in your media library more than once, so nothing was changed. Ask Forge Forward to check it.",
   library_limit: "We could not check your whole media library, so nothing was changed. Your current image is still live. Try again or ask Forge Forward.",
   format_mismatch: "The new file is a different format from your current file, so nothing was changed. Your current image is still live.",
+  locked: "Locked by Forge Forward. Ask us to change it. Your current image is still live.",
 };
 
 const SVG_PROBLEMS: Record<SvgProblemCode, string> = {

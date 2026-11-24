@@ -1,5 +1,5 @@
 import { getGuards, hitRateLimit } from "@/features/auth";
-import { handleMediaReplace, isMediaReplaceEnabled, isWriteBackEnabled, mediaFailure, replaceTenantImage } from "@/features/settings-write-back";
+import { handleMediaReplace, isMediaReplaceEnabled, isWriteBackEnabled, lockedKeysOf, mediaFailure, replaceTenantImage } from "@/features/settings-write-back";
 import { parseEnv } from "@/shared/config";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +16,7 @@ export async function POST(request: Request): Promise<Response> {
       isEnabled: (tenantId) => isWriteBackEnabled(tenantId) && isMediaReplaceEnabled(tenantId),
       hit: hitRateLimit,
       replace: replaceTenantImage,
+      isLocked: async (tenantId, key) => (await lockedKeysOf(tenantId)).has(key),
     });
   } catch {
     return mediaFailure();

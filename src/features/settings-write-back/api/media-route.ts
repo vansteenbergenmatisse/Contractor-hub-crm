@@ -19,6 +19,8 @@ export type MediaRouteDeps = {
   isEnabled: (tenantId: string) => boolean;
   hit: (key: string, limit: number, windowMs: number, now: Date) => Promise<boolean>;
   replace: (input: { tenantId: string; actorId: string; key: string; expected: string; file: CheckedImage }) => Promise<ImageAnswer>;
+  // Forge Forward locked this key for the tenant. A failed check uploads nothing (fails closed).
+  isLocked?: (tenantId: string, key: string) => Promise<boolean>;
 };
 
 const reply = (status: number, body: unknown) =>
@@ -124,6 +126,16 @@ export async function handleMediaReplace(request: Request, deps: MediaRouteDeps)
   if (!body) return reply(413, { error: "too_large" });
   const fields = await parseFields(body, contentType);
   if (!fields) return reply(400, { error: "invalid" });
+  if (deps.isLocked) {
+    let locked: boolean;
+    try {
+      locked = await deps.isLocked(tenantId, fields.key);
+    } catch {
+      console.error("Settings image failed: step=locks");
+      return reply(200, { status: "retry" });
+    }
+    if (locked) return reply(200, { status: "locked" });
+  }
   const checked = checkFile(fields.key, new Uint8Array(await fields.file.arrayBuffer()));
   if (!checked.ok) {
     const response = reply(400, { error: "invalid", reason: checked.reason });
