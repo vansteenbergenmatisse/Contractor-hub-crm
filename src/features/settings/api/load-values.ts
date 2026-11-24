@@ -1,10 +1,12 @@
-import { settingsValuesFrom } from "./allowlist";
+import { settingsReadFrom } from "./allowlist";
 import { imageHostsFrom } from "./image-preview";
+import { unplacedKeys } from "./layout";
 
 type Row = { key: string; value: string | null | undefined };
 
-// What the page needs to arrange a loaded account: the hosts an image preview may load from.
-export type AccountLayout = { imageHosts: string[] };
+// What the page needs to arrange a loaded account: the hosts an image preview may load from, and
+// the shown keys whose value is too long to edit here (names only, never their values).
+export type AccountLayout = { imageHosts: string[]; longKeys?: string[] };
 
 // How the read went. `ok`: values arrived (blank ones count). `empty`: HighLevel answered, but with no
 // key Settings shows. `failed`: the read or the filter failed. `not-connected`: no tenant, or the
@@ -15,7 +17,7 @@ const isNotConnected = (error: unknown) =>
   typeof error === "object" && error !== null && (error as { code?: unknown }).code === "not-connected";
 
 // The Settings page's values for one tenant: the tenant's custom values, read by `read` (the server
-// passes its reader), filtered by the settings allowlist so secrets stay on the server. When they
+// passes its reader), classified on the server so secrets (name and value) stay there. When they
 // cannot be read, or there is no tenant, the fields stay empty: never the design's sample business.
 // `onLayout` is called only after a good read, so a failed read never looks like removed keys.
 // `onStatus` gets how the read went, so the page says "did not load" only on a real failure.
@@ -40,12 +42,18 @@ export async function loadSettingsValues(
     return {};
   }
   try {
-    const values = settingsValuesFrom(rows);
-    const empty = Object.keys(values).length === 0;
+    const { values, longKeys, hiddenKeys } = settingsReadFrom(rows);
+    // Names only: keys kept on the server (secret name or secret-looking value), so a re-run of the
+    // layout, or a person checking why a value is missing, knows they exist.
+    if (hiddenKeys && hiddenKeys.length > 0) console.warn(`Settings layout: hidden keys=${hiddenKeys.join(",")}`);
+    const empty = Object.keys(values).length === 0 && longKeys.length === 0;
     if (empty) {
       console.error(`Settings values did not load: step=${rows.length === 0 ? "empty" : "none-allowed"} rows=${rows.length}`);
     }
-    onLayout?.({ imageHosts: imageHostsFrom(process.env.LOGO_HOST_ALLOWLIST) });
+    // Key names only (never values), so the next layout re-run knows what to place.
+    const unplaced = unplacedKeys([...Object.keys(values), ...longKeys]);
+    if (unplaced.length > 0) console.warn(`Settings layout: unplaced keys=${unplaced.join(",")}`);
+    onLayout?.({ imageHosts: imageHostsFrom(process.env.LOGO_HOST_ALLOWLIST), longKeys });
     onStatus?.(empty ? "empty" : "ok");
     return values;
   } catch {

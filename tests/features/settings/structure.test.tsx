@@ -102,7 +102,8 @@ describe("keys that come and go", () => {
     expect(screen.queryByText(/^Show \d+ names?$/)).toBeNull();
   });
 
-  it("the server sends neither the name nor the value of an unknown key", async () => {
+  // Changed 2026-11-24 (every value shows): an unknown plain key now reaches the page; secrets still do not.
+  it("the server sends an unknown plain key, and neither the name nor the value of a secret", async () => {
     const rows = [
       { key: "business_name", value: "Test Co" },
       { key: "new_client_field", value: "PRIVATE-VALUE" },
@@ -112,11 +113,13 @@ describe("keys that come and go", () => {
       { key: "bad key!", value: "x" },
     ];
     let layout: unknown;
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const values = await loadSettingsValues("tenant_1", async () => rows, (l) => { layout = l; });
-    expect(values).toEqual({ business_name: "Test Co" });
-    expect(layout).toEqual({ imageHosts: expect.any(Array) });
+    expect(values).toEqual({ business_name: "Test Co", new_client_field: "PRIVATE-VALUE" });
+    expect(layout).toEqual({ imageHosts: expect.any(Array), longKeys: [] });
+    warn.mockRestore();
     const sent = JSON.stringify({ values, layout });
-    for (const bad of ["new_client_field", "PRIVATE-VALUE", "webhook", "hooks.example", "stripe_secret", "sec-456", "embed", "iframe"]) expect(sent).not.toContain(bad);
+    for (const bad of ["webhook", "hooks.example", "stripe_secret", "sec-456", "embed", "iframe"]) expect(sent).not.toContain(bad);
   });
 
   it("gives no layout when the read fails", async () => {
@@ -125,8 +128,9 @@ describe("keys that come and go", () => {
     expect(onLayout).not.toHaveBeenCalled();
   });
 
-  it("still refuses to save a key that is not allowlisted", () => {
-    expect(isSettingsKeyAllowed("new_client_field")).toBe(false);
+  // Changed 2026-11-24 (every value shows): a shown key may be saved; a secret one is still refused.
+  it("saves a shown key and still refuses a secret one", () => {
+    expect(isSettingsKeyAllowed("new_client_field")).toBe(true);
     expect(isSettingsKeyAllowed("0_webhook_url_form")).toBe(false);
   });
 });

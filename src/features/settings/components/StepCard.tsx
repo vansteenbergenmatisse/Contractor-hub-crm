@@ -1,4 +1,4 @@
-import { memo, type ReactNode } from "react";
+import { Fragment, memo, type ReactNode } from "react";
 import { labelOfKey } from "../api/fields";
 import { clearedKeys, filledCount, type Step } from "../api/steps";
 import type { CustomValues, Field, Problem } from "../types";
@@ -10,6 +10,8 @@ export type StepContext = {
   readOnly: boolean;
   blocked: boolean;
   imageHosts?: readonly string[];
+  // Keys listed by name only, read-only (value too long to send).
+  longKeys: ReadonlySet<string>;
   onEdit: (key: string, value: string) => void;
   onSave: (id: string) => void;
   onConfirmClear: (id: string) => void;
@@ -41,9 +43,15 @@ const isDirty = (keys: readonly string[], values: CustomValues, draft: CustomVal
   keys.some((key) => (draft[key] ?? "").trim() !== (values[key] ?? "").trim());
 
 function StepCardView({ step, number, total, keys, shownKeys, values, draft, error, current, saving, anySaving, savedHere, problem, reviewing, context }: Props) {
-  const { live, readOnly, blocked, imageHosts, onEdit, onSave, onConfirmClear, onKeep, onCancel, imageControl } = context;
+  const { live, readOnly, blocked, imageHosts, longKeys, onEdit, onSave, onConfirmClear, onKeep, onCancel, imageControl } = context;
   const dirty = isDirty(keys, values, draft);
-  const filled = filledCount(keys, values);
+  const filled = filledCount(keys, values, longKeys);
+  const shownSet = new Set(shownKeys);
+  // Sub-groups from the layout; one group on screen needs no heading.
+  const groups = step.groups.map((g) => ({ ...g, keys: g.keys.filter((key) => shownSet.has(key)) })).filter((g) => g.keys.length > 0);
+  const field = (key: string) => (
+    <StepField key={key} fieldKey={key} value={draft[key] ?? ""} saved={values[key] ?? ""} error={error} readOnly={readOnly} imageHosts={imageHosts} onChange={onEdit} imageControl={imageControl} long={longKeys.has(key)} />
+  );
   const cleared = reviewing ? clearedKeys(keys, values, draft) : [];
   const verb = live ? "Save" : "Apply";
   const hint = dirty
@@ -58,13 +66,16 @@ function StepCardView({ step, number, total, keys, shownKeys, values, draft, err
           <p className="ga-line">{step.line}</p>
         </div>
       </header>
-      {shownKeys.length > 0 ? (
-        <div className="sv-fields">
-          {shownKeys.map((key) => (
-            <StepField key={key} fieldKey={key} value={draft[key] ?? ""} saved={values[key] ?? ""} error={error} readOnly={readOnly} imageHosts={imageHosts} onChange={onEdit} imageControl={imageControl} />
+      {shownKeys.length === 0 ? <p className="ga-none">Nothing is empty here.</p> : groups.length > 1 ? (
+        <div className="ga-bd">
+          {groups.map((g) => (
+            <Fragment key={g.id}>
+              <div className="ga-sgh"><h3 className="ga-sg">{g.title}</h3></div>
+              <div className="sv-fields">{g.keys.map(field)}</div>
+            </Fragment>
           ))}
         </div>
-      ) : <p className="ga-none">Nothing is empty here.</p>}
+      ) : <div className="sv-fields">{shownKeys.map(field)}</div>}
       {cleared.length > 0 ? (
         <div className="ga-rv is-on" role="group" aria-labelledby={`s-r-${step.id}`}>
           <p className="ga-rt" id={`s-r-${step.id}`} tabIndex={-1}>Check before you clear</p>

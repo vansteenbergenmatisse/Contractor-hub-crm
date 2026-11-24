@@ -22,7 +22,7 @@ import { SettingsPage, type SaveValues } from "@/features/settings";
 // Made-up values only.
 const VALUES: Record<string, string> = { business_name: "Test Co", seasonal_offer_text: "Old offer" };
 const allSaved: SaveValues = async (changes) => ({ kind: "results", results: changes.map(({ key }) => ({ key, status: "saved" as const })) });
-const CARD_SAVE = "Save Images and offers";
+const CARD_SAVE = "Save Business";
 
 const scrolled: Element[] = [];
 const original = Element.prototype.scrollIntoView;
@@ -56,7 +56,7 @@ describe("the clear review", () => {
     const { user } = await emptyOffer();
     await user.click(screen.getByRole("button", { name: CARD_SAVE }));
     await waitFor(() => expect(scrolled.at(-1)).toBe(heading().closest(".ga-rv")));
-    expect(scrolled).not.toContain(document.getElementById("s-card-img"));
+    expect(scrolled).not.toContain(document.getElementById("s-card-biz"));
   });
 
   it("shows the review again when the phone bar's Save is pressed twice", async () => {

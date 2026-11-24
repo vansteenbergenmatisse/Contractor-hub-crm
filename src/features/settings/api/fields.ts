@@ -1,6 +1,6 @@
 import type { ColorGroup, Connection, Field, SectionKey } from "../types";
 import { isSettingsKeyAllowed } from "./allowlist";
-import { OUR_WORK_KEYS, SOCIAL_KEYS, folderKeyLabel } from "./folder-keys";
+import { OUR_WORK_KEYS, PAGE_TEXT_KEY, SOCIAL_KEYS, folderKeyLabel } from "./folder-keys";
 
 // Folder 01_Business_essentials (build prompt section 5). Keys never change.
 export const ESSENTIAL_FIELDS: Field[] = [
@@ -64,8 +64,8 @@ export const COLOR_GROUPS: ColorGroup[] = [
 export const ESSENTIAL_KEYS: string[] = ESSENTIAL_FIELDS.map((f) => f.key);
 export const COLOR_KEYS: string[] = COLOR_GROUPS.flatMap((g) => g.fields.map((f) => f.key));
 // Keys the sub-account has that the design does not list (for example business_address_city or
-// request_a_job_booking_link). They show under their own key in Business details; only values change.
-// Only allowlisted keys show (the server filters too): a secret custom value never becomes a field.
+// residentialservice3). Each shows in its layout folder; only values change. Only keys the
+// classifier shows (the server filters first): a secret custom value never becomes a field.
 export function extraKeys(values: Record<string, string>): string[] {
   const known = new Set([...ESSENTIAL_KEYS, ...COLOR_KEYS]);
   return Object.keys(values).filter((k) => !known.has(k) && isSettingsKeyAllowed(k));
@@ -78,7 +78,7 @@ export function labelOfKey(key: string): string {
   if (known) return known.label;
   const numbered = folderKeyLabel(key);
   if (numbered) return numbered;
-  const words = key.replace(/_/g, " ").trim();
+  const words = key.replace(/_/g, " ").replace(/([a-z])(\d)/gi, "$1 $2").replace(/(\d)([a-z])/gi, "$1 $2").replace(/\s+/g, " ").trim();
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
@@ -88,6 +88,15 @@ export const LINK_KEYS: string[] = [
   "business_google_profile_url", "google_review_request_url", "bbb_review_request_url",
   ...SOCIAL_KEYS, ...OUR_WORK_KEYS,
 ];
+const LINK_SET: ReadonlySet<string> = new Set(LINK_KEYS);
+// Names that hold a link or an image link, for keys the list above does not name (a new booking
+// link, a partner logo, project 100). Their values must be https links, in the form and on write.
+const LINK_NAME = /(_url|_link|_logo|_image|_img|_photo|_picture|_favicon)$|^\d+_our_work_(before|after)$/i;
+export const isLinkKey = (key: string): boolean => LINK_SET.has(key) || (LINK_NAME.test(key) && !PAGE_TEXT_KEY.test(key));
+
+// A website page's HTML text or URL slug (`residentialservice1content`, `bizarea3path`). Shown as
+// plain text; editable only inside a protected folder's unlock step.
+export const isPageTextKey = (key: string): boolean => PAGE_TEXT_KEY.test(key);
 
 // The brand reader's spellings of one fact, in its order (brand/api/build-brand.ts).
 const READER_SPELLINGS: readonly (readonly string[])[] = [

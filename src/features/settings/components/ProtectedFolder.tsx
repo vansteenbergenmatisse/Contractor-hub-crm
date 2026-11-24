@@ -1,7 +1,8 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { Fragment, memo, useEffect, useRef, useState } from "react";
 import { labelOfKey } from "../api/fields";
 import { filledCount, type ProtectedId, type Step } from "../api/steps";
 import type { CustomValues, Problem } from "../types";
+import { TOO_LONG_NOTE } from "./StepField";
 import { ValueField } from "./ValueField";
 
 export type FolderMode = "locked" | "gate" | "edit" | "review";
@@ -11,6 +12,8 @@ type Props = {
   keys: readonly string[];
   values: CustomValues;
   draft: CustomValues;
+  // Keys listed by name only, read-only (value too long to send).
+  longKeys: ReadonlySet<string>;
   mode: FolderMode;
   error: Problem | null;
   problem: string | null;
@@ -38,8 +41,11 @@ const ANNOUNCED: Record<FolderMode, string> = {
   review: "Check your changes.",
 };
 
-function ProtectedFolderView({ step, keys, values, draft, mode, error, problem, live, saved, readOnly, blocked, saving, anySaving, otherOpen, onMode, onEdit, onLock, onSave }: Props) {
+function ProtectedFolderView({ step, keys, values, draft, longKeys, mode, error, problem, live, saved, readOnly, blocked, saving, anySaving, otherOpen, onMode, onEdit, onLock, onSave }: Props) {
   const [ack, setAck] = useState(false);
+  const inKeys = new Set(keys);
+  // Sub-groups from the layout (one per service or area); one group needs no heading.
+  const groups = step.groups.map((g) => ({ ...g, keys: g.keys.filter((key) => inKeys.has(key)) })).filter((g) => g.keys.length > 0);
   const changed = keys.filter((key) => (draft[key] ?? "").trim() !== (values[key] ?? "").trim());
   const go = (next: FolderMode) => { setAck(false); onMode(step.id, next); };
   const root = useRef<HTMLDivElement>(null);
@@ -69,7 +75,7 @@ function ProtectedFolderView({ step, keys, values, draft, mode, error, problem, 
       <div className="ga-pfh">
         <div className="ga-pft">
           <h3 className="ga-pfn" id={`s-t-${step.id}`} tabIndex={-1}>{step.title}</h3>
-          <div className="ga-meta"><span className="sv-chip">{filledCount(keys, values)} of {keys.length} filled</span></div>
+          <div className="ga-meta"><span className="sv-chip">{filledCount(keys, values, longKeys)} of {keys.length} filled</span></div>
         </div>
         <span className={`ga-pst ${mode === "locked" || mode === "gate" ? "is-lock" : "is-open"}`}>{mode === "locked" || mode === "gate" ? "Locked" : "Unlocked"}</span>
         {mode === "locked" && !readOnly ? (
@@ -90,20 +96,26 @@ function ProtectedFolderView({ step, keys, values, draft, mode, error, problem, 
           </div>
         </div>
       ) : null}
-      <div className="sv-fields ga-pfields">
-        {keys.map((key) => (
-          <ValueField
-            key={key}
-            field={{ key, label: labelOfKey(key) }}
-            value={draft[key] ?? ""}
-            saved={values[key] ?? ""}
-            invalid={error?.key === key}
-            error={error?.key === key ? error.message : undefined}
-            readOnly={readOnly || mode !== "edit"}
-            onChange={onEdit}
-          />
-        ))}
-      </div>
+      {(groups.length > 1 ? groups : [{ id: "all", title: "", keys: [...keys] }]).map((g) => (
+        <Fragment key={g.id}>
+          {groups.length > 1 ? <div className="ga-sgh"><h4 className="ga-sg">{g.title}</h4></div> : null}
+          <div className="sv-fields ga-pfields">
+            {g.keys.map((key) => (
+              <ValueField
+                key={key}
+                field={{ key, label: labelOfKey(key) }}
+                value={longKeys.has(key) ? "" : draft[key] ?? ""}
+                saved={longKeys.has(key) ? "" : values[key] ?? ""}
+                invalid={error?.key === key}
+                error={error?.key === key ? error.message : undefined}
+                readOnly={readOnly || mode !== "edit" || longKeys.has(key)}
+                helpers={longKeys.has(key) ? [TOO_LONG_NOTE] : undefined}
+                onChange={onEdit}
+              />
+            ))}
+          </div>
+        </Fragment>
+      ))}
       {mode === "edit" ? (
         <div className="ga-eb">
           <p className={`ga-edn${changed.length > 0 ? " is-chg" : ""}`}>{changed.length === 0 ? "No changes yet" : `${changed.length} changed`}</p>
@@ -129,7 +141,7 @@ function ProtectedFolderView({ step, keys, values, draft, mode, error, problem, 
 }
 
 export const ProtectedFolder = memo(ProtectedFolderView, (a, b) =>
-  a.step === b.step && a.mode === b.mode && a.error === b.error && a.problem === b.problem && a.live === b.live && a.saved === b.saved && a.readOnly === b.readOnly &&
+  a.step === b.step && a.longKeys === b.longKeys && a.mode === b.mode && a.error === b.error && a.problem === b.problem && a.live === b.live && a.saved === b.saved && a.readOnly === b.readOnly &&
   a.blocked === b.blocked && a.saving === b.saving && a.anySaving === b.anySaving && a.otherOpen === b.otherOpen &&
   a.onMode === b.onMode && a.onEdit === b.onEdit && a.onLock === b.onLock && a.onSave === b.onSave &&
   a.keys.length === b.keys.length && a.keys.every((key, i) => key === b.keys[i] && a.values[key] === b.values[key] && a.draft[key] === b.draft[key]));

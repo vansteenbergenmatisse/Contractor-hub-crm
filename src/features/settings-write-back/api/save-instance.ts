@@ -6,7 +6,7 @@ import { claimSaveLock, releaseSaveLock } from "../db/save-lock";
 import { saveCustomValues } from "./write-back";
 
 // The real save. The HighLevel adapter is built per call, so `next build` needs no environment.
-export function saveTenantValues(input: { tenantId: string; actorId: string; changes: ValueChange[] }) {
+export function saveTenantValues(input: { tenantId: string; actorId: string; changes: ValueChange[]; unlocked?: string }) {
   const adapter = createTenantCustomValueAdapter();
   return saveCustomValues(input, {
     read: adapter.read,

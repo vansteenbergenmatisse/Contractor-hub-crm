@@ -1,4 +1,4 @@
-import { LINK_KEYS } from "@/features/settings";
+import { isLinkKey } from "@/features/settings";
 import { safeHttpsUrl } from "@/shared/lib/safe-https-url";
 
 // Stricter than the form, because these values leave the app and feed the client's website and
@@ -28,7 +28,7 @@ function isInRange(value: string, limit: number): boolean {
 
 export function isSafeToWrite(key: string, value: string): boolean {
   if (UNSAFE_TEXT.test(value)) return false;
-  if (LINK_KEYS.includes(key)) return isSafeLink(value);
+  if (isLinkKey(key)) return isSafeLink(value);
   if (key === "business_email") return EMAIL.test(value);
   if (key === "business_phone_number") return PHONE.test(value) && /\d/.test(value);
   if (key === "business_latitude") return isInRange(value, 90);

@@ -22,7 +22,7 @@ describe("loadSettingsValues: says why the page has nothing to show", () => {
 
   it("logs a read where no row is a key Settings shows", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
-    const rows = [{ key: "secret_webhook_url", value: "https://secret.test" }, { key: "business_full_address", value: null }, { key: "x", value: "y" }];
+    const rows = [{ key: "secret_webhook_url", value: "https://secret.test" }, { key: "business_full_address", value: null }, { key: "0_x", value: "y" }];
     expect(await loadSettingsValues("t1", async () => rows)).toEqual({ business_full_address: "" });
     expect(error).not.toHaveBeenCalled();
     expect(await loadSettingsValues("t1", async () => rows.filter((r) => r.key !== "business_full_address"))).toEqual({});

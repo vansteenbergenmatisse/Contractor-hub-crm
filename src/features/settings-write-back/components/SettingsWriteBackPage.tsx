@@ -3,7 +3,7 @@
 import type { ComponentProps } from "react";
 import { useRouter } from "next/navigation";
 import { SettingsPage } from "@/features/settings";
-import type { ImageUploader, SaveAnswer, ValueChange } from "@/features/settings";
+import type { ImageUploader, SaveAnswer, SaveOptions, ValueChange } from "@/features/settings";
 import { sendImage } from "../api/send-image";
 import { sendValues } from "../api/send-values";
 
@@ -17,8 +17,8 @@ type Props = Omit<ComponentProps<typeof SettingsPage>, "saveValues" | "readOnly"
 // from it and a client navigation does not re-render a layout.
 export function SettingsWriteBackPage({ mediaReplace = false, ...props }: Props) {
   const router = useRouter();
-  async function save(changes: ValueChange[]): Promise<SaveAnswer> {
-    const answer = await sendValues(changes);
+  async function save(changes: ValueChange[], options?: SaveOptions): Promise<SaveAnswer> {
+    const answer = await (options ? sendValues(changes, options) : sendValues(changes));
     if (answer.kind === "results" && answer.results.some(({ status }) => status === "saved" || status === "unknown")) router.refresh();
     return answer;
   }

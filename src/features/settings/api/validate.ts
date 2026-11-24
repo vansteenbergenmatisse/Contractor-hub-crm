@@ -1,5 +1,5 @@
 import type { CustomValues, Problem } from "../types";
-import { COLOR_KEYS, LINK_KEYS, labelOfKey, sectionOfKey } from "./fields";
+import { COLOR_KEYS, LINK_KEYS, isLinkKey, labelOfKey, sectionOfKey } from "./fields";
 
 const HEX6 = /^#[0-9a-fA-F]{6}$/;
 // HighLevel can hold a short color that the brand reader accepts, so the contrast rule judges it too.
@@ -50,7 +50,8 @@ export function validateValues(values: CustomValues, saved?: CustomValues): Prob
     if (!HEX6.test(v(key))) return problem(key, `${labelOfKey(key)} needs a color like #2E7D32.`);
   }
   if (changed("business_name") && v("business_name") === "") return problem("business_name", "Enter the business name.");
-  for (const key of LINK_KEYS) {
+  const linkKeys = [...LINK_KEYS, ...Object.keys(values).filter((key) => !LINK_KEYS.includes(key) && isLinkKey(key))];
+  for (const key of linkKeys) {
     if (changed(key) && v(key) !== "" && !HTTPS.test(v(key))) {
       return problem(key, `${labelOfKey(key)} needs a link that starts with https://.`);
     }

@@ -1,5 +1,5 @@
 import type { CustomValueDetail, CustomValueRead, CustomValueWriteOutcome } from "@/features/highlevel";
-import { isClearableKey, isSettingsKeyAllowed, validateValues, type CustomValues, type SaveResult, type SaveStatus, type ValueChange } from "@/features/settings";
+import { MAX_VALUE_LENGTH, isClearableKey, isSecretValue, isSettingsKeyAllowed, validateValues, writeGuardOf, type CustomValues, type SaveResult, type SaveStatus, type ValueChange } from "@/features/settings";
 import { isSafeToWrite } from "./value-rules";
 
 const UNITS_AT_ONCE = 3;
@@ -28,7 +28,16 @@ export type SaveDeps = {
   wait?: (ms: number) => Promise<void>;
 };
 
-type Input = { tenantId: string; actorId: string; changes: readonly ValueChange[] };
+// `unlocked`: the protected folder this save was made in (see writeGuardOf). Without it a protected
+// folder's keys are refused.
+type Input = { tenantId: string; actorId: string; changes: readonly ValueChange[]; unlocked?: string };
+
+// The key's guard lets this save write it.
+function guardAllows(key: string, unlocked: string | undefined): boolean {
+  const guard = writeGuardOf(key);
+  if (guard.kind === "open") return true;
+  return guard.kind === "folder" && guard.folder === unlocked;
+}
 type Candidate = { key: string; value: string; previous: string; target: CustomValueDetail };
 // `unresolved`: part of a color pair whose final state cannot be proven, so it is never called saved.
 type Written = { candidate: Candidate; auditId: string; http: CustomValueWriteOutcome; unresolved: boolean; restoreAuditId: string | null; restoreHttp: CustomValueWriteOutcome | null };
@@ -274,12 +283,18 @@ async function runSave(input: Input, deps: SaveDeps, startedAt?: number): Promis
     const { key } = change;
     const value = change.value.trim();
     // The allowlist comes first, so the answer never reveals whether a denied key exists.
-    if (!isSettingsKeyAllowed(key)) out.set(key, { key, status: "denied" });
+    // So is the guard: a protected folder's key needs that folder's unlock, page text elsewhere is never written.
+    if (!isSettingsKeyAllowed(key) || !guardAllows(key, input.unlocked)) out.set(key, { key, status: "denied" });
     else if (listedTwice.has(key)) out.set(key, { key, status: "duplicate" });
     else {
       const target = byKey.get(key);
       const now = target?.value.trim();
       if (!target || now === undefined) out.set(key, { key, status: "missing" });
+      // What the page never got stays on the server: a value too long to send, or one that looks
+      // secret. Refused before the conflict check, so the answer never carries it.
+      else if (target.value.length > MAX_VALUE_LENGTH || isSecretValue(target.value)) out.set(key, { key, status: "denied" });
+      // A secret-looking new value (a token, a webhook link) is never written to a shown key.
+      else if (value && isSecretValue(value)) out.set(key, { key, status: "invalid" });
       // Empty only with the review step's mark, never for a required value; a mark on a real value is refused.
       else if (value ? change.clear === true || !isSafeToWrite(key, value) : change.clear !== true || !isClearableKey(key)) out.set(key, { key, status: "invalid" });
       else if (now === value) out.set(key, { key, status: "unchanged" });

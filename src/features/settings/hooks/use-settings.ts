@@ -43,7 +43,10 @@ export function useSettings(
   const arrivedFocus = useRef(state.focus);
   const arrivedSave = useRef(state.ok ? state.values : null);
   const lastValues = useRef(state.values);
-  const extras = useMemo(() => extraKeys(state.values), [state.values]);
+  // Keys with a value too long to send are listed by name, read-only (see settingsReadFrom).
+  const longJoined = (account?.longKeys ?? []).join("|");
+  const longKeys = useMemo(() => new Set(longJoined ? longJoined.split("|") : []), [longJoined]);
+  const extras = useMemo(() => [...extraKeys(state.values), ...[...longKeys].filter((key) => !Object.hasOwn(state.values, key))], [state.values, longKeys]);
   // No key at all: the read failed or the account holds none of these values. A key with an empty
   // value is still a key, so a new client's blank account does not count.
   const notLoaded = Object.keys(state.values).length === 0;
@@ -73,13 +76,13 @@ export function useSettings(
   // an unsaved edit in it. An empty read proves nothing, so it removes no field.
   const hidden = useMemo(() => {
     const out = shadowedKeys(state.values);
-    const present = account && initialValues ? Object.keys(initialValues) : [];
+    const present = account && initialValues ? [...Object.keys(initialValues), ...longKeys] : [];
     if (present.length > 0) {
       for (const key of [...ESSENTIAL_KEYS, ...COLOR_KEYS, ...extras]) if (!present.includes(key)) out.add(key);
     }
     for (const key of out) if ((state.draft[key] ?? "").trim() !== (state.values[key] ?? "").trim()) out.delete(key);
     return out;
-  }, [state.values, state.draft, account, initialValues, extras]);
+  }, [state.values, state.draft, account, initialValues, extras, longKeys]);
   const phone = (state.values.business_phone_number ?? "").trim();
   // With a tenant's real values the choices have no source yet, so they read "Not available yet".
   const choicesAvailable = initialValues === undefined;
@@ -131,5 +134,5 @@ export function useSettings(
     else updateRef.current?.(patch);
   }, [state.ok, state.values, live]);
 
-  return { state, dispatch, filter, extras, phone, choicesAvailable, notLoaded };
+  return { state, dispatch, filter, extras, longKeys, phone, choicesAvailable, notLoaded };
 }

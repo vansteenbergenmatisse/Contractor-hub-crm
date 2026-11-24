@@ -46,26 +46,30 @@ const page = (values = VALUES, extra: Partial<React.ComponentProps<typeof Settin
   render(<PageStateProvider><SettingsPage initialValues={values} initialSection="biz" account={{ imageHosts: [HOST] }} {...extra} /></PageStateProvider>);
 
 describe("the folder map", () => {
+  // Changed 2026-11-24: the folders come from the layout file (layout.ts), which adds the known
+  // section folders and guessed ones (null name), then the catch-all.
   it("lists the folders in HighLevel's order, under their real names", () => {
     expect(FOLDERS.map((f) => f.name)).toEqual([
-      "01_Business_essentials", "01a_Social_Links", "01b_Google_Business_Profile", "01c_booking_links", "02_Branding",
-      "03.1_Residential_Services", "03.2_Commercial_Services", "04_Service-Types", "05_Service-Areas-(cities)", "07.5_Our-work",
+      "01_Business_essentials(NAP+logo+email)", "01a_Social_Links", "01b_Google_Business_Profile", "01c_booking_links", "02_Branding",
+      "03.1_Residential_Services", "03.2_Commercial_Services", "04_Service-Types", "05_Service-Areas-(cities)",
+      "07.1_Sections_Partners", "07.2_Sections_Reviews", null, null, "07.5_Our-work", null,
     ]);
   });
 
   it("places keys by pattern", () => {
     const cases: [string, string][] = [
-      ["business_name", "essentials"], ["seasonal_offer_text", "essentials"], ["business_website_url", "essentials"],
-      ["bbb_review_request_url", "google"], ["request_a_quote_booking_link", "booking"], ["sub_color", "branding"],
-      ["residentialservice20", "residential"], ["commercialservice7", "commercial"], ["servicetype10", "service-types"],
-      ["bizarea00maincounty", "areas"], ["bizarea21", "areas"], ["3_our_work_after", "our-work"],
+      ["business_name", "biz"], ["seasonal_offer_text", "biz"], ["business_website_url", "biz"],
+      ["bbb_review_request_url", "gbp"], ["request_a_quote_booking_link", "book"], ["sub_color", "col"],
+      ["residentialservice20", "res"], ["commercialservice7", "com"], ["servicetype10", "typ"],
+      ["bizarea00maincounty", "area"], ["bizarea21", "area"], ["3_our_work_after", "work"],
+      ["residentialservice20content", "res"], ["bizarea25path", "area"], ["not_in_the_layout", "more"],
     ];
     for (const [key, id] of cases) expect(folderIdOfKey(key), key).toBe(id);
   });
 
   it("orders numbered keys by number and leaves out a folder without keys", () => {
     const out = foldersFor(["residentialservice10", "residentialservice2", "business_name"]);
-    expect(out.map((f) => f.folder.id)).toEqual(["essentials", "residential"]);
+    expect(out.map((f) => f.folder.id)).toEqual(["biz", "res"]);
     expect(out[1].keys).toEqual(["residentialservice2", "residentialservice10"]);
   });
 
@@ -87,18 +91,24 @@ describe("what may reach the browser", () => {
     }
   });
 
-  it("never allows article, path, webhook, group title or out-of-pattern keys", () => {
+  // Changed 2026-11-24 (every value shows): page text, page paths and out-of-pattern numbered keys
+  // now show (as plain text); webhook, 0_ group title and secret-looking keys stay refused.
+  it("never allows webhook, group title or secret-looking keys", () => {
+    for (const key of ["0_webhook_url_form", "0_servicetypename", "0_our_work_before", "1_our_work_token", "1_our_work_before_secret"]) {
+      expect(isSettingsKeyAllowed(key), key).toBe(false);
+    }
     for (const key of [
       "residentialservice00content", "residentialservice1content", "residentialservice1path", "commercialservice00content", "commercialservice2content",
       "commercialservice2path", "servicetype01content", "servicetype01path", "bizarea00maincitycontent", "bizarea00maincountycontent", "bizarea00maincountypath",
-      "bizarea1content", "bizarea1path", "0_webhook_url_form", "0_servicetypename", "0_our_work_before", "residentialservice0", "residentialservice21",
-      "servicetype1", "servicetype11", "bizarea22", "1_our_work_token", "1_our_work_before_secret", "1_our_work_beforecontent", "100_our_work_before",
+      "bizarea1content", "bizarea1path", "residentialservice0", "residentialservice21",
+      "servicetype1", "servicetype11", "bizarea22", "1_our_work_beforecontent", "100_our_work_before",
     ]) {
-      expect(isSettingsKeyAllowed(key), key).toBe(false);
+      expect(isSettingsKeyAllowed(key), key).toBe(true);
     }
   });
 
-  it("sends no content, path or webhook value to the page", async () => {
+  // Changed 2026-11-24: content and path values now reach the page as plain text; the webhook does not.
+  it("sends content and path values as text and no webhook value to the page", async () => {
     const rows = [
       ...Object.entries(VALUES).map(([key, value]) => ({ key, value })),
       { key: "residentialservice1content", value: "<script>alert(1)</script>" },
@@ -106,15 +116,20 @@ describe("what may reach the browser", () => {
       { key: "0_webhook_url_form", value: "https://hooks.example/abc" },
     ];
     const values = await loadSettingsValues("tenant_1", async () => rows);
+    expect(values.residentialservice1content).toBe("<script>alert(1)</script>");
+    expect(values.residentialservice1path).toBe("residential-services/secret-path");
     const sent = JSON.stringify(values);
-    for (const bad of ["content", "script", "secret-path", "webhook", "hooks.example"]) expect(sent).not.toContain(bad);
+    for (const bad of ["webhook", "hooks.example"]) expect(sent).not.toContain(bad);
   });
 
-  it("does not render a content key passed straight in", () => {
+  // Changed 2026-11-24: a content key now shows, as escaped plain text in a read-only field, never as markup.
+  it("renders a content key passed straight in as plain text only", () => {
     const out = renderToStaticMarkup(<SettingsPage initialValues={{ ...VALUES, residentialservice1content: "<img src=x onerror=alert(1)>", residentialservice1path: "a/b" }} />);
-    expect(out).not.toContain("residentialservice1content");
-    expect(out).not.toContain("onerror");
-    expect(out).not.toContain("residentialservice1path");
+    expect(out).not.toContain("<img src=x");
+    expect(out).toContain("&lt;img src=x onerror=alert(1)&gt;");
+    page({ ...VALUES, residentialservice1content: "<img src=x onerror=alert(1)>" });
+    expect(document.querySelector("img[src=x]")).toBeNull();
+    expect(screen.getByLabelText("Residential service 1, page text")).toHaveValue("<img src=x onerror=alert(1)>");
   });
 
   it("renders markup in a display name as text", () => {
@@ -142,7 +157,7 @@ describe("collapsible folders", () => {
     s = settingsReducer(s, { type: "edit", key: "1_our_work_before", value: "http://x.example/a.png" });
     s = settingsReducer(s, { type: "save" });
     expect(s.err?.key).toBe("1_our_work_before");
-    expect(s.folders["our-work"]).toBe(true);
+    expect(s.folders.work).toBe(true);
   });
 
 });

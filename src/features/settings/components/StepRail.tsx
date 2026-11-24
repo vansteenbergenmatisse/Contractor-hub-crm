@@ -1,11 +1,17 @@
 import { useRef } from "react";
-import { PROTECTED_STEPS, STEPS, filledCount, type StepKeys } from "../api/steps";
+import { filledCount, type Step, type StepKeys } from "../api/steps";
 import { useStepSheet } from "../hooks/use-step-sheet";
 import type { CustomValues } from "../types";
 import { RailStep } from "./RailStep";
 
 type Props = {
+  // Every step id on the page in order, search or not: numbers and the count come from it.
+  order: readonly string[];
+  // The steps on screen (from the layout and the keys present), protected ones apart.
+  steps: readonly Step[];
+  protectedSteps: readonly Step[];
   keys: StepKeys;
+  longKeys: ReadonlySet<string>;
   values: CustomValues;
   dirtyKeys: readonly string[];
   current: string;
@@ -17,17 +23,17 @@ type Props = {
 };
 
 // The step list with real progress, counted from the saved values. On a phone it is a bottom sheet.
-export function StepRail({ keys, values, dirtyKeys, current, sheetOpen, onlyEmpty, onOnlyEmpty, onJump, onCloseSheet }: Props) {
+export function StepRail({ order, steps, protectedSteps, keys, longKeys, values, dirtyKeys, current, sheetOpen, onlyEmpty, onOnlyEmpty, onJump, onCloseSheet }: Props) {
   const root = useRef<HTMLDivElement>(null);
   useStepSheet(root, sheetOpen, onCloseSheet);
-  const main = STEPS.filter((step) => keys[step.id].length > 0);
-  const locked = PROTECTED_STEPS.filter((step) => keys[step.id].length > 0);
+  const main = steps.filter((step) => keys[step.id].length > 0);
+  const locked = protectedSteps.filter((step) => keys[step.id].length > 0);
   const total = main.reduce((sum, step) => sum + keys[step.id].length, 0);
-  const filled = main.reduce((sum, step) => sum + filledCount(keys[step.id], values), 0);
+  const filled = main.reduce((sum, step) => sum + filledCount(keys[step.id], values, longKeys), 0);
   const percent = total === 0 ? 0 : Math.round((filled / total) * 100);
-  const sub = (id: keyof StepKeys) => {
+  const sub = (id: string) => {
     if (keys[id].some((key) => dirtyKeys.includes(key))) return "Not saved yet";
-    return `${filledCount(keys[id], values)} of ${keys[id].length} filled`;
+    return `${filledCount(keys[id], values, longKeys)} of ${keys[id].length} filled`;
   };
   return (
     <div
@@ -50,10 +56,10 @@ export function StepRail({ keys, values, dirtyKeys, current, sheetOpen, onlyEmpt
         </span>
       </div>
       <nav className="ga-list sv-card" aria-label="Your details">
-        <p className="ga-lh">Your details in {STEPS.length} steps</p>
+        <p className="ga-lh">Your details in {Math.max(order.length, main.length)} steps</p>
         <ol className="ga-steps">
           {main.map((step) => (
-            <RailStep key={step.id} id={step.id} title={step.title} sub={sub(step.id)} mark={String(STEPS.indexOf(step) + 1)} done={filledCount(keys[step.id], values) === keys[step.id].length} current={current === step.id} onJump={onJump} />
+            <RailStep key={step.id} id={step.id} title={step.title} sub={sub(step.id)} mark={String((order.indexOf(step.id) + 1) || main.indexOf(step) + 1)} done={filledCount(keys[step.id], values, longKeys) === keys[step.id].length} current={current === step.id} onJump={onJump} />
           ))}
         </ol>
       </nav>

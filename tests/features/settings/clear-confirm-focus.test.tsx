@@ -30,7 +30,7 @@ async function confirmClear(send: SaveValues) {
   const user = userEvent.setup();
   render(<PageStateProvider><SettingsPage initialValues={VALUES} saveValues={send} /></PageStateProvider>);
   await user.clear(screen.getByLabelText(/^Seasonal offer text/));
-  await user.click(screen.getByRole("button", { name: "Save Images and offers" }));
+  await user.click(screen.getByRole("button", { name: "Save Business" }));
   await user.click(await screen.findByRole("button", { name: "Clear and save" }));
   await waitFor(() => expect(screen.queryByRole("button", { name: "Clear and save" })).toBeNull());
 }
@@ -38,13 +38,13 @@ async function confirmClear(send: SaveValues) {
 describe("focus after Clear and save on a step card", () => {
   it("lands on the saved message inside the card", async () => {
     await confirmClear(saved);
-    const card = document.getElementById("s-card-img");
+    const card = document.getElementById("s-card-biz");
     await waitFor(() => expect(document.activeElement).toBe(card?.querySelector(".fd-okl")));
   });
 
   it("lands on the error message inside the card when the save fails", async () => {
     await confirmClear(refused);
-    const card = document.getElementById("s-card-img");
+    const card = document.getElementById("s-card-biz");
     await waitFor(() => expect(document.activeElement).toBe(card?.querySelector(".ga-fe")));
   });
 
@@ -53,9 +53,9 @@ describe("focus after Clear and save on a step card", () => {
     const slow: SaveValues = () => new Promise((resolve) => { finish = resolve; });
     await confirmClear(slow);
     const active = document.activeElement as HTMLButtonElement;
-    expect(document.getElementById("s-card-img")?.contains(active)).toBe(true);
+    expect(document.getElementById("s-card-biz")?.contains(active)).toBe(true);
     expect(active.disabled ?? false).toBe(false);
     finish({ kind: "results", results: [{ key: "seasonal_offer_text", status: "saved" }] });
-    await waitFor(() => expect(document.querySelector("#s-card-img .fd-okl")).not.toBeNull());
+    await waitFor(() => expect(document.querySelector("#s-card-biz .fd-okl")).not.toBeNull());
   });
 });

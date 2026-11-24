@@ -25,7 +25,7 @@ describe("loadSettingsValues: the status of the read", () => {
 
   it("is empty when no row is a key Settings shows", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
-    expect(await load("t1", async () => [{ key: "x", value: "y" }])).toEqual({ values: {}, status: "empty" });
+    expect(await load("t1", async () => [{ key: "0_x", value: "y" }])).toEqual({ values: {}, status: "empty" });
   });
 
   it("is failed when the read throws", async () => {
