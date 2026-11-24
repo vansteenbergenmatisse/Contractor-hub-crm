@@ -9,6 +9,8 @@ const QUALITIES = [0.86, 0.76, 0.66, 0.56, 0.46];
 const SHRINK_STEPS = [1, 0.8, 0.64, 0.5];
 
 const kb = (bytes: number) => `${Math.max(1, Math.round(bytes / 1024))} KB`;
+// The original's size, for the before and after line.
+const sizeOf = (bytes: number) => (bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : kb(bytes));
 
 // The longest side at most `max`, never enlarged.
 export function fitSize(width: number, height: number, max = MAX_PHOTO_SIDE): { width: number; height: number } {
@@ -35,8 +37,34 @@ const ENCODERS: Record<PhotoFormat, { type: string; label: string; qualities: re
 const encode = (canvas: HTMLCanvasElement, type: string, quality: number) =>
   new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, quality));
 
-async function preparePhoto(file: File, format: PhotoFormat): Promise<PreparedImage> {
+// `unsupported`: this browser has no encoder for the format (it quietly returns a PNG instead).
+async function encodePhoto(bitmap: ImageBitmap, format: PhotoFormat, originalBytes: number): Promise<PreparedImage | "unsupported"> {
   const encoder = ENCODERS[format];
+  const base = fitSize(bitmap.width, bitmap.height);
+  for (const step of SHRINK_STEPS) {
+    const size = fitSize(base.width * step, base.height * step);
+    const canvas = document.createElement("canvas");
+    canvas.width = size.width;
+    canvas.height = size.height;
+    const context = canvas.getContext("2d");
+    if (!context) break;
+    context.drawImage(bitmap, 0, 0, size.width, size.height);
+    for (const quality of encoder.qualities) {
+      const blob = await encode(canvas, encoder.type, quality);
+      // A browser without this encoder quietly returns a PNG, which would not match the file's name.
+      if (!blob || blob.type !== encoder.type) return "unsupported";
+      if (blob.size <= MAX_PHOTO_BYTES) {
+        const summary = `${encoder.label}, ${size.width} by ${size.height}, ${kb(blob.size)} (was ${sizeOf(originalBytes)})`;
+        return { ok: true, blob, previewUrl: URL.createObjectURL(blob), summary };
+      }
+    }
+  }
+  return { ok: false, message: "This photo could not be made smaller than 2 MB. Try another one." };
+}
+
+// No format asked: WebP, or JPEG where the browser cannot write WebP (older iOS Safari). A format
+// asked by the server (the current file's) is the only one tried.
+async function preparePhoto(file: File, format: PhotoFormat | undefined): Promise<PreparedImage> {
   if (file.type !== "" && !file.type.startsWith("image/")) return { ok: false, message: "Choose a photo, such as a JPG or PNG." };
   if (file.size > MAX_SOURCE_BYTES) return { ok: false, message: "This photo is over 40 MB. Choose a smaller one." };
   let bitmap: ImageBitmap;
@@ -46,31 +74,18 @@ async function preparePhoto(file: File, format: PhotoFormat): Promise<PreparedIm
     return { ok: false, message: "This file could not be read as a photo. Try a JPG or PNG." };
   }
   try {
-    const base = fitSize(bitmap.width, bitmap.height);
-    for (const step of SHRINK_STEPS) {
-      const size = fitSize(base.width * step, base.height * step);
-      const canvas = document.createElement("canvas");
-      canvas.width = size.width;
-      canvas.height = size.height;
-      const context = canvas.getContext("2d");
-      if (!context) break;
-      context.drawImage(bitmap, 0, 0, size.width, size.height);
-      for (const quality of encoder.qualities) {
-        const blob = await encode(canvas, encoder.type, quality);
-        // A browser without this encoder quietly returns a PNG, which would not match the file's name.
-        if (!blob || blob.type !== encoder.type) return { ok: false, message: "This browser cannot prepare the photo. Try Chrome, Edge or Firefox." };
-        if (blob.size <= MAX_PHOTO_BYTES) {
-          return { ok: true, blob, previewUrl: URL.createObjectURL(blob), summary: `${encoder.label}, ${size.width} by ${size.height}, ${kb(blob.size)}` };
-        }
-      }
+    for (const tried of format ? [format] : (["webp", "jpeg"] as const)) {
+      const result = await encodePhoto(bitmap, tried, file.size);
+      if (result !== "unsupported") return result;
     }
-    return { ok: false, message: "This photo could not be made smaller than 2 MB. Try another one." };
+    return { ok: false, message: "This browser cannot prepare the photo. Try Chrome, Edge or Firefox." };
   } finally {
     bitmap.close();
   }
 }
 
-// A photo starts as WebP. The server names the current file's format when it differs.
-export function prepareImageFile(file: File, kind: ImageKind, format: PhotoFormat = "webp"): Promise<PreparedImage> {
+// Every photo is compressed: WebP (JPEG fallback), longest side at most 2400, quality lowered until it
+// fits. The server names the current file's format when it differs.
+export function prepareImageFile(file: File, kind: ImageKind, format?: PhotoFormat): Promise<PreparedImage> {
   return kind === "svg" ? prepareSvg(file) : preparePhoto(file, format);
 }

@@ -1,7 +1,10 @@
-import { Fragment, memo, useEffect, useRef, useState } from "react";
+import { Fragment, memo, useEffect, useRef, useState, type ReactNode } from "react";
 import { labelOfKey } from "../api/fields";
+import { isImageKey } from "../api/image-keys";
+import { DEFAULT_IMAGE_HOSTS, previewSrc } from "../api/image-preview";
 import { filledCount, type ProtectedId, type Step } from "../api/steps";
-import type { CustomValues, Problem } from "../types";
+import type { CustomValues, Field, Problem } from "../types";
+import { ImagePreview } from "./ImagePreview";
 import { TOO_LONG_NOTE } from "./StepField";
 import { ValueField } from "./ValueField";
 
@@ -31,6 +34,9 @@ type Props = {
   onEdit: (key: string, value: string) => void;
   onLock: (id: ProtectedId) => void;
   onSave: (id: ProtectedId) => void;
+  imageHosts?: readonly string[];
+  // An image key's picker; shown only after the unlock, and given this folder's id as the unlock.
+  imageControl?: (field: Field, saved: string, dirty: boolean, unlock?: string) => ReactNode;
 };
 
 const shown = (value: string | undefined) => (value ?? "").trim() || "(empty)";
@@ -41,7 +47,7 @@ const ANNOUNCED: Record<FolderMode, string> = {
   review: "Check your changes.",
 };
 
-function ProtectedFolderView({ step, keys, values, draft, longKeys, mode, error, problem, live, saved, readOnly, blocked, saving, anySaving, otherOpen, onMode, onEdit, onLock, onSave }: Props) {
+function ProtectedFolderView({ step, keys, values, draft, longKeys, mode, error, problem, live, saved, readOnly, blocked, saving, anySaving, otherOpen, onMode, onEdit, onLock, onSave, imageHosts = DEFAULT_IMAGE_HOSTS, imageControl }: Props) {
   const [ack, setAck] = useState(false);
   const inKeys = new Set(keys);
   // Sub-groups from the layout (one per service or area); one group needs no heading.
@@ -111,7 +117,14 @@ function ProtectedFolderView({ step, keys, values, draft, longKeys, mode, error,
                 readOnly={readOnly || mode !== "edit" || longKeys.has(key)}
                 helpers={longKeys.has(key) ? [TOO_LONG_NOTE] : undefined}
                 onChange={onEdit}
-              />
+              >
+                {isImageKey(key) && !longKeys.has(key) ? (
+                  <>
+                    <ImagePreview src={previewSrc(draft[key], imageHosts)} label={labelOfKey(key)} />
+                    {mode === "edit" ? imageControl?.({ key, label: labelOfKey(key) }, values[key] ?? "", (draft[key] ?? "").trim() !== (values[key] ?? "").trim(), step.id) : null}
+                  </>
+                ) : null}
+              </ValueField>
             ))}
           </div>
         </Fragment>
@@ -144,4 +157,5 @@ export const ProtectedFolder = memo(ProtectedFolderView, (a, b) =>
   a.step === b.step && a.longKeys === b.longKeys && a.mode === b.mode && a.error === b.error && a.problem === b.problem && a.live === b.live && a.saved === b.saved && a.readOnly === b.readOnly &&
   a.blocked === b.blocked && a.saving === b.saving && a.anySaving === b.anySaving && a.otherOpen === b.otherOpen &&
   a.onMode === b.onMode && a.onEdit === b.onEdit && a.onLock === b.onLock && a.onSave === b.onSave &&
+  a.imageHosts === b.imageHosts && a.imageControl === b.imageControl &&
   a.keys.length === b.keys.length && a.keys.every((key, i) => key === b.keys[i] && a.values[key] === b.values[key] && a.draft[key] === b.draft[key]));
