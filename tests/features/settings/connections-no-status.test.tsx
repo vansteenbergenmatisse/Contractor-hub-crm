@@ -8,58 +8,44 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/features/app-shell", async () => {
   const { useReducer } = await import("react");
   return {
-    usePushed: vi.fn(),
     useShell: () => ({}),
     useKeptReducer: (_key: string, r: never, a: never, i: never) => useReducer(r, a, i),
   };
 });
 
 import * as settings from "@/features/settings";
-import type { ConnectionStatus } from "@/features/settings";
+import type { PhoneNumbersView } from "@/features/settings";
 
-const { SettingsPage, filterSettings, initialState } = settings;
+const { SettingsPage, initialState } = settings;
+const conn = (phoneNumbers?: PhoneNumbersView) => renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), sec: "conn" }} phoneNumbers={phoneNumbers} />);
+const rowOf = (html: string, name: string) => html.slice(html.indexOf(`>${name}<`), html.indexOf("</li>", html.indexOf(`>${name}<`)));
 
-const chips = (html: string) =>
-  [...html.matchAll(/<span class="fd-chip (is-ok|is-plain)">(?:(?!<\/span><\/span>).)*<span class="fd-h">([^<]*)<\/span><\/span>/gs)]
-    .map((m) => `${m[1]}:${m[2]}`);
-const ASK = />Ask Forge Forward to connect</g;
+describe("Settings connections claim nothing without a source", () => {
+  const html = conn();
 
-describe("Settings connections with no real status", () => {
-  const html = renderToStaticMarkup(<SettingsPage />);
-
-  it("shows every row as Not available yet", () => {
-    expect(chips(html)).toEqual(Array(6).fill("is-plain:Not available yet"));
-    expect(html).not.toMatch(/fd-chip is-ok/);
-    expect(html).not.toContain(">Not connected<");
-    expect(html).not.toContain(">Connected<");
-  });
-
-  it("offers no action and no steps that imply a status", () => {
-    expect(html.match(ASK)).toBeNull();
+  it("never says Connected, and offers no ask button or made-up status", () => {
+    expect(html).not.toMatch(/>Connected</);
+    expect(html).not.toContain("Connected:");
+    expect(html).not.toContain("Ask Forge Forward to connect");
     expect(html).not.toContain("Noted on this screen");
-    expect(html).not.toContain("fd-how");
-    expect(html).not.toContain("A2P status:");
-    expect(html).not.toContain("A2P verified. Your texts get delivered.");
+    expect(html).not.toContain("A2P verified");
   });
 
-  it("has no How it works toggle on a row without a status", () => {
-    expect(html).not.toContain("How it works");
-    expect(html).not.toMatch(/class="fd-btn is-plain(?: is-off)?" aria-expanded/);
-    const kept = renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), how: { 2: true } }} />);
-    expect(kept).not.toContain("fd-how");
-    expect(kept).not.toContain(">Hide<");
-    expect(kept.match(ASK)).toBeNull();
+  it("keeps Facebook, Instagram and Google My Business as Not connected yet", () => {
+    for (const name of ["Facebook page", "Instagram", "Google My Business"]) expect(rowOf(html, name)).toContain("Not connected yet");
   });
 
-  it("ignores an ask left in kept state while the status is unknown", () => {
-    const out = renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), asked: { 1: true }, how: { 1: true } }} />);
-    expect(out).not.toContain("Noted on this screen");
+  it("says Online payments is Not available yet", () => {
+    expect(rowOf(html, "Online payments")).toContain("Not available yet");
   });
 
-  it("does not let search find a row by a status it does not show", () => {
-    const out = renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), q: "not connected" }} />);
-    expect(out).not.toContain(">Instagram<");
-    expect(filterSettings("ask forge forward to connect").items["conn-0"]).toBe(false);
+  it("hands Calendar and Gmail off to HighLevel with steps and no status chip", () => {
+    for (const name of ["Calendar", "Gmail"]) {
+      const row = rowOf(html, name);
+      expect(html).toContain(`>${name}<`);
+      expect(row).not.toContain("sv-chip");
+    }
+    expect((html.match(/<summary>Connect in HighLevel<\/summary>/g) ?? []).length).toBe(2);
   });
 
   it("no longer exports made-up statuses", () => {
@@ -67,62 +53,42 @@ describe("Settings connections with no real status", () => {
   });
 });
 
-describe("Settings copy while a status is unknown", () => {
-  const allOpen = { 0: true, 1: true, 2: true, 3: true, 4: true, 5: true };
-  const html = renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), how: allOpen }} />);
-
-  it("does not promise a status in an expanded row", () => {
-    expect(html).not.toContain("Done when this row says Connected.");
-    expect(html).not.toContain("Ask Forge Forward to connect it.");
-    expect(html).not.toContain("This status cannot be shown yet.");
-    expect(html).not.toContain("fd-rex");
-  });
-
-  it("shows no steps and nothing the owner would need to do", () => {
-    expect(html).not.toContain("Sign in to Instagram in the window that opens.");
-    expect(html).not.toContain("You need:");
-    expect(html).not.toContain("fd-steps");
-  });
-
-  it("says plainly in the intro that statuses cannot be shown yet", () => {
-    expect(html).not.toContain("A row that is not connected shows its steps.");
-    expect(html).toContain("The status of each connection cannot be shown yet.");
-    expect(html).not.toContain("What is linked to your dashboard.");
-  });
-
-  it("does not let search find an unknown row by the removed copy", () => {
-    for (const q of ["done when this row", "ask forge forward to connect it", "sign in to instagram", "how it works", "you need"]) {
-      const out = renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), q }} />);
-      expect(out).not.toContain(">Instagram<");
+describe("the business phone row", () => {
+  it("always says the A2P status is not available", () => {
+    const phones: (PhoneNumbersView | undefined)[] = [undefined, { state: "unavailable" }, { state: "ok", numbers: [{ number: "+15550100000", name: null }], complete: true }];
+    for (const phone of phones) {
+      expect(conn(phone)).toContain("A2P status: Not available yet");
     }
   });
 
-  it("keeps the current copy on rows with a real status", () => {
-    const st: ConnectionStatus[] = [
-      { state: "connected" }, { state: "unknown" }, { state: "not-connected" },
-      { state: "unknown" }, { state: "connected" }, { state: "not-connected" },
-    ];
-    const out = renderToStaticMarkup(<SettingsPage connections={st} initial={{ ...initialState(), how: allOpen }} />);
-    expect((out.match(/Done when this row says Connected\./g) ?? []).length).toBe(4);
-    expect((out.match(/Ask Forge Forward to connect it\./g) ?? []).length).toBe(3);
-    expect(out).not.toContain("This status cannot be shown yet.");
-    expect(out).toContain("What is linked to your dashboard. A row that is not connected shows its steps.");
+  it("lists the real numbers with their names", () => {
+    const html = conn({ state: "ok", numbers: [{ number: "+15550100000", name: "Main" }, { number: "+15550100001", name: null }], complete: true });
+    expect(html).toContain("+15550100000, Main");
+    expect(html).toContain("+15550100001");
+    expect(html).not.toContain("more numbers");
   });
-});
 
-describe("Settings connections with a real status", () => {
-  it("renders connected, not-connected and unknown rows correctly", () => {
-    const st: ConnectionStatus[] = [
-      { state: "connected", a2pVerified: true }, { state: "unknown" }, { state: "not-connected" },
-      { state: "unknown" }, { state: "connected", note: "Connected: Test Page" }, { state: "not-connected" },
-    ];
-    const out = renderToStaticMarkup(<SettingsPage connections={st} />);
-    expect(chips(out)).toEqual([
-      "is-ok:Connected", "is-plain:Not available yet", "is-plain:Not connected",
-      "is-plain:Not available yet", "is-ok:Connected: Test Page", "is-plain:Not connected",
-    ]);
-    expect(out).toContain("A2P verified. Your texts get delivered.");
-    expect(out.match(ASK)?.length).toBe(2);
-    expect((out.match(/class="fd-rex fd-how"/g) ?? []).length).toBe(2);
+  it("says when the list may be short", () => {
+    expect(conn({ state: "ok", numbers: [{ number: "+15550100000", name: null }], complete: false })).toContain("You may have more numbers than shown here.");
+  });
+
+  it("says when no number can text", () => {
+    expect(conn({ state: "ok", numbers: [], complete: true })).toContain("No number that can text was found.");
+  });
+
+  it.each([
+    ["no-access", "We do not have access to your phone numbers yet."],
+    ["not-connected", "No phone system is connected yet."],
+    ["inactive", "Your phone account is not active."],
+    ["unavailable", "Your phone numbers could not be loaded."],
+  ] as const)("explains %s", (state, text) => {
+    const html = conn({ state });
+    expect(html).toContain(text);
+    expect(html).not.toMatch(/>Connected</);
+  });
+
+  it("does not take the number from the custom value", () => {
+    const html = renderToStaticMarkup(<SettingsPage initialValues={{ business_phone_number: "+15550109999" }} initialSection="conn" />);
+    expect(rowOf(html, "Business phone")).not.toContain("+15550109999");
   });
 });

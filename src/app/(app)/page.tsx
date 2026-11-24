@@ -3,12 +3,19 @@ import { businessValues } from "@/features/app-shell";
 import { hitRateLimit } from "@/features/auth";
 import { loadBusiness } from "@/features/brand";
 import { calendarTimeZone, loadCalendar } from "@/features/calendar";
-import { createTenantCalendarReader, createTenantContactsReader, createTenantLocationZoneReader } from "@/features/highlevel";
+import { createTenantBillingReaders, createTenantCalendarReader, createTenantContactsReader, createTenantEstimatesReader, createTenantLocationZoneReader } from "@/features/highlevel";
+import { isInvoicesPageLive, loadInvoices } from "@/features/invoices";
 import { loadLeads } from "@/features/leads";
-import { AppointmentsTile, dayPartWord, LeadsTile, TodayCalendarCard, TodayLeadsCard, TodayPage } from "@/features/today";
+import { isQuotesPageLive, loadQuotes } from "@/features/quotes";
+import { isNotifiableCalendar } from "@/features/routes";
+import {
+  AppointmentsTile, bookedThisWeek, CountTile, dayPartWord, invoicesToSend, jobsThisWeek, LeadsTile, moneyOwed, MoneyCards, quotesOut,
+  TodayCalendarCard, TodayLeadsCard, TodayNeedsCard, TodayPage,
+} from "@/features/today";
 import { getRequestUser } from "../session";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const loadTenantBusiness = cache(async () => {
   const user = await getRequestUser();
@@ -43,6 +50,40 @@ const locationZone = cache(async (): Promise<string | null> => {
   }
 });
 
+// Null while the page's own server flag is off: the flag is checked before any read.
+const loadTenantQuotes = cache(async () => {
+  if (!isQuotesPageLive()) return null;
+  const user = await getRequestUser();
+  const reader = user?.viewing ? createTenantEstimatesReader(hitRateLimit, { viewerId: user.id }) : createTenantEstimatesReader(hitRateLimit);
+  return loadQuotes(user?.tenantId, reader);
+});
+
+const loadTenantInvoices = cache(async () => {
+  if (!isInvoicesPageLive()) return null;
+  const user = await getRequestUser();
+  const readers = user?.viewing ? createTenantBillingReaders(hitRateLimit, { viewerId: user.id }) : createTenantBillingReaders(hitRateLimit);
+  return loadInvoices(user?.tenantId, readers.invoices);
+});
+
+async function JobsTileData() {
+  const count = jobsThisWeek(await loadTenantCalendar(), isNotifiableCalendar);
+  return <CountTile page="pipeline" label="Jobs this week" index={2} count={count} unit="jobs" />;
+}
+
+async function InvoicesTileData() {
+  return <CountTile page="invoices" label="Invoices to send" index={3} count={invoicesToSend(await loadTenantInvoices())} unit="to send" />;
+}
+
+async function NeedsCardData() {
+  const [leads, invoices, timeZone] = await Promise.all([loadTenantLeads(), loadTenantInvoices(), locationZone()]);
+  return <TodayNeedsCard leads={leads} toSend={invoicesToSend(invoices)} owed={moneyOwed(invoices)} invoicesLive={isInvoicesPageLive()} timeZone={timeZone} />;
+}
+
+async function MoneyCardsData() {
+  const [calendar, quotes, invoices] = await Promise.all([loadTenantCalendar(), loadTenantQuotes(), loadTenantInvoices()]);
+  return <MoneyCards counts={{ booked: bookedThisWeek(calendar), quotes: quotesOut(quotes), owed: moneyOwed(invoices) }} />;
+}
+
 async function LeadsTileData() {
   const [result, timeZone] = await Promise.all([loadTenantLeads(), locationZone()]);
   return <LeadsTile result={result} timeZone={timeZone} />;
@@ -50,7 +91,7 @@ async function LeadsTileData() {
 
 async function LeadsCardData() {
   const [result, timeZone] = await Promise.all([loadTenantLeads(), locationZone()]);
-  return <TodayLeadsCard result={result} timeZone={timeZone} />;
+  return <TodayLeadsCard result={result} timeZone={timeZone} index={7} />;
 }
 
 async function AppointmentsTileData() {
@@ -83,6 +124,10 @@ export default async function Page() {
       leadsCard={<LeadsCardData />}
       appointmentsTile={<AppointmentsTileData />}
       calendarCard={<CalendarCardData />}
+      jobsTile={<JobsTileData />}
+      invoicesTile={<InvoicesTileData />}
+      needsCard={<NeedsCardData />}
+      moneyCards={<MoneyCardsData />}
     />
   );
 }

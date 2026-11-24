@@ -40,7 +40,7 @@ async function changePhone(value = "222") {
 }
 // The line is always in the page and hidden by `is-off`.
 const savedLineShown = () => waitFor(() => expect(document.querySelector(".fd-okl")).not.toHaveClass("is-off"));
-const saveButton = () => screen.getByRole("button", { name: "Save to your account" });
+const saveButton = () => screen.getByRole("button", { name: "Save Business" });
 
 beforeEach(() => {
   fetchMock.mockReset();
@@ -56,9 +56,9 @@ describe("Settings with write-back off", () => {
   it("keeps the visit-only button and calls nothing", async () => {
     page(false);
     const { user } = await changePhone();
-    await user.click(screen.getByRole("button", { name: "Apply for this visit" }));
+    await user.click(screen.getByRole("button", { name: "Apply Business" }));
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(screen.queryByRole("button", { name: "Save to your account" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save Business" })).toBeNull();
   });
 });
 
@@ -98,7 +98,7 @@ describe("Settings with write-back on", () => {
     await user.click(saveButton());
     await screen.findByText("Phone did not save. Try again.");
     expect(field).toHaveValue("222");
-    expect(document.querySelector(".fd-okl")).toHaveClass("is-off");
+    expect(screen.queryByText("Saved to your account.")).toBeNull();
     expect(screen.getByText("You have changes that are not saved yet.")).toBeInTheDocument();
   });
 

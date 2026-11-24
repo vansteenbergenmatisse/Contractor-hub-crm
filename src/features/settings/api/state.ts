@@ -26,6 +26,8 @@ export type SettingsState = {
   // Kept here, not in the page, so a save that outlives the page still shows when the owner returns.
   saving: boolean;
   saveProblem: string | null;
+  // The step the last save belongs to, so its result shows on that card.
+  saveStep: string | null;
 };
 
 export type SettingsAction =
@@ -33,12 +35,13 @@ export type SettingsAction =
   | { type: "back" }
   | { type: "search"; q: string }
   | { type: "edit"; key: string; value: string }
-  | { type: "save" }
+  | { type: "save"; keys?: readonly string[]; step?: string }
+  | { type: "revert"; keys: readonly string[] }
   | { type: "normalize"; draft: CustomValues }
   | { type: "remoteSaved"; results: readonly SaveResult[]; submitted: CustomValues }
   // Change image: what the account now holds for this key. `saved`: this change put it there.
   | { type: "imageValue"; key: string; value: string; saved: boolean }
-  | { type: "saveStart" }
+  | { type: "saveStart"; step?: string }
   | { type: "saveEnd"; problem: string | null }
   | { type: "loaded"; values: CustomValues }
   | { type: "toggleCols" }
@@ -71,6 +74,7 @@ export function initialState(values?: CustomValues, section?: SectionKey): Setti
     focus: null,
     saving: false,
     saveProblem: null,
+    saveStep: null,
   };
 }
 
@@ -102,10 +106,16 @@ function withFixedInput(trimmed: CustomValues, saved: CustomValues): CustomValue
   return out;
 }
 
+function pick(from: CustomValues, keys: readonly string[]): CustomValues {
+  return Object.fromEntries(keys.filter((k) => Object.hasOwn(from, k)).map((k) => [k, from[k]]));
+}
+
 // What Save would store: the cleaned-up values, the form's first problem, and the keys that changed.
-export function prepareSave(s: Pick<SettingsState, "draft" | "values">): { trimmed: CustomValues; problem: Problem | null; changedKeys: string[] } {
+// With `scope` only those keys count: another step's unsaved edit is neither checked nor sent.
+export function prepareSave(s: Pick<SettingsState, "draft" | "values">, scope?: readonly string[]): { trimmed: CustomValues; problem: Problem | null; changedKeys: string[] } {
+  const source = scope ? { ...s.values, ...pick(s.draft, scope) } : s.draft;
   const typed: CustomValues = {};
-  for (const k of Object.keys(s.draft)) typed[k] = String(s.draft[k]).trim();
+  for (const k of Object.keys(source)) typed[k] = String(source[k]).trim();
   const trimmed = withFixedInput(typed, s.values);
   // Only what the owner changed since the last save is checked (see validateValues).
   const problem = validateValues(trimmed, s.values);
@@ -135,6 +145,14 @@ export function settingsReducer(s: SettingsState, a: SettingsAction): SettingsSt
       return s.q.trim()
         ? { ...s, searchClosed: { ...s.searchClosed, [a.id]: !a.open } }
         : { ...s, folders: { ...s.folders, [a.id]: a.open } };
+    case "revert": {
+      const draft = { ...s.draft };
+      for (const key of a.keys) {
+        if (Object.hasOwn(s.values, key)) draft[key] = s.values[key];
+        else delete draft[key];
+      }
+      return { ...s, draft, err: s.err && a.keys.includes(s.err.key) ? null : s.err };
+    }
     case "switch": {
       const sw: [boolean, boolean] = [...s.sw];
       sw[a.index] = !sw[a.index];
@@ -145,7 +163,7 @@ export function settingsReducer(s: SettingsState, a: SettingsAction): SettingsSt
     case "ask":
       return { ...s, asked: { ...s.asked, [a.index]: true } };
     case "saveStart":
-      return { ...s, saving: true, saveProblem: null };
+      return { ...s, saving: true, saveProblem: null, saveStep: a.step ?? s.saveStep };
     case "saveEnd":
       return { ...s, saving: false, saveProblem: a.problem };
     case "loaded": {
@@ -174,7 +192,8 @@ export function settingsReducer(s: SettingsState, a: SettingsAction): SettingsSt
       return { ...s, values, ok: a.results.some((result) => isSaved(result.status)) };
     }
     case "save": {
-      const { trimmed, problem: bad, changedKeys } = prepareSave(s);
+      const { trimmed, problem: bad, changedKeys } = prepareSave(s, a.keys);
+      const saveStep = a.step ?? s.saveStep;
       if (bad) {
         // The bad field must be visible, whichever folder holds it.
         const folder = folderIdOfKey(bad.key);
@@ -183,6 +202,7 @@ export function settingsReducer(s: SettingsState, a: SettingsAction): SettingsSt
           folders: { ...s.folders, [folder]: true },
           searchClosed: { ...s.searchClosed, [folder]: false },
           ok: false,
+          saveStep,
           err: bad,
           sec: bad.section,
           open: true,
@@ -191,8 +211,8 @@ export function settingsReducer(s: SettingsState, a: SettingsAction): SettingsSt
         };
       }
       // Nothing really changed: keep the stored values and make no claim that something was applied.
-      if (changedKeys.length === 0) return { ...s, draft: s.values, err: null };
-      return { ...s, values: trimmed, draft: trimmed, ok: true, err: null };
+      if (changedKeys.length === 0) return { ...s, draft: a.keys ? { ...s.draft, ...pick(s.values, a.keys) } : s.values, err: null };
+      return { ...s, values: trimmed, draft: a.keys ? { ...s.draft, ...pick(trimmed, a.keys) } : trimmed, ok: true, err: null, saveStep };
     }
   }
 }

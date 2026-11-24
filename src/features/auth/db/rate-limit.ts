@@ -25,3 +25,8 @@ export async function hitRateLimit(key: string, limit: number, windowMs: number,
   }
   return Number(rows[0]?.count ?? Infinity) <= limit;
 }
+
+// Gives back a claim whose work did not happen, so the next run may try again.
+export async function clearRateLimit(key: string): Promise<void> {
+  await getPrisma().rateLimit.deleteMany({ where: { key: `app:${key}` } });
+}

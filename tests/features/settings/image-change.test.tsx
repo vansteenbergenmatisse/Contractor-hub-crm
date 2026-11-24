@@ -97,9 +97,6 @@ describe("Change image: the flow", () => {
   it("uses the photo rules on an Our work field", async () => {
     const prepareImage = prepareOk();
     show({ uploadImage: vi.fn(), prepareImage });
-    const group = screen.getByRole("button", { name: /Our work/i }) && null;
-    expect(group).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /Our work/i }));
     const work = screen.getByRole("group", { name: "Change Project 1, before" });
     pick(photo(), work);
     await waitFor(() => expect(prepareImage).toHaveBeenCalledWith(expect.any(File), "photo"));
@@ -179,7 +176,6 @@ describe("Change image: says exactly what happened", () => {
       .mockResolvedValueOnce({ status: "saved", url: NEW_URL, oldFile: "trashed" });
     const prepareImage = prepareOk();
     show({ uploadImage, prepareImage });
-    fireEvent.click(screen.getByRole("button", { name: /Our work/i }));
     const work = screen.getByRole("group", { name: "Change Project 1, before" });
     pick(photo(), work);
     fireEvent.click(await within(work).findByRole("button", { name: "Save image" }));
@@ -191,7 +187,6 @@ describe("Change image: says exactly what happened", () => {
   it("does not loop when the second format is refused too", async () => {
     const uploadImage = vi.fn<ImageUploader>(async () => ({ status: "format_mismatch", format: "png" }));
     show({ uploadImage, prepareImage: prepareOk() });
-    fireEvent.click(screen.getByRole("button", { name: /Our work/i }));
     const work = screen.getByRole("group", { name: "Change Project 1, before" });
     pick(photo(), work);
     fireEvent.click(await within(work).findByRole("button", { name: "Save image" }));

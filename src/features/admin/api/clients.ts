@@ -8,9 +8,13 @@ const LABELS: Record<TenantStatusValue, string> = {
 
 export const statusLabel = (status: TenantStatusValue): string => LABELS[status];
 
-export function loginState(users: number, activeUsers: number, loginOff = false): LoginState {
+// `loginOff` is the TenantLoginLock state and decides the row whenever it is known. Blocked users
+// do not make a client off: they may be people HighLevel removed. Only a caller that did not read
+// the lock (undefined) falls back to the user counts.
+export function loginState(users: number, activeUsers: number, loginOff?: boolean): LoginState {
   if (loginOff) return "off";
   if (users === 0) return "no users";
+  if (loginOff === false) return "on";
   return activeUsers > 0 ? "on" : "off";
 }
 
@@ -23,7 +27,7 @@ export function toClientRow(
     tenantId: tenant.id,
     name: tenant.name ?? tenant.locationId,
     status: statusLabel(tenant.status),
-    login: loginState(users, activeUsers, Boolean(tenant.loginDisabledAt)),
+    login: loginState(users, activeUsers, tenant.loginDisabledAt === undefined ? undefined : tenant.loginDisabledAt !== null),
     users,
   };
 }

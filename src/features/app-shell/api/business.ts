@@ -15,6 +15,7 @@ export type BusinessInput = {
   email?: string | null;
   address?: string | null;
   hours?: string | null;
+  hoursUnreadable?: boolean;
   websiteUrl?: string | null;
   universalCta?: string | null;
   logoUrl?: string | null;
@@ -61,6 +62,7 @@ export function buildBusiness(input: BusinessInput): Business {
     county: clean(input.county),
     state: clean(input.state),
     hours: clean(input.hours),
+    ...(input.hoursUnreadable ? { hoursUnreadable: true } : {}),
     websiteUrl: link(input.websiteUrl),
     site: siteOf(input.websiteUrl),
     cta: clean(input.universalCta),

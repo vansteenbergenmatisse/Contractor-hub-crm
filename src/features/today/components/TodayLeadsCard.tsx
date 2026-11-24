@@ -13,7 +13,7 @@ const reducer = createReducer(NO_TODOS);
 const NO_ROWS: readonly SearchRow[] = [];
 
 // The card with its range, kept while the owner moves between pages.
-export function TodayLeadsCard({ result, timeZone: locationZone }: { result: LeadsResult | null; timeZone?: string | null }) {
+export function TodayLeadsCard({ result, timeZone: locationZone, index }: { result: LeadsResult | null; timeZone?: string | null; index?: number }) {
   const [state, dispatch] = useKeptReducer("today", reducer, NO_TODOS, initialState);
   const viewerZone = useTimeZone();
   const timeZone = locationZone ?? viewerZone;
@@ -23,5 +23,5 @@ export function TodayLeadsCard({ result, timeZone: locationZone }: { result: Lea
     [result, timeZone],
   );
   useSearchRows("leads", rows, { seed: true });
-  return <LeadsCard result={result} range={state.range} onRange={(range) => dispatch({ type: "range", range })} timeZone={timeZone} />;
+  return <LeadsCard result={result} range={state.range} onRange={(range) => dispatch({ type: "range", range })} timeZone={timeZone} index={index} />;
 }

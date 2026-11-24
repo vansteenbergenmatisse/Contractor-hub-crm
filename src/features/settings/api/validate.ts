@@ -24,6 +24,10 @@ export function contrast(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
+// The one value that must never be emptied.
+const REQUIRED_KEYS: ReadonlySet<string> = new Set(["business_name"]);
+export const isClearableKey = (key: string) => !REQUIRED_KEYS.has(key);
+
 function problem(key: string, message: string): Problem {
   return { key, message, section: sectionOfKey(key) ?? "biz" };
 }

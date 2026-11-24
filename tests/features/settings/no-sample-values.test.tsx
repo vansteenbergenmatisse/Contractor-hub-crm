@@ -42,24 +42,29 @@ describe("Settings with a tenant's real values", () => {
   });
 
   it("shows the choices as Not available yet, with no sample On switch", () => {
-    expect(html).not.toContain('role="switch"');
+    // The only switch on the page is the view filter, and it starts off.
+    expect(html.match(/role="switch"/g)).toHaveLength(1);
+    expect(html).toContain('aria-label="Only show empty fields"');
+    expect(html).not.toContain('aria-checked="true"');
     expect(html).not.toContain("Each switch works at once.");
-    expect(html).toMatch(/Approve every quote before it goes out<\/p><\/div><\/div><div class="fd-rac"><span class="fd-chip is-plain">Not available yet<\/span>/);
-    expect(html).toMatch(/Customers pick their own job date<\/p><\/div><\/div><div class="fd-rac"><span class="fd-chip is-plain">Not available yet<\/span>/);
+    for (const label of ["Approve every quote before it goes out", "Customers pick their own job date"]) {
+      expect(html).toContain(`<span class="sv-crn">${label}</span></span><span class="sv-chip">Not available yet</span>`);
+    }
   });
 
   it("keeps the sample switches out of the state", () => {
     expect(initialState(real).sw).toEqual([false, false]);
   });
 
-  it("does not find a choice by a sample switch state when searching", () => {
-    const out = renderToStaticMarkup(<SettingsPage initialValues={real} initial={{ ...initialState(real), q: "off" }} />);
-    expect(out).not.toContain("Approve every quote before it goes out");
-    expect(out).not.toContain("Customers pick their own job date");
+  it("gives a choice no working switch, whatever the kept state holds", () => {
+    const out = renderToStaticMarkup(<SettingsPage initialValues={real} initial={{ ...initialState(real), sw: [true, true], sec: "choice" }} />);
+    expect(out).not.toContain('aria-label="Approve every quote before it goes out"');
+    expect(out).not.toContain('aria-label="Customers pick their own job date"');
+    expect(out).not.toContain('aria-checked="true"');
   });
 
   it("keeps the fields and Save usable", () => {
-    expect(html).toContain("Apply for this visit");
+    expect(html).toContain('aria-label="Apply Business"');
     expect(html).toContain('id="cv-business_name"');
   });
 });

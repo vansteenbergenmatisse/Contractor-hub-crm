@@ -3,7 +3,6 @@ import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-const usePushed = vi.fn();
 vi.mock("next/navigation", () => ({
   usePathname: () => "/settings",
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
@@ -11,7 +10,6 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/features/app-shell", async () => {
   const { useReducer } = await import("react");
   return {
-    usePushed: (v: boolean) => usePushed(v),
     useShell: () => ({}),
     // Outside the shell useKeptReducer is exactly useReducer.
     useKeptReducer: (_key: string, r: never, a: never, i: never) => useReducer(r, a, i),
@@ -19,16 +17,15 @@ vi.mock("@/features/app-shell", async () => {
 });
 
 import { COLOR_KEYS, ESSENTIAL_KEYS, MOCK_CUSTOM_VALUES, SettingsPage, initialState, labelOfKey, settingsValuesFrom } from "@/features/settings";
-import type { ConnectionStatus } from "@/features/settings";
 
 describe("SettingsPage markup", () => {
   const fetchSpy = vi.fn();
   vi.stubGlobal("fetch", fetchSpy);
   const html = renderToStaticMarkup(<SettingsPage />);
 
-  it("shows the title, five sections and one field per key, under its plain label only", () => {
+  it("shows the title, the tabs and one field per key, under its plain label only", () => {
     expect(html).toContain("Settings</h1>");
-    for (const t of ["Business details", "Brand colors", "Connections", "Your choices", "Not available yet"]) {
+    for (const t of ["Your details", "Brand colors", "Connections", "Your choices", "Not available yet"]) {
       expect(html).toContain(t);
     }
     for (const k of [...ESSENTIAL_KEYS, ...COLOR_KEYS]) {
@@ -43,88 +40,10 @@ describe("SettingsPage markup", () => {
     expect(html).toContain('data-sec="biz"');
     expect(html).toContain('data-open="0"');
     expect(html).toContain('data-q="0"');
-    usePushed.mockClear();
-    renderToStaticMarkup(<SettingsPage />);
-    expect(usePushed).toHaveBeenCalledWith(false);
   });
 
-  it("marks the current section and shows every connection as Not available yet without a real status", () => {
-    expect(html).toMatch(/aria-current="page"[^>]*>(?:(?!<\/button>).)*Business details/s);
-    // No real status source exists yet, so every row says "Not available yet".
-    const chips = [...html.matchAll(/<span class="fd-chip (is-ok|is-plain)">(?:(?!<\/span><\/span>).)*<span class="fd-h">([^<]*)<\/span><\/span>/gs)].map((m) => `${m[1]}:${m[2]}`);
-    expect(chips).toEqual([
-      "is-plain:Not available yet", "is-plain:Not available yet", "is-plain:Not available yet", "is-plain:Not available yet", "is-plain:Not available yet", "is-plain:Not available yet",
-    ]);
-    // The calendar's name is not readable, so it is never claimed.
-    expect(html).not.toContain("Connected: Google Calendar");
-    // The A2P line belongs to a connected phone row, and it is never claimed as verified.
-    expect(html).not.toContain("A2P status: Not available yet.");
-    expect(html).not.toContain("A2P verified. Your texts get delivered.");
-    // A row with no status is collapsed and offers no ask button.
-    expect((html.match(/>Ask Forge Forward to connect</g) ?? []).length).toBe(0);
-    expect((html.match(/class="fd-rex fd-how"/g) ?? []).length).toBe(0);
-    expect((html.match(/class="fd-rex fd-how is-off"/g) ?? []).length).toBe(0);
-    expect(html).not.toContain("Done when this row says Connected.");
-    expect(html).not.toMatch(/>Connect</);
-  });
-
-  it("shows Connected and Not connected rows when a status is given", () => {
-    const st: ConnectionStatus[] = [
-      { state: "connected", a2pVerified: true }, { state: "connected", note: "Connected: Google Calendar" },
-      { state: "not-connected" }, { state: "unknown" }, { state: "connected" }, { state: "not-connected" },
-    ];
-    const out = renderToStaticMarkup(<SettingsPage initialValues={{ business_phone_number: "+1 (555) 010-0000" }} connections={st} />);
-    expect(out).toContain("Connected: Google Calendar");
-    expect(out).toContain("A2P verified. Your texts get delivered.");
-    expect((out.match(/Not connected/g) ?? []).length).toBe(2);
-    expect((out.match(/>Ask Forge Forward to connect</g) ?? []).length).toBe(2);
-    expect((out.match(/class="fd-rex fd-how is-off"/g) ?? []).length).toBe(3);
-  });
-
-  it("leaves out the phone number sentence when there is no number", () => {
-    expect(html).toContain('<p class="fd-rsb">Calls and texts to this number land in Communications.</p>');
-    expect(html).not.toContain(". Calls and texts");
-    const withNumber = renderToStaticMarkup(<SettingsPage initialValues={{ business_phone_number: "+1 (555) 010-0000" }} />);
-    expect(withNumber).toContain('<span class="fd-h">+1 (555) 010-0000</span>. Calls and texts to this number land in Communications.');
-  });
-
-  it("after Ask, says the request is noted on this screen only, never that it was received", () => {
-    const out = renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), sec: "conn", asked: { 1: true } }} connections={[{ state: "connected" }, { state: "not-connected" }, { state: "connected" }, { state: "not-connected" }, { state: "connected" }, { state: "not-connected" }]} />);
-    expect(out).toContain("Noted on this screen. The request is not sent to Forge Forward yet.");
-    expect(out).not.toContain("got your request");
-    expect((out.match(/>Ask Forge Forward to connect</g) ?? []).length).toBe(2);
-  });
-
-  it("has two real switches showing On or Off and three chips with no switch", () => {
-    expect((html.match(/role="switch"/g) ?? []).length).toBe(2);
-    expect(html).toContain('aria-label="Approve every quote before it goes out"');
-    expect(html).toContain('aria-label="Customers pick their own job date"');
-    expect((html.match(/Not available yet<\/span><\/div>/g) ?? []).length).toBe(3);
-    expect(html).toMatch(/>(On|Off)</);
-  });
-
-  it("labels every field and keeps the 44px search input labelled", () => {
-    expect(html).toContain('for="fx-st-q"');
+  it("labels every field", () => {
     expect(html).toContain('for="cv-main_color"');
-  });
-
-  it("opens the phone detail view and the pushed screen when a section is open", () => {
-    usePushed.mockClear();
-    const open = renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), sec: "colors", open: true }} />);
-    expect(open).toContain('data-sec="colors"');
-    expect(open).toContain('data-open="1"');
-    expect(usePushed).toHaveBeenCalledWith(true);
-  });
-
-  it("does not push while a search is active, and hides rows that do not match", () => {
-    usePushed.mockClear();
-    const q = renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), open: true, q: "county" }} />);
-    expect(usePushed).toHaveBeenCalledWith(false);
-    expect(q).toContain('data-q="1"');
-    expect(q).toContain('id="cv-business_main_county"');
-    expect(q).not.toContain('id="cv-business_email"');
-    const none = renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), q: "zzzz" }} />);
-    expect(none).toContain("No settings match your search.");
   });
 
   it("shows the error once, next to its field, and the field points to it", () => {
@@ -139,42 +58,8 @@ describe("SettingsPage markup", () => {
     expect(out).toContain('class="fd-lerr fd-ste is-off"');
   });
 
-  it("keeps the error in the top alert when its field cannot be seen", () => {
-    const msg = "Main, pressed needs a color like #2E7D32.";
-    const err = { key: "main_hover_color", message: msg, section: "colors" as const };
-    for (const s of [
-      { ...initialState(), sec: "colors" as const, q: "county", err }, // hidden by the search
-      { ...initialState(), sec: "biz" as const, err }, // in another section
-      { ...initialState(), sec: "colors" as const, cols: false, err }, // color fields closed
-    ]) {
-      const out = renderToStaticMarkup(<SettingsPage initial={s} />);
-      expect(out).toMatch(/class="fd-lerr fd-ste" id="fd-st-err" role="alert">(?:(?!<\/p>).)*Main, pressed needs a color/s);
-      expect(out.split(msg).length - 1).toBe(1);
-      expect(out).not.toContain('id="cv-main_hover_color-err"');
-    }
-  });
-
-  it("shows the save bar while searching only when a field is in the results", () => {
-    const out = renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), q: "a2p" }} connections={[{ state: "connected" }]} />);
-    expect(out).not.toContain("Apply for this visit");
-    expect(out).toContain('class="fd-cols fd-st2 fd-in"');
-    expect(out).not.toContain('id="cv-business_name"');
-    expect(out).toContain("A2P status: Not available yet.");
-    expect(renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), q: "zzzz" }} />)).not.toContain("Apply for this visit");
-    expect(renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), q: "county" }} />)).toContain("Apply for this visit");
-    expect(renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), q: "pressed" }} />)).toContain("Apply for this visit");
-  });
-
-  it("finds a connection by its status, as the design's search reads the whole row", () => {
-    const out = renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), q: "not connected" }} connections={[{ state: "connected" }, { state: "unknown" }, { state: "connected" }, { state: "not-connected" }, { state: "connected" }, { state: "unknown" }]} />);
-    expect(out).toContain(">Instagram<");
-    expect(out).not.toContain(">Facebook page<");
-    const live = renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), q: "on" }} />);
-    expect(live).toContain('aria-label="Customers pick their own job date"');
-  });
-
   it("has the design's Sign out button", () => {
-    expect(html).toMatch(/<button type="button" class="fd-btn is-plain fd-lgo fd-stout">Sign out<\/button>/);
+    expect(html).toMatch(/<button type="button" class="sv-btn is-plain sv-out">Sign out<\/button>/);
   });
 
   it("shows the sub-account's real values, empty fields for keys it lacks, and its extra keys under their own key", () => {
@@ -250,25 +135,13 @@ describe("SettingsPage markup", () => {
   });
 
   it("says what Save really does, in plain words", () => {
-    expect(html).toContain("<span>Changed for this visit only. Not saved to your account yet.</span>");
-    expect(html).toContain("Your business name, contact details and links. Changes here do not reach your website or texts yet.");
-    expect(html).toContain("Type a color like #2E7D32, then press Apply for this visit.");
     expect(html).toContain("Changes last until you close or reload this page.");
-    expect(html).toContain("The details and colors come from your account.");
+    expect(html).toContain("save each step.");
     expect(html).not.toContain("GoHighLevel");
     expect(html).not.toContain("custom values");
     for (const untrue of ["Every page uses", "A change here changes them too", "Every page takes", "Folder 0", "names of the keys"]) {
       expect(html).not.toContain(untrue);
     }
-  });
-
-  it("keeps the color toggle's aria-expanded equal to what shows, also while searching", () => {
-    const closed = renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), cols: false, q: "main" }} />);
-    expect(closed).toMatch(/aria-expanded="false"[^>]*aria-controls="fd-st-col"/);
-    expect(closed).toContain('class="fd-cvg is-off" id="fd-st-col"');
-    const open = renderToStaticMarkup(<SettingsPage initial={{ ...initialState(), cols: true, q: "main" }} />);
-    expect(open).toMatch(/aria-expanded="true"[^>]*aria-controls="fd-st-col"/);
-    expect(open).toContain('class="fd-cvg" id="fd-st-col"');
   });
 
   it("opens on the section named in the URL", () => {

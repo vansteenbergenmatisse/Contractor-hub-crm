@@ -24,6 +24,8 @@ export type BusinessProfile = {
   state: string | null;
   county: string | null;
   hours: string | null;
+  // Set when a structured hours value could not be used, so `hours` may be missing a day.
+  hoursUnreadable?: boolean;
   keyword: string | null;
   websiteUrl: string | null;
   universalCta: string | null;

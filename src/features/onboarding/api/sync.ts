@@ -23,6 +23,8 @@ export type SyncDeps = {
   send(message: EmailMessage): Promise<{ delivered: boolean }>;
   // True when the admin may be mailed now about this agency's lost token. Left out: no mail.
   claimAgencyAlert?(companyId: string, now: Date): Promise<boolean>;
+  // Gives the claim back when the mail did not leave (the delivery guard held it).
+  releaseAgencyAlert?(companyId: string): Promise<void>;
   // When the whole request began, so work done before this sync counts against the time budget.
   startedAt?: Date;
   // Where to start in each list, so rows that keep running long cannot use up every run's budget.
@@ -192,7 +194,12 @@ async function alertLostAgency(deps: SyncDeps, companyId: string, summary: SyncS
   }
   try {
     if (!(await deps.claimAgencyAlert(companyId, deps.now()))) return;
-    await deps.send(buildAgencyTokenAlert(deps.adminEmail, deps.installLink, companyId));
+    const { delivered } = await deps.send(buildAgencyTokenAlert(deps.adminEmail, deps.installLink, companyId));
+    if (!delivered) {
+      console.warn("Sync: agency_alert_not_delivered, check the email delivery settings");
+      await deps.releaseAgencyAlert?.(companyId);
+      return;
+    }
     summary.alertsSent += 1;
   } catch (error) {
     summary.failures += 1;
@@ -234,13 +241,19 @@ async function alertMissing(
       await deps.releaseAlerts(due.map((d) => d.locationId));
       return;
     }
+    let delivered: boolean;
     try {
-      await deps.send(buildAlertMessage(deps.adminEmail, deps.installLink, due, new Set(unlisted)));
-      summary.alertsSent += 1;
+      ({ delivered } = await deps.send(buildAlertMessage(deps.adminEmail, deps.installLink, due, new Set(unlisted))));
     } catch (error) {
       await deps.releaseAlerts(due.map((d) => d.locationId));
       throw error;
     }
+    if (!delivered) {
+      console.warn("Sync: missing_app_alert_not_delivered, check the email delivery settings");
+      await deps.releaseAlerts(due.map((d) => d.locationId));
+      return;
+    }
+    summary.alertsSent += 1;
   } catch (error) {
     summary.failures += 1;
     console.error(`Sync: missing-app step failed: ${error instanceof Error ? error.name : "unknown error"}`);
