@@ -2,6 +2,7 @@ import { validateLead } from "./leads-logic";
 import { isOrigin, ORIGIN_LABEL, originFromRaw } from "./lead-sources";
 import type { AddressSuggestion } from "@/shared/lib/places-search";
 import { buildLeadsCsv, type ExportRow } from "./leads-csv";
+import { isLeadsReadDisabled } from "./read-flag";
 
 // HTTP handlers for Leads. Tenant and user come from the session only. Logs and audit lines hold ids
 // and counts, never a name, phone, email, address or search text.
@@ -70,6 +71,8 @@ export async function handleLeadsExport(request: Request, deps: LeadsExportDeps)
   if (!user) return reply(401, { error: "unauthorized" });
   // Owners only. An admin in View as client has the admin role and never passes.
   if (user.viewing || user.role !== "owner" || !user.tenantId) return reply(403, { error: "forbidden" });
+  // The same kill switch as the Leads page, checked before the limiter and any read.
+  if (isLeadsReadDisabled()) return reply(503, { error: "unavailable" });
   const tenantId = user.tenantId;
   const body = await readBody(request);
   if (!body || (body.includeContact !== undefined && typeof body.includeContact !== "boolean")) return reply(400, { error: "invalid" });
@@ -99,7 +102,7 @@ export async function handleLeadsExport(request: Request, deps: LeadsExportDeps)
   });
 }
 
-export type LeadCreateOutcome = { status: "created" } | { status: "duplicate" } | { status: "invalid_phone" } | { status: "unsure" } | { status: "failed" };
+export type LeadCreateOutcome = { status: "created" } | { status: "duplicate" } | { status: "in_progress" } | { status: "invalid_phone" } | { status: "unsure" } | { status: "failed" };
 export type LeadCreateInput = { name: string; phone: string; email: string; address: string; source: string };
 export type LeadCreateDeps = Base & {
   isEnabled: (tenantId: string) => boolean;

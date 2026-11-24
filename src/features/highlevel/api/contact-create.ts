@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { parseEnv } from "@/shared/config";
 import { readLocationState } from "../db/token-store";
 import { parseContactSearch } from "./contacts";
@@ -18,7 +19,7 @@ const EXPORT_PAGE_SIZE = 100;
 
 export type NewContact = { name: string; phone: string; email: string; address: string; source: string };
 export type ContactCreateOutcome =
-  | { status: "created" } | { status: "duplicate" } | { status: "invalid_phone" } | { status: "unsure" } | { status: "failed" };
+  | { status: "created" } | { status: "duplicate" } | { status: "in_progress" } | { status: "invalid_phone" } | { status: "unsure" } | { status: "failed" };
 export type ContactCreateRequests = {
   duplicate: (token: string, query: { locationId: string; number?: string; email?: string }) => Promise<Response>;
   create: (token: string, body: Record<string, unknown>) => Promise<Response>;
@@ -177,6 +178,53 @@ export function createContactCreateAdapter(deps: ContactCreateDeps) {
   }
 
   return { createContact, readForExport };
+}
+
+// One key per normalized phone and email, scoped to the tenant. Keyed with a server secret because a
+// plain hash of a phone number can be reversed by trying every number. Null when the phone is invalid.
+export function contactClaimKeys(secret: string, tenantId: string, phone: string, email: string): string[] | null {
+  const e164 = toE164(phone);
+  if (!e164) return null;
+  const key = (kind: string, value: string) =>
+    `lead-create:${tenantId}:${createHmac("sha256", secret).update(`lead-create-claim\0${tenantId}\0${kind}\0${value}`).digest("hex")}`;
+  const normalizedEmail = email.trim().toLowerCase();
+  return normalizedEmail ? [key("phone", e164), key("email", normalizedEmail)] : [key("phone", e164)];
+}
+
+export type ContactOnceDeps = {
+  secret: string;
+  claim: (key: string) => Promise<boolean>;
+  create: (tenantId: string, input: NewContact) => Promise<ContactCreateOutcome>;
+};
+
+// Closes the gap between the duplicate search and the create. The claim is atomic and is never
+// released early: it outlives the create, so a retry after a lost answer cannot double the contact.
+export async function createContactOnce(tenantId: string, input: NewContact, deps: ContactOnceDeps): Promise<ContactCreateOutcome> {
+  const keys = contactClaimKeys(deps.secret, tenantId, input.phone, input.email);
+  if (!keys) return { status: "invalid_phone" };
+  try {
+    for (const key of keys) {
+      if (!(await deps.claim(key))) return { status: "in_progress" };
+    }
+  } catch {
+    console.error("Lead create claim failed.");
+    return { status: "failed" };
+  }
+  return deps.create(tenantId, input);
+}
+
+// Proposal, not a measured number: longer than the searches, the create and a token renewal together.
+export const CONTACT_CLAIM_MS = 120_000;
+type ClaimHit = (key: string, limit: number, windowMs: number, now: Date) => Promise<boolean>;
+
+export function createTenantContactCreator(hit: ClaimHit) {
+  const env = parseEnv("highlevel");
+  const adapter = createTenantContactCreateAdapter();
+  return (tenantId: string, input: NewContact) => createContactOnce(tenantId, input, {
+    secret: env.TOKEN_ENCRYPTION_KEY,
+    claim: (key) => hit(key, 1, CONTACT_CLAIM_MS, new Date()),
+    create: adapter.createContact,
+  });
 }
 
 export function createTenantContactCreateAdapter() {

@@ -2,6 +2,7 @@ import { joinParts } from "@/shared/lib/join-parts";
 import type { Lead, LeadContact, LeadContactsReader, LeadsResult } from "../types";
 import { extraOrigin } from "./lead-sources";
 import { sourceKey } from "./leads-logic";
+import { isLeadsReadDisabled } from "./read-flag";
 
 function toLead(contact: LeadContact): Lead {
   const place = joinParts([contact.city, joinParts([contact.state, contact.postalCode], " ")], ", ");
@@ -27,7 +28,7 @@ export async function loadLeads(
   read: LeadContactsReader,
   now: () => Date = () => new Date(),
 ): Promise<LeadsResult> {
-  if (!tenantId || process.env.LEADS_READ_DISABLED?.trim() === "true") return { state: "unavailable" };
+  if (!tenantId || isLeadsReadDisabled()) return { state: "unavailable" };
   let answer;
   try {
     answer = await read(tenantId);
