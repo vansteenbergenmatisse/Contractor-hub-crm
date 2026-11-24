@@ -4,6 +4,8 @@ Written 2026-11-22 from the code, `docs/greenlane/build-prompt.md` and that day'
 
 **Status: the install from our link worked on dev for JCR on 2026-11-22. On 2026-11-24 "Select all" on dev connected the agency's 3 other sub-accounts through the `INSTALL` webhook (see "Proven on dev, 2026-11-24").** On 2026-11-24 a sub-account Admin of a brand-new sub-account signed in to the CRM through **Sign in with HighLevel** on a laptop (owner sign-in proven on dev). A snapshot copies custom value names, keys and folders but **not their values**: a new sub-account starts with every value blank (throwaway: 16 folders, 320 blank values). Staging and production have not been installed. Steps marked **(not proven)** have not been run for real. After the first success in each environment, remove the mark or correct the step. A snapshot may not carry the app, so assume each new sub-account needs the Install steps.
 
+**Matt's step-by-step version for the team** (Part A one-time setup, Part B per client, owner message, checklist): `docs/sop-step-4-add-client-to-crm.md`, copied from his SOP file on 2026-11-24 and updated with that evening's findings. It adds to this file: the dev `HIGHLEVEL_CRM_MENU_URL` template (set on Preview `develop`), the owner's message text, Step 10 (connect email and calendar in HighLevel) and the "not built yet" list. Keep both in step: this file is the technical source.
+
 ## The short version
 
 - **You do not install per sub-account.** The intended setup is one install per environment, from the agency, with "all sub-accounts" selected in production.
