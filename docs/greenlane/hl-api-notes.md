@@ -135,3 +135,24 @@ Sources: OpenAPI repo `GoHighLevel/highlevel-api-docs` at commit `0af86a4` (2026
 - **Off switch:** `PIPELINE_READ_DISABLED=true`.
 
 **Custom value write-back as built (2026-11-22). Response shape UNVERIFIED, no live call made.** Source: `apps/locations.json` at commit `0af86a4`. `PUT /locations/{locationId}/customValues/{id}`, `Version: 2021-07-28`, body `{ name, value }`, both required; documented 200, 400, 401, 422. The file lists no scope on the PUT; `locations/customValues.write` is on the POST and in our scope list. Unconfirmed: whether a stored token holds that scope, the real answer, the rate limit, and whether a change fires anything in HighLevel. Rules and rollback: `openspec/changes/settings-write-back/proposal.md`.
+
+# New sub-account auto-connect: facts read from the public docs (2026-11-24)
+
+Read with a summarising fetch tool from `marketplace.gohighlevel.com/docs/webhook/AppInstall.md`, `.../webhook/LocationCreate.md`, `.../webhook/WebhookIntegrationGuide/index.html`, `.../docs/ghl/oauth/get-installed-location.md` and `.../docs/ghl/oauth/get-location-access-token.md`, plus the GitHub copy of AppInstall. No page shows a date. No live call was made.
+
+**Confirmed by the docs:**
+- INSTALL: "The User ID and Company ID may be available when a new token is generated." and "In case of app installation via future locations, you may not get these fields." So a future-location INSTALL may lack `companyId` (handled since 2026-11-22).
+- LocationCreate: "Available only to Agency Level Apps". Schema: `type`, `id` (the new location), `name`, `email`, `stripeProductId`, `companyId`. No `appId`, no `locationId`, no `webhookId`.
+- Webhook events are switched on per event in the app's Advanced Settings, webhook section ("Turn on and paste your webhook URL against the events you wish to receive"). LocationCreate is listed under Location Events. Subscriptions can be changed at any time.
+- Retries: any non-2xx or no response is retried up to 12 times with exponential backoff and jitter. The timeout is not stated.
+- `GET /oauth/installed-locations` (`Version: v3`, agency token, `oauth.readonly`): query `companyId` and `appId` required, `pageSize` 1 to 100 (default 20), `pageToken`, `isInstalled`, `locationId`, `query`, `versionId`, `onTrial`, `planId`, `restrictToUserLocations`. Response `items[]` (`_id`, `name`, `address` required; `isInstalled`, `versionId`, `installedAt` optional), `pagination` (`hasNextPage`, `hasPrevPage`, `currentPageSize` required; `nextPageToken` and others optional), and an optional `installToFutureLocations` boolean. The page notes that without `restrictToUserLocations` "the install list (`isInstalled=false`) is still user-filtered".
+- `POST /oauth/location-token` (`Version: v3`, agency token, `oauth.write`), body `companyId` + `locationId`. The OpenAPI spec says form-urlencoded; the page's code samples send JSON (the docs disagree). Response `access_token`, `token_type`, `expires_in`, `scope`, `locationId`, `planId`, `userId`, `appId`, `versionId`, `refresh_token`. Errors 400, 401, 422.
+
+**Not stated anywhere read (unproven until a real new sub-account is created):**
+- Whether HighLevel sends an INSTALL webhook at all for a sub-account added through "future locations", and how long after LocationCreate.
+- How soon a new sub-account appears in `/oauth/installed-locations` after it is created.
+- Whether `/oauth/location-token` fails for a location the app is not (yet) installed on, and with which status.
+- Whether `installToFutureLocations` is really sent, and whether "Select all" on the install screen sets it.
+- Whether loading a snapshot carries the app (no page read says so).
+
+**How the code uses this (2026-11-24):** INSTALL (with or without `companyId`) and LocationCreate both connect a location only when our agency's `/oauth/installed-locations` list (asked with our `appId`) names it; not listed yet answers 500 so HighLevel retries. A LocationCreate whose location is not listed and whose agency reports `installToFutureLocations: false` is acknowledged without retries. The reconcile (daily cron on production, an admin opening `/admin/clients` at most once per 5 minutes per agency, and the "Check for new sub-accounts" button) connects any listed location the webhooks missed.

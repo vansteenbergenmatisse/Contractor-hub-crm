@@ -1,13 +1,13 @@
 // Public API of the onboarding feature. Other code imports from "@/features/onboarding" only.
 export { onboardLocation } from "./api/onboard";
 export type { OnboardDeps } from "./api/onboard";
-export { buildAlertMessage, handleSync, runSync } from "./api/sync";
+export { buildAlertMessage, handleCheckSubAccounts, handleSync, runSync, throttledCompanyIds } from "./api/sync";
 export type { SyncDeps } from "./api/sync";
 export { addCounts, syncTenantUsers } from "./api/users";
 export type { UserSyncDeps } from "./api/users";
 export { createWebhookHooks } from "./api/hooks";
 export type { WebhookHookDeps } from "./api/hooks";
-export { getCallbackOnboard, getWebhookHooks, scheduleTokenRenewal, scheduleVisitSync, syncRoute } from "./api/instance";
+export { checkSubAccountsRoute, getCallbackOnboard, getWebhookHooks, scheduleTokenRenewal, scheduleVisitSync, syncRoute } from "./api/instance";
 export { deferVisitSync, runVisitSync, syncUsersOnVisit, VISIT_SYNC_INTERVAL_MS } from "./api/visit-sync";
 export { createMailCap, MAX_SET_PASSWORD_MAILS_PER_TENANT_PER_DAY } from "./api/mail-cap";
 export type { MailCapDeps } from "./api/mail-cap";

@@ -29,6 +29,12 @@ export type SyncDeps = {
   startedAt?: Date;
   // Where to start in each list, so rows that keep running long cannot use up every run's budget.
   startOffset?: (length: number) => number;
+  // False: no admin mails and no read of the agency's full sub-account list (the on-demand reconcile
+  // from /admin/clients). The daily cron leaves it out and keeps the mails.
+  alerts?: boolean;
+  // False: only onboard locations that are new to the CRM; known tenants keep their users as they
+  // are (the cron, the webhooks and visits re-read them). Used by the "Check for new sub-accounts" button.
+  resyncKnown?: boolean;
 };
 
 // No new step starts after this, so one in flight can finish inside the 60-second function limit
@@ -118,7 +124,7 @@ export async function runSync(deps: SyncDeps): Promise<SyncSummary> {
     }
     if (!agency) {
       console.error("Sync: agency_token_unusable, the agency must install the app again");
-      await alertLostAgency(deps, companyId, summary);
+      if (deps.alerts !== false) await alertLostAgency(deps, companyId, summary);
       continue;
     }
     let installed: InstalledLocation[];
@@ -142,7 +148,7 @@ export async function runSync(deps: SyncDeps): Promise<SyncSummary> {
   }
 
   // Alerts go before the per-tenant work, so a long tenant pass can never starve them.
-  for (const plan of rotated(plans, deps.startOffset)) {
+  for (const plan of deps.alerts === false ? [] : rotated(plans, deps.startOffset)) {
     if (outOfTime()) {
       skipped += 1;
       continue;
@@ -154,6 +160,7 @@ export async function runSync(deps: SyncDeps): Promise<SyncSummary> {
   const jobs = plans.flatMap(({ companyId, known, installed }) => installed.map((location) => ({ companyId, known, location })));
   for (const { companyId, known, location } of rotated(jobs, deps.startOffset)) {
     const tenantId = known.get(location.locationId);
+    if (tenantId && deps.resyncKnown === false) continue;
     if (!tenantId && (agenciesListing.get(location.locationId) ?? 0) > 1) {
       // Never attach it to whichever agency came first.
       skippedShared.add(location.locationId);
@@ -257,6 +264,45 @@ async function alertMissing(
   } catch (error) {
     summary.failures += 1;
     console.error(`Sync: missing-app step failed: ${error instanceof Error ? error.name : "unknown error"}`);
+  }
+}
+
+// Agencies whose on-demand reconcile is due: `claim` is a shared rate limit (at most once per window
+// per agency). A claim that fails counts as "not due", so a database hiccup never fans out.
+export function throttledCompanyIds(list: () => Promise<string[]>, claim: (companyId: string) => Promise<boolean>): () => Promise<string[]> {
+  return async () => {
+    const due: string[] = [];
+    for (const companyId of await list()) {
+      try {
+        if (await claim(companyId)) due.push(companyId);
+      } catch (error) {
+        console.error(`Reconcile: claim failed: ${error instanceof Error ? error.name : "unknown error"}`);
+      }
+    }
+    return due;
+  };
+}
+
+// POST /api/admin/sub-accounts/check: an admin asks to connect new sub-accounts now. Same-origin and
+// admin session first, then a per-admin rate limit. The answer holds counts only.
+export async function handleCheckSubAccounts(
+  request: Request,
+  deps: { appOrigin: string; adminId(request: Request): Promise<string | null>; allow(adminId: string): Promise<boolean>; run(): Promise<SyncSummary> },
+): Promise<Response> {
+  const noStore = { "cache-control": "no-store" };
+  if (request.headers.get("origin") !== deps.appOrigin) return Response.json({ error: "forbidden" }, { status: 403, headers: noStore });
+  const admin = await deps.adminId(request);
+  if (admin === null) return Response.json({ error: "forbidden" }, { status: 403, headers: noStore });
+  try {
+    if (!(await deps.allow(admin))) return Response.json({ error: "rate_limited" }, { status: 429, headers: noStore });
+    const summary = await deps.run();
+    return Response.json(
+      { connected: summary.onboarded, installed: summary.installedLocations, agencies: summary.companies, failures: summary.failures },
+      { headers: noStore },
+    );
+  } catch (error) {
+    console.error(`Reconcile: check failed: ${error instanceof Error ? error.name : "unknown error"}`);
+    return Response.json({ error: "failed" }, { status: 500, headers: noStore });
   }
 }
 

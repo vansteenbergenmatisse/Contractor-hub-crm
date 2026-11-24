@@ -1,5 +1,5 @@
 import { after } from "next/server";
-import { clearRateLimit, createEmailSenderFromEnv, deactivateGhlUser, getProvisionDeps, hitRateLimit, listActiveLinks, provisionGhlUser } from "@/features/auth";
+import { clearRateLimit, createEmailSenderFromEnv, deactivateGhlUser, getGuards, getProvisionDeps, hitRateLimit, listActiveLinks, provisionGhlUser } from "@/features/auth";
 import { getBrandService } from "@/features/brand";
 import {
   CRON_RENEWAL_WINDOW_MS,
@@ -16,7 +16,8 @@ import { claimVisitSync, reserveSetPasswordMail } from "../db/sync-state";
 import { createWebhookHooks } from "./hooks";
 import { createMailCap } from "./mail-cap";
 import { onboardLocation, type OnboardDeps } from "./onboard";
-import { handleSync, runSync, type SyncDeps } from "./sync";
+import { parseEnv } from "@/shared/config";
+import { handleCheckSubAccounts, handleSync, runSync, throttledCompanyIds, type SyncDeps } from "./sync";
 import { syncTenantUsers, withSyncMoveProof, type UserSyncDeps } from "./users";
 import { deferVisitSync, runVisitSync, syncUsersOnVisit } from "./visit-sync";
 
@@ -41,10 +42,10 @@ function build() {
   };
   const onboardDeps: OnboardDeps = {
     ...userSync,
-    async connect({ companyId, locationId, name }) {
+    async connect({ companyId, locationId, name, listedAt }) {
       const agency = await hl.agency(companyId);
       if (!agency) throw new Error("No usable agency token.");
-      return agency.connect(locationId, name);
+      return agency.connect(locationId, name, listedAt);
     },
     listUsers: hl.usersWithToken,
   };
@@ -120,8 +121,9 @@ export function scheduleVisitSync(tenantId: string): void {
 }
 
 // Called when an admin opens the client list: after the response, renews tokens close to expiry, at
-// most once per 10 minutes across all instances. This is what keeps dev and staging connected, since
-// Vercel runs its cron on production only.
+// most once per 10 minutes across all instances, and runs the agency reconcile (new sub-accounts with
+// the app get connected, known clients' users re-read), at most once per 5 minutes per agency. This is
+// what keeps dev and staging connected, since Vercel runs its cron on production only.
 export function scheduleTokenRenewal(): void {
   deferVisitSync(after, async () => {
     try {
@@ -129,6 +131,14 @@ export function scheduleTokenRenewal(): void {
       await runTokenRenewal(VISIT_RENEWAL_WINDOW_MS);
     } catch (error) {
       console.error(`Token renewal: visit step failed: ${error instanceof Error ? error.name : "unknown error"}`);
+    }
+  });
+  deferVisitSync(after, async () => {
+    try {
+      const deps = reconcileDeps(new Date(), { resyncKnown: true });
+      await runSync({ ...deps, companyIds: throttledCompanyIds(deps.companyIds, (companyId) => hitRateLimit(`agency-reconcile:${companyId}`, 1, ADMIN_RECONCILE_INTERVAL_MS, new Date())) });
+    } catch (error) {
+      console.error(`Reconcile: visit step failed: ${error instanceof Error ? error.name : "unknown error"}`);
     }
   });
 }
@@ -154,7 +164,7 @@ export async function syncRoute(request: Request): Promise<Response> {
         companyIds: hl.companyIds,
         agency: hl.agency,
         connectedTenants: hl.connectedTenants,
-        onboard: (input) => onboardLocation(onboardDeps, input),
+        onboard: (input) => onboardLocation(onboardDeps, { ...input, listedAt: startedAt }),
         resyncUsers: async (tenantId) => syncTenantUsers(userSync, tenantId, await hl.usersOfTenant(tenantId)),
         claimAlerts,
         releaseAlerts,
@@ -169,5 +179,49 @@ export async function syncRoute(request: Request): Promise<Response> {
       };
       return runSync(deps);
     },
+  });
+}
+
+// A proposal, not a measured number: often enough that a new client appears within minutes of an
+// admin looking, rare enough that page loads do not multiply HighLevel calls.
+const ADMIN_RECONCILE_INTERVAL_MS = 5 * 60_000;
+
+// The on-demand reconcile: onboards only the locations HighLevel's installed list (asked with our
+// appId) names, never the agency's other sub-accounts. No admin mails (the daily cron sends them).
+function reconcileDeps(startedAt: Date, options: { resyncKnown: boolean }): SyncDeps {
+  const { hl, userSync, onboardDeps } = build();
+  return {
+    now: () => new Date(),
+    companyIds: hl.companyIds,
+    agency: hl.agency,
+    connectedTenants: hl.connectedTenants,
+    onboard: (input) => onboardLocation(onboardDeps, { ...input, listedAt: startedAt }),
+    resyncUsers: async (tenantId) => syncTenantUsers(userSync, tenantId, await hl.usersOfTenant(tenantId)),
+    claimAlerts,
+    releaseAlerts,
+    adminEmail: null,
+    installLink: "",
+    send: async () => ({ delivered: false }),
+    alerts: false,
+    resyncKnown: options.resyncKnown,
+    startedAt,
+    startOffset: (length) => Math.floor(Math.random() * length),
+  };
+}
+
+// POST /api/admin/sub-accounts/check: the "Check for new sub-accounts" button on /admin/clients.
+export async function checkSubAccountsRoute(request: Request): Promise<Response> {
+  let appOrigin: string;
+  try {
+    appOrigin = new URL(parseEnv("auth").APP_URL).origin;
+  } catch {
+    return new Response("Server is not configured.", { status: 500, headers: { "cache-control": "no-store" } });
+  }
+  const guards = getGuards();
+  return handleCheckSubAccounts(request, {
+    appOrigin,
+    adminId: guards.adminId,
+    allow: (adminId) => hitRateLimit(`agency-reconcile:manual:${adminId}`, 3, 60_000, new Date()),
+    run: async () => runSync(reconcileDeps(new Date(), { resyncKnown: false })),
   });
 }
