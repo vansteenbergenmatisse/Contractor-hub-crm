@@ -7,10 +7,14 @@ import { announceViewChange } from "../api/view-channel";
 import type { ClientRow } from "../types";
 import { CheckSubAccountsButton } from "./CheckSubAccountsButton";
 import { ClientUsers } from "./ClientUsers";
+import { TemplateCopyPanel } from "./TemplateCopyPanel";
+import type { TemplateCopyView } from "@/features/template-copy";
 
 // Plain styling on purpose (build prompt section 4.8). All text states are words, not colors.
-export function ClientsTable({ clients }: { clients: ClientRow[] }) {
+// `templateCopy`: set only while the template copy is on (TEMPLATE_COPY_ENABLED).
+export function ClientsTable({ clients, templateCopy }: { clients: ClientRow[]; templateCopy?: TemplateCopyView }) {
   const [rows, setRows] = useState(clients);
+  const [copyFor, setCopyFor] = useState<string | null>(null);
   // `link` is a one-time link (invite or set-password) shown under the client with a Copy button.
   const [message, setMessage] = useState<{ tenantId: string; text: string; link?: string; note?: string } | null>(null);
   const [usersFor, setUsersFor] = useState<string | null>(null);
@@ -155,6 +159,11 @@ export function ClientsTable({ clients }: { clients: ClientRow[] }) {
                         </button>
                       </small>
                     </div>
+                    {templateCopy && row.tenantId !== templateCopy.templateTenantId && templateCopy.warnings[row.tenantId]?.length ? (
+                      <p role="note">
+                        <strong>Warning: still the template&apos;s values</strong> for {templateCopy.warnings[row.tenantId].join(", ")}. Replace them before this client goes live.
+                      </p>
+                    ) : null}
                   </td>
                   <td>{row.status}</td>
                   <td>{row.users}</td>
@@ -219,6 +228,16 @@ export function ClientsTable({ clients }: { clients: ClientRow[] }) {
                         >
                           {usersFor === row.tenantId ? "Hide users" : "Users"}
                         </button>
+                        {templateCopy && row.tenantId !== templateCopy.templateTenantId && row.status !== "Uninstalled" ? (
+                          <button
+                            type="button"
+                            aria-expanded={copyFor === row.tenantId}
+                            aria-label={`Copy values from template to ${row.name}`}
+                            onClick={() => setCopyFor((current) => (current === row.tenantId ? null : row.tenantId))}
+                          >
+                            Copy values from template
+                          </button>
+                        ) : null}
                         {row.login === "off" ? (
                           <button type="button" disabled={pending.has(row.tenantId)} onClick={() => setLogin(row.tenantId, false)}>Turn on login</button>
                         ) : (
@@ -248,6 +267,13 @@ export function ClientsTable({ clients }: { clients: ClientRow[] }) {
                           Copy link
                         </button>
                       ) : null}
+                    </td>
+                  </tr>
+                ) : null}
+                {templateCopy && copyFor === row.tenantId ? (
+                  <tr>
+                    <td colSpan={6}>
+                      <TemplateCopyPanel tenantId={row.tenantId} clientName={row.name} onClose={() => setCopyFor(null)} />
                     </td>
                   </tr>
                 ) : null}

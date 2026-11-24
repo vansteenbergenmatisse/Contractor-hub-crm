@@ -12,3 +12,7 @@ export type { CheckedImage, MediaDeps } from "./api/media-replace";
 export { handleMediaReplace, mediaFailure } from "./api/media-route";
 export type { MediaRouteDeps } from "./api/media-route";
 export { replaceTenantImage } from "./api/media-instance";
+// For the admin template copy: the same audit rows, per-tenant save lease and SVG check.
+export { beginValueChange, finishValueChange } from "./db/value-changes";
+export { claimSaveLock, releaseSaveLock } from "./db/save-lock";
+export { checkSvg, MAX_SVG_BYTES } from "./api/svg-check";

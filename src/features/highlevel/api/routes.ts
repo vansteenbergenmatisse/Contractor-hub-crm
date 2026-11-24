@@ -4,7 +4,7 @@ import { createHighLevelClient } from "./client";
 import { searchUsersWithRetry } from "./search-users";
 import { listCustomValuesWithRetry, readCustomValuesWithStoredToken } from "./custom-values";
 import { createCustomValueAdapter } from "./custom-value-write";
-import { createMediaAdapter } from "./media-write";
+import { createMediaAdapter, createMediaLibraryAdapter } from "./media-write";
 import { listLocationUsersWithRetry } from "./location-users";
 import { CONTACTS_PAGE_SIZE, readContactsPage, readContactsThrottled } from "./contacts";
 import type { AgencyLocation, ContactsRead, CustomValue, HighLevelUser, InstalledLocation, SaveLocationConnectionInput, SearchUsersQuery } from "../types";
@@ -243,30 +243,60 @@ export function createTenantContactsReader(
 
 // Reads and updates custom values for the settings write-back. Throws when the environment is
 // incomplete. The tenant id always comes from the caller's server session.
-export function createTenantCustomValueAdapter() {
+// Optional hooks around each HighLevel request of an adapter: `beforeRequest` may wait (a pacer
+// that keeps a location under its burst limit), `observeStatus` sees each answer's status (a 429).
+export type RequestHooks = { beforeRequest?: () => Promise<void>; observeStatus?: (status: number) => void };
+
+function hooked<A extends unknown[]>(request: (...args: A) => Promise<Response>, hooks: RequestHooks): (...args: A) => Promise<Response> {
+  if (!hooks.beforeRequest && !hooks.observeStatus) return request;
+  return async (...args: A) => {
+    await hooks.beforeRequest?.();
+    const response = await request(...args);
+    hooks.observeStatus?.(response.status);
+    return response;
+  };
+}
+
+export function createTenantCustomValueAdapter(hooks: RequestHooks = {}) {
   const env = parseEnv("highlevel");
   const client = buildClient(env);
   const tokens = buildTokenService(env, client);
   return createCustomValueAdapter({
     readLocationId: async (id) => (await readLocationState(id, env.TOKEN_ENCRYPTION_KEY))?.locationId ?? null,
     getLocationToken: (tenantId) => tokens.getLocationToken(tenantId),
-    requestList: client.requestCustomValues,
-    requestUpdate: client.requestUpdateCustomValue,
+    requestList: hooked(client.requestCustomValues, hooks),
+    requestUpdate: hooked(client.requestUpdateCustomValue, hooks),
   });
 }
 
 // Finds, uploads and trashes media library files for Settings' Change image. The tenant id always
 // comes from the caller's server session. It offers no permanent delete or rename.
-export function createTenantMediaAdapter() {
+export function createTenantMediaAdapter(hooks: RequestHooks = {}) {
   const env = parseEnv("highlevel");
   const client = buildClient(env);
   const tokens = buildTokenService(env, client);
   return createMediaAdapter({
     readLocationId: async (id) => (await readLocationState(id, env.TOKEN_ENCRYPTION_KEY))?.locationId ?? null,
     getLocationToken: (tenantId) => tokens.getLocationToken(tenantId),
-    requestFiles: client.requestMediaFiles,
-    requestUpload: client.requestMediaUpload,
-    requestTrash: client.requestMediaTrash,
+    requestFiles: hooked(client.requestMediaFiles, hooks),
+    requestUpload: hooked(client.requestMediaUpload, hooks),
+    requestTrash: hooked(client.requestMediaTrash, hooks),
+  });
+}
+
+// Reads a whole media library and creates folders, for the admin template copy only. The tenant id
+// comes from the server (the template's from its env, the target's from the admin route).
+export function createTenantMediaLibraryAdapter(hooks: RequestHooks = {}) {
+  const env = parseEnv("highlevel");
+  const client = buildClient(env);
+  const tokens = buildTokenService(env, client);
+  return createMediaLibraryAdapter({
+    readLocationId: async (id) => (await readLocationState(id, env.TOKEN_ENCRYPTION_KEY))?.locationId ?? null,
+    getLocationToken: (tenantId) => tokens.getLocationToken(tenantId),
+    requestFiles: hooked(client.requestMediaFiles, hooks),
+    requestUpload: hooked(client.requestMediaUpload, hooks),
+    requestTrash: hooked(client.requestMediaTrash, hooks),
+    requestCreateFolder: hooked(client.requestMediaCreateFolder, hooks),
   });
 }
 
