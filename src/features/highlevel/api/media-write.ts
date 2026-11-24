@@ -163,8 +163,10 @@ export function createMediaAdapter(deps: MediaAdapterDeps) {
   return media;
 }
 
-// The admin template copy: reads a whole library and creates folders. Kept apart so Change image
-// never gains a folder write.
+// Reads a whole library and creates folders: the admin template copy, and Settings' add-an-image
+// (an owner's image for a value with no library file goes into the layout folder, created if missing).
+// Kept apart from createMediaAdapter so that adapter (find, verify, upload, trash) has no folder write,
+// and this one has no trash.
 export function createMediaLibraryAdapter(deps: MediaAdapterDeps) {
   const { library, createFolder } = buildMediaAdapter(deps);
   return { library, createFolder };

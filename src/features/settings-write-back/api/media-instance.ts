@@ -6,7 +6,8 @@ import { beginValueChange, finishValueChange } from "../db/value-changes";
 import { replaceImage, type CheckedImage } from "./media-replace";
 
 // The real Change image. The adapters are built per call, so `next build` needs no environment.
-// The library adapter (read and create folder) is used only to add an image to an empty value.
+// The library adapter (read and create folder, no trash) is used only to add an image to a value that
+// holds no library file (empty, or a link from elsewhere). A folder create is audited (media-replace).
 export function replaceTenantImage(input: { tenantId: string; actorId: string; key: string; expected: string; file: CheckedImage; unlocked?: string }) {
   const values = createTenantCustomValueAdapter();
   const media = createTenantMediaAdapter();

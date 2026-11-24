@@ -57,6 +57,11 @@ export function ImageChange({ fieldKey, label, kind, current, dirty, upload, pre
   const saveButton = useRef<HTMLButtonElement>(null);
   const changeButton = useRef<HTMLButtonElement>(null);
   const hadPreview = useRef(false);
+  // After Remove the buttons leave the screen: focus moves to the note that says what happens next.
+  const removeNote = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (removing) removeNote.current?.focus();
+  }, [removing]);
   useEffect(() => {
     if (ready && !busy) saveButton.current?.focus();
     else if (!ready && !busy && hadPreview.current) changeButton.current?.focus();
@@ -115,7 +120,7 @@ export function ImageChange({ fieldKey, label, kind, current, dirty, upload, pre
       return;
     }
     if (answer.status === "conflict" && answer.current !== undefined) onValue(fieldKey, answer.current, false);
-    setError(imageFailureMessage(answer));
+    setError(imageFailureMessage(answer, { empty }));
   }
 
   function remove() {
@@ -135,7 +140,11 @@ export function ImageChange({ fieldKey, label, kind, current, dirty, upload, pre
     <div className="fd-imgc" role="group" aria-label={`Change ${short}`} onDragOver={(event) => event.preventDefault()} onDrop={drop}>
       <input ref={input} type="file" hidden accept={svgOrPhoto ? SVG_OR_PHOTO_ACCEPT : ACCEPT[kind]} aria-label={`Choose a file for ${short}`} onChange={(event) => void take(event.target.files?.[0])} />
       {dirty ? (
-        <p className="fd-hint fd-cvh">{removing ? "Save this step to remove the image, or undo. The file stays in your media library." : "Save or undo your link change before changing the image."}</p>
+        removing ? (
+          <p ref={removeNote} className="fd-hint fd-cvh" role="status" tabIndex={-1}>Save this step to remove the image, or undo. The file stays in your media library.</p>
+        ) : (
+          <p className="fd-hint fd-cvh">Save or undo your link change before changing the image.</p>
+        )
       ) : ready ? (
         <>
           <span className="fd-cvp" role="img" aria-label={`New ${short} preview`} style={{ backgroundImage: `url("${ready.previewUrl}")` }} />

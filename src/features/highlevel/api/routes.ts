@@ -287,8 +287,9 @@ export function createTenantMediaAdapter(hooks: RequestHooks = {}) {
   });
 }
 
-// Reads a whole media library and creates folders, for the admin template copy only. The tenant id
-// comes from the server (the template's from its env, the target's from the admin route).
+// Reads a whole media library and creates folders: the admin template copy, and the owner's Settings
+// image route (add an image to a value with no library file). The tenant id always comes from the
+// server: the template's from its env, the target's from the admin route, the owner's from the session.
 export function createTenantMediaLibraryAdapter(hooks: RequestHooks = {}) {
   const env = parseEnv("highlevel");
   const client = buildClient(env);

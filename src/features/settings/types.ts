@@ -62,8 +62,9 @@ export type ImageStatus =
 export type ImageFormat = "webp" | "png" | "jpeg" | "svg";
 // What happened to the old file after the image changed.
 // `unproven`: the new file's name, folder or bytes could not be confirmed. `same`: nothing to change.
-// `none`: the value was empty, so there was no old file.
-export type ImageOldFile = "trashed" | "in_use" | "kept" | "unconfirmed" | "unproven" | "same" | "none";
+// `none`: the value was empty, so there was no old file. `outside`: the old link was not a file in the
+// media library, so nothing there was touched.
+export type ImageOldFile = "trashed" | "in_use" | "kept" | "unconfirmed" | "unproven" | "same" | "none" | "outside";
 export type SvgProblemCode = "script" | "outside_link" | "embedded" | "animation" | "doctype" | "style" | "reference" | "too_complex" | "unsupported" | "broken";
 // `leftover`: the change failed and the file it uploaded could not be removed.
 export type ImageAnswer = { status: ImageStatus; url?: string; current?: string; format?: ImageFormat; oldFile?: ImageOldFile; leftover?: boolean; svgProblem?: SvgProblemCode };

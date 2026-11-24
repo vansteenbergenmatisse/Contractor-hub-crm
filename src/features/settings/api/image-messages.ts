@@ -10,6 +10,7 @@ const SAVED: Record<ImageOldFile, string> = {
   unproven: "Image changed. The old file was kept because we could not confirm the new file's name, folder and content. Ask Forge Forward to check it.",
   same: "This is already your current image, so nothing was changed.",
   none: "Image added. It is in your media library.",
+  outside: "Image changed. The new file is in your media library. The old link points to a file that is not in your media library, so nothing was removed there.",
 };
 
 // What the owner reads when a change did not finish. Every one says where the old image stands.
@@ -29,9 +30,25 @@ const MESSAGES: Record<Exclude<ImageStatus, "saved">, string> = {
   invalid: "This file cannot be used. Your current image is still live. Try another file.",
   failed: "The image could not be changed. Your current image is still live. Try again.",
   not_found: "We could not find this exact image in your media library, so nothing was changed. Your current image is still live.",
-  ambiguous: "This image is in your media library more than once, so nothing was changed. Ask Forge Forward to check it.",
+  // Also the stop when the folder a new file goes in has a name used more than once.
+  ambiguous: "This image, or the folder it goes in, is in your media library more than once, so nothing was changed. Ask Forge Forward to check it.",
   library_limit: "We could not check your whole media library, so nothing was changed. Your current image is still live. Try again or ask Forge Forward.",
   format_mismatch: "The new file is a different format from your current file, so nothing was changed. Your current image is still live.",
+};
+
+// The same stops on an empty value: there is no current image, so none is said to be live.
+const EMPTY_MESSAGES: Partial<Record<Exclude<ImageStatus, "saved">, string>> = {
+  needs_approval: "Image upload needs re-approval of the app for this account. Ask Forge Forward to approve it. No image was added.",
+  connection: "Your account connection needs attention. No image was added.",
+  busy: "Another save is running. Try again in a moment. No image was added.",
+  rejected: "Your account refused this image. No image was added.",
+  retry: "No image was added. Try again.",
+  limited: "Too many image changes. Try again later. No image was added.",
+  invalid: "This file cannot be used. No image was added. Try another file.",
+  failed: "The image could not be uploaded, so no image was added. Try again.",
+  library_limit: "We could not check your whole media library, so no image was added. Try again or ask Forge Forward.",
+  // On an empty value only the folder can be the duplicate.
+  ambiguous: "Your media library has more than one folder with the name this image goes in, so no image was added. Ask Forge Forward to check it.",
 };
 
 const SVG_PROBLEMS: Record<SvgProblemCode, string> = {
@@ -53,13 +70,16 @@ export const imageMessage = (status: Exclude<ImageStatus, "saved">) => MESSAGES[
 
 export const imageSavedMessage = (answer: ImageAnswer) => (answer.oldFile ? SAVED[answer.oldFile] : IMAGE_SAVED);
 
-// The status message plus what the server said about this particular file.
-export function imageFailureMessage(answer: ImageAnswer): string {
-  if (answer.status === "invalid" && answer.svgProblem) return `${SVG_PROBLEMS[answer.svgProblem]} Your current image is still live.`;
+// The status message plus what the server said about this particular file. `empty`: the value had no
+// image, so the message never speaks of a current one.
+export function imageFailureMessage(answer: ImageAnswer, context: { empty?: boolean } = {}): string {
+  const empty = context.empty === true;
+  if (answer.status === "invalid" && answer.svgProblem) return `${SVG_PROBLEMS[answer.svgProblem]} ${empty ? "No image was added." : "Your current image is still live."}`;
   if (answer.status === "format_mismatch" && answer.format) {
     const name = FORMAT_NAMES[answer.format];
     return `Your current file is a ${name}. Choose a ${name} file so its name stays correct. Nothing was changed.`;
   }
-  const base = MESSAGES[answer.status === "saved" ? "unknown" : answer.status];
+  const status = answer.status === "saved" ? "unknown" : answer.status;
+  const base = (empty ? EMPTY_MESSAGES[status] : undefined) ?? MESSAGES[status];
   return answer.leftover ? `${base} The new file could not be removed and is still in your media library.` : base;
 }

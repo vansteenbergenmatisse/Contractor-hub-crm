@@ -261,9 +261,13 @@ async function run(input: Input, deps: MediaDeps): Promise<Run> {
   if (!row) return stopped("missing");
   const current = row.value.trim();
   if (current !== input.expected.trim()) return { answer: { status: "conflict", current }, keepLease: false };
-  if (current === "" && deps.library && deps.createFolder && deps.folderOf) return addImage(input, started, { ...deps, library: deps.library, createFolder: deps.createFolder, folderOf: deps.folderOf });
+  const add: AddDeps | null = deps.library && deps.createFolder && deps.folderOf ? { ...deps, library: deps.library, createFolder: deps.createFolder, folderOf: deps.folderOf } : null;
+  if (current === "" && add) return addImage(input, started, "none", add);
 
   const located = await findOld(input, current, deps);
+  // A link that is no file in the library (pasted, or hosted elsewhere): a plain add into the layout
+  // folder, as for an empty value. Whatever the old link points at is never touched.
+  if ("stop" in located && located.stop === "not_found" && add) return addImage(input, started, "outside", add);
   if ("stop" in located) return stopped(located.stop);
   const { old, siblings } = located;
   const wanted = formatOfFile(old);
@@ -308,31 +312,65 @@ const LIBRARY_STOPS: Readonly<Record<"permission" | "connection" | "retry" | "in
 };
 const FOLDER_STOPS: Readonly<Record<Exclude<MediaFolderOutcome["kind"], "created">, ImageStatus>> = {
   permission: "needs_approval", rejected: "rejected", retry: "retry", connection: "connection",
-  // The folder may exist now: the next try finds it by name, so it is never created twice blindly.
+  // The folder may exist now. The library is read once more first (see placeFor); a folder still not
+  // listed stops here, and the next try looks for it by name again.
   unconfirmed: "retry",
+};
+const FOLDER_AUDIT: Readonly<Record<MediaFolderOutcome["kind"], AuditOutcome>> = {
+  created: "saved", permission: "permission", rejected: "rejected", retry: "failed", connection: "failed", unconfirmed: "unknown",
 };
 
 async function readLibrary(tenantId: string, deps: AddDeps): Promise<MediaLibrary> {
   return deps.library(tenantId).catch(() => ({ ok: false as const, reason: "retry" as const }));
 }
 
-// The folder named after the key's layout folder: the one with that exact name (the top-level one
-// when the name is used more than once), created at the top of the library when there is none.
-async function placeFor(input: Input, deps: AddDeps): Promise<Place> {
-  const library = await readLibrary(input.tenantId, deps);
-  if (!library.ok) return { stop: LIBRARY_STOPS[library.reason] };
-  const name = deps.folderOf(input.key);
-  if (name === null) return { parentId: null, files: library.files };
+// The folder with that exact name (the top-level one when the name is used more than once).
+function folderNamed(library: Extract<MediaLibrary, { ok: true }>, name: string): { id: string } | "none" | "ambiguous" {
   const named = library.folders.filter((folder) => folder.name === name);
   const top = named.filter((folder) => folder.parentId === null);
   const only = named.length === 1 ? named[0] : top.length === 1 ? top[0] : null;
-  if (only) return { parentId: only.id, files: library.files };
-  if (named.length > 1) return { stop: "ambiguous" };
+  if (only) return { id: only.id };
+  return named.length > 1 ? "ambiguous" : "none";
+}
+
+// Creating a folder changes the client's library, so it is audited like an upload: who, which tenant,
+// which folder name (from the checked-in layout, never from HighLevel or the request) and the outcome.
+async function createAudited(input: Input, name: string, deps: AddDeps): Promise<MediaFolderOutcome | null> {
+  let auditId: string;
+  try {
+    auditId = await deps.begin({ tenantId: input.tenantId, actorId: input.actorId, key: input.key, previousValue: input.expected, newValue: `folder:${name}` });
+  } catch {
+    console.error("Settings image failed: step=audit-start");
+    return null;
+  }
   let made: MediaFolderOutcome;
   try {
     made = await deps.createFolder(input.tenantId, name, null);
   } catch {
     made = { kind: "unconfirmed" };
+  }
+  await closeAudit(auditId, FOLDER_AUDIT[made.kind], deps);
+  return made;
+}
+
+// The folder named after the key's layout folder, created at the top of the library when there is
+// none. A create with no clear answer is followed by one more read, so a folder that did land is used
+// rather than created again on the next try.
+async function placeFor(input: Input, deps: AddDeps): Promise<Place> {
+  const library = await readLibrary(input.tenantId, deps);
+  if (!library.ok) return { stop: LIBRARY_STOPS[library.reason] };
+  const name = deps.folderOf(input.key);
+  if (name === null) return { parentId: null, files: library.files };
+  const found = folderNamed(library, name);
+  if (found === "ambiguous") return { stop: "ambiguous" };
+  if (found !== "none") return { parentId: found.id, files: library.files };
+  const made = await createAudited(input, name, deps);
+  if (!made) return { stop: "retry" };
+  if (made.kind === "unconfirmed") {
+    const again = await readLibrary(input.tenantId, deps);
+    const landed = again.ok ? folderNamed(again, name) : "none";
+    if (again.ok && typeof landed === "object") return { parentId: landed.id, files: again.files };
+    return { stop: landed === "ambiguous" ? "ambiguous" : FOLDER_STOPS.unconfirmed };
   }
   if (made.kind !== "created") return { stop: FOLDER_STOPS[made.kind] };
   return { parentId: made.id, files: [] };
@@ -376,9 +414,10 @@ async function uploadInto(input: Input, name: string, parentId: string | null, b
   return stopped("unknown", true);
 }
 
-// An empty value has no old file: a plain upload into the matching folder, then the value is written.
-// A same-name file there with the same bytes (an earlier try) is reused. Nothing is ever trashed.
-async function addImage(input: Input, started: number, deps: AddDeps): Promise<Run> {
+// An empty value, or a link that is no library file, has no old file to replace: a plain upload into
+// the matching folder, then the value is written. A same-name file there with the same bytes (an
+// earlier try) is reused. Nothing is ever trashed.
+async function addImage(input: Input, started: number, oldFile: "none" | "outside", deps: AddDeps): Promise<Run> {
   const place = await placeFor(input, deps);
   if ("stop" in place) return stopped(place.stop);
   const name = `${input.key}.${input.file.extension}`;
@@ -397,7 +436,7 @@ async function addImage(input: Input, started: number, deps: AddDeps): Promise<R
   if (deps.now() - started > PUT_CUTOFF_MS) return failAfterUpload(input, stopped("retry"), target, started, deps);
   const saved = await pointValueAt(input, target.file.url, started, deps);
   if (saved.answer.status !== "saved") return failAfterUpload(input, saved, target, started, deps);
-  return { answer: { ...saved.answer, oldFile: "none" }, keepLease: false };
+  return { answer: { ...saved.answer, oldFile }, keepLease: false };
 }
 
 export async function replaceImage(input: Input, deps: MediaDeps): Promise<ImageAnswer> {

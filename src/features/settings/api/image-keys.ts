@@ -7,8 +7,9 @@ const PHOTO_KEYS: ReadonlySet<string> = new Set([BACKGROUND_KEY, ...OUR_WORK_KEY
 
 // A key whose value is an image link, by the last part of its name: logo, favicon, background, image,
 // photo, picture, banner, hero (partner logos, review photos, team photos and the like), with an
-// optional `_url`, `_link` or `_src` after it, or a `_before_`/`_after_` photo.
-const IMAGE_NAME = /(^|_)(logo|favicon|background|bg|image|img|photo|picture|pic|banner|hero|thumbnail|avatar|headshot)(_url|_link|_src)?$|_(before|after)_(image|img|photo|picture)$/i;
+// optional `_url` or `_src` after it, or a `_before_`/`_after_` photo. Not `_link` (a button or page
+// link such as `hero_link`) and not `bg` (often a color such as `section_bg`).
+const IMAGE_NAME = /(^|_)(logo|favicon|background|image|img|photo|picture|pic|banner|hero|thumbnail|avatar|headshot)(_url|_src)?$|_(before|after)_(image|img|photo|picture)$/i;
 
 // The one rule for "this key holds an image", shared by the preview, the picker and the server's
 // image route, so the page and the server always agree.
