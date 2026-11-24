@@ -33,11 +33,18 @@ export async function readCustomValuesWithStoredToken(
   },
   tenantId: string,
 ): Promise<CustomValue[] | null> {
+  // Log lines name the reason or step only: never a value, a token or a body.
   const state = await deps.readState(tenantId);
-  if (!state || state.status !== "connected" || state.expiresAt.getTime() <= deps.now().getTime()) return null;
+  const skipped = !state ? "no-connection" : state.status !== "connected" ? "not-connected" : state.expiresAt.getTime() <= deps.now().getTime() ? "expired" : null;
+  if (skipped || !state) {
+    console.error(`HighLevel custom values read (stored token) skipped: reason=${skipped}`);
+    return null;
+  }
   try {
     return await deps.listCustomValues(state.accessToken, state.locationId);
   } catch (error) {
+    const step = error instanceof HighLevelHttpError ? `request status=${error.status ?? "none"}` : "parse";
+    console.error(`HighLevel custom values read (stored token) failed: step=${step}`);
     if (error instanceof HighLevelHttpError && error.status === 401) return null;
     throw error;
   }

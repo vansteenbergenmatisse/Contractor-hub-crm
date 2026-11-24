@@ -60,7 +60,7 @@ The portal's event list has **no INSTALL or UNINSTALL switch** (seen 2026-11-24)
 
 ## Add a new client (after the install)
 
-Updated 2026-11-24 (branch `integrate/onboarding`, not yet merged into `develop`).
+Updated 2026-11-24 (merged into `develop`, deployed to dev).
 
 **How a new sub-account gets connected (the reconcile).** Four ways in, all of which connect a sub-account only when HighLevel's installed list for our agency (queried with our app id) names it. The agency's other sub-accounts are never connected.
 - The `INSTALL` webhook, with or without a company id.
@@ -83,6 +83,15 @@ Updated 2026-11-24 (branch `integrate/onboarding`, not yet merged into `develop`
    - **Invite owner** on an email that already has a never-used account in the same client now returns a set-password link instead of `email_taken`. A used account gets "ask them to use Forgot password"; a turned-off or removed account gets "login is turned off".
    - Then the owner opens the link, sets a password and signs in at `<site>/sign-in` under "Or use your email and password". **Forgot password** on the sign-in page works for synced users too (24-hour link).
 
+**Per-client checks** (taken from the user's SOP "STEP 4", Part B, 2026-11-24):
+- **View client** (read-only, 1 hour): Leads, Pipeline and Calendar show this client's data, and the name, logo and colors are theirs, not the snapshot's.
+- **Custom values** (sub-account Settings > Custom Values, from the client's TXT file): `01_Business_essentials` (name, owner, phone, email, address, city, state, main county, hours in 24-hour form for weekdays, Saturday and Sunday, logo and favicon links, universal CTA, main background image, not a video), `01b_Google_Business_Profile`, `01c_booking_links`, `02_Branding` (the 14 colors as hex). Replace every snapshot value. A main color that fails contrast with "text on main color" falls back to the default green.
+- **Users:** the owner as sub-account **Admin** (CRM `owner`), office staff as **User** (CRM `office`), real emails. They appear under **Users** on the client row. One email is one CRM account across all clients.
+- **Owner message:** accept the HighLevel invite first, then open the personal sign-in link on phone and laptop, tap **Sign in with HighLevel**, then **Continue**; on the phone, Share > Add to Home Screen. The CRM item in the HighLevel menu also works.
+- **HighLevel setup:** a phone number with A2P approved (the CRM cannot read A2P; note the date confirmed); calendars named exactly `Job`, `Jobs`, `Estimate`, `Estimates`, `Schedule a Job` or `Request an Estimate` for the later "On my way" text; the snapshot's pipeline and stages present; the client's email and calendar connected in HighLevel, or Inbox and Calendar stay empty.
+- **Write switches stay off** for a new client (Settings write-back, logo replace, new lead create, Routes notify). Forge Forward turns them on per client after testing, using **Copy id**.
+- **Done:** the owner shows "Has signed in" under **Users**; note "Added to CRM on <date>" in the client's TXT file.
+
 **Email env vars (names only):** `RESEND_API_KEY`, `EMAIL_FROM`, `EMAIL_DELIVERY_MODE` (`allowlist` or `live`), `EMAIL_ALLOWED_RECIPIENTS` (allowlist mode), `APP_URL`, and `ONBOARDING_SEND_SET_PASSWORD=true` only if the sync should mail new users itself. Keep dev on `allowlist`: in `live` mode **Send sign-in email** for the JCR owner would really email them.
 
 **Proven on dev, 2026-11-24** (user's browser session, plus the `WebhookEvent` and `Tenant` rows on Neon `develop`):
@@ -90,11 +99,16 @@ Updated 2026-11-24 (branch `integrate/onboarding`, not yet merged into `develop`
 - Five `INSTALL` events arrived in the same second (13:37:05 UTC). The three new clients were created at 13:37:06 UTC, so the `INSTALL` webhook connected them, not the `/admin/clients` check.
 - `/admin/clients` then showed four Connected clients: the three new ones (one with 1 user, two with 0 users) and JCR.
 
-**Not proven yet (no new sub-account has been created since):**
-- whether a sub-account created later, through "future sub-accounts", gets an `INSTALL` event at all, and how late;
+**Proven on dev, 2026-11-24, second test (a brand-new sub-account, user's browser session plus Vercel logs):**
+- Snapshot "Forge Forward – Landscaping Core v2.0" (all 647 assets from JCR) loaded into a new sub-account.
+- It connected by itself: two `INSTALL` webhooks at 14:44:49–50 UTC, each logging `Onboarding: INSTALL users created=0 linked=0 failed=0` (the sub-account had no users yet). Connected on `/admin/clients` within a minute. No `LocationCreate` line appeared in the logs.
+- The new sub-account got the app's Custom Page as its **CRM** menu item automatically. An agency custom menu link does not reach new sub-accounts.
+- Found in View client: Settings said "Your details did not load" (cause being traced, see `PROGRESS.md`); the read-only banner covered the top of the More sheet at about 520px (fixed 2026-11-24).
+
+**Not proven yet:**
+- how late the `INSTALL` event comes in general (one sample: within seconds), and whether `LocationCreate` is ever sent;
 - how soon it appears in `/oauth/installed-locations`, and whether minting its token fails before the install finishes;
 - whether `installToFutureLocations` is really sent, and the real `LocationCreate` payload;
-- whether a snapshot carries the app;
 - that a real email arrives (no mail was sent; the Resend From domain is unchecked);
 - the button, the Users panel and the background check in a browser (component tests only).
 - An account made before the `UnusedAccountMarker` migration can't be proven unused, so it gets no admin link; that person uses Forgot password. (Since `integrate/signin`, **Invite owner** on an existing account counts against the 50-per-day client cap.)
@@ -105,7 +119,7 @@ On dev and staging, a new test sub-account is picked up only if the app is insta
 
 ## Owner access: Sign in with HighLevel
 
-Added 2026-11-24 (branch `integrate/signin`, not yet merged into `develop`). User decision: one login for the client, their HighLevel login. Email and password stay as an optional second way in. Facts and unknowns about HighLevel's side: `docs/greenlane/hl-api-notes.md`, "Sign in with HighLevel".
+Added 2026-11-24 (merged into `develop`, deployed to dev). User decision: one login for the client, their HighLevel login. Email and password stay as an optional second way in. Facts and unknowns about HighLevel's side: `docs/greenlane/hl-api-notes.md`, "Sign in with HighLevel".
 
 **The CRM menu item is the marketplace app's Custom Page, not an agency custom menu link.** Tested on dev 2026-11-24 (once, as the agency admin, on `app.gohighlevel.com`): an agency custom menu link `CRM` → `<site>/embed`, Embedded Page (iFrame), showed "Signing you in…" and then "HighLevel did not answer". HighLevel's docs describe the user-context request (`REQUEST_USER_DATA`) for a marketplace app's Custom Page only, and the agency link did not answer it. Do not use an agency custom menu link for the CRM; delete it if one exists, or the sub-account shows two CRM items.
 

@@ -28,6 +28,15 @@ export type PhoneNumbersRuntime = { readLocationId: ReadDeps["readLocationId"]; 
 type Hit = (key: string, limit: number, windowMs: number, now: Date) => Promise<boolean>;
 
 class InactiveAccountError extends Error {}
+// Which shape check failed, for the log. `keys` holds top-level key names only (plain ones, at most
+// five): the shape of the answer, never a value.
+class PhoneShapeError extends Error {
+  constructor(readonly detail: string) {
+    super(`HighLevel phone read returned an unexpected response (${detail}).`);
+  }
+}
+const PLAIN_KEY = /^[A-Za-z][A-Za-z0-9_]{0,39}$/;
+const keyNames = (body: Record<string, unknown>) => Object.keys(body).filter((key) => PLAIN_KEY.test(key)).slice(0, 5).join(",");
 
 const record = (value: unknown): Record<string, unknown> | null =>
   typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
@@ -60,7 +69,8 @@ export function createPhoneNumberRequests(baseUrl: string, doFetch: typeof fetch
 // Keeps the number and its name only, for numbers that can text. A full page may have more behind it.
 export function parsePhoneNumbers(json: unknown): { numbers: HighLevelPhoneNumber[]; complete: boolean } {
   const body = record(json);
-  if (!body || !Array.isArray(body.numbers)) throw new Error("HighLevel phone read returned an unexpected response.");
+  if (!body) throw new PhoneShapeError("not-object");
+  if (!Array.isArray(body.numbers)) throw new PhoneShapeError(`no-numbers-list keys=${keyNames(body)}`);
   if (body.accountStatus !== undefined && body.accountStatus !== "active") throw new InactiveAccountError();
   const numbers: HighLevelPhoneNumber[] = [];
   for (const raw of body.numbers as unknown[]) {
@@ -73,7 +83,8 @@ export function parsePhoneNumbers(json: unknown): { numbers: HighLevelPhoneNumbe
 }
 
 async function readBody(response: Response): Promise<unknown> {
-  if (!response.body) throw new Error("HighLevel phone read returned no body.");
+  // No body at all is the same answer as an empty one: nothing to parse.
+  if (!response.body) throw new PhoneShapeError("not-json");
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let size = 0;
@@ -84,11 +95,15 @@ async function readBody(response: Response): Promise<unknown> {
     size += value.byteLength;
     if (size > MAX_RESPONSE_BYTES) {
       await reader.cancel().catch(() => {});
-      throw new Error("HighLevel phone read was too large.");
+      throw new PhoneShapeError("too-large");
     }
     body += decoder.decode(value, { stream: true });
   }
-  return JSON.parse(body + decoder.decode());
+  try {
+    return JSON.parse(body + decoder.decode());
+  } catch {
+    throw new PhoneShapeError("not-json");
+  }
 }
 
 function failureOf(status: number | null): PhoneNumbersFailure {
@@ -110,7 +125,14 @@ export async function readPhoneNumbers(deps: ReadDeps, tenantId: string): Promis
     return { ok: true, ...parsePhoneNumbers(await readBody(response)) };
   } catch (error) {
     if (error instanceof InactiveAccountError) return { ok: false, reason: "inactive" };
-    const step = error instanceof TokenServiceError ? `token code=${error.code}` : error instanceof HighLevelHttpError ? `request status=${error.status ?? "none"}` : "parse";
+    const step =
+      error instanceof TokenServiceError
+        ? `token code=${error.code}`
+        : error instanceof HighLevelHttpError
+          ? `request status=${error.status ?? "none"}`
+          : error instanceof PhoneShapeError
+            ? `parse detail=${error.detail}`
+            : "parse";
     console.error(`HighLevel phone read failed: step=${step}`);
     return { ok: false, reason: "unavailable" };
   }

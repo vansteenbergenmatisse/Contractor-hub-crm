@@ -2101,6 +2101,8 @@ select.fd-lin{padding:0 10px}
   /* More: the other pages in a bottom sheet (the side menu, without the four tab pages) */
   .fd-app .fd-side{position:fixed;left:0;right:0;bottom:0;top:auto;width:auto;max-width:none;max-height:88vh;overflow-y:auto;overscroll-behavior:contain;margin:0;padding:30px 16px calc(16px + env(safe-area-inset-bottom,0px));border:0;border-radius:20px 20px 0 0;background:var(--fd-card);box-shadow:0 -8px 40px color-mix(in srgb,var(--heading-color) 20%,transparent);animation:fxUp 260ms var(--e-out);display:flex;z-index:40;transform:translateY(105%);visibility:hidden;transition:transform var(--t-panel) var(--e-out),visibility 0s linear var(--t-panel);animation:none}
   .fd-app .fd-side.is-open{transform:none;visibility:visible;transition:transform var(--t-panel) var(--e-out),visibility 0s}
+  /* View client: the admin banner sits on top of everything, so the sheet stays below its bottom edge (88vh as before when there is no banner) */
+  .fd-app .fd-side{max-height:min(88vh,calc(100vh - var(--fd-view-banner-bottom,0px) - 12px));max-height:min(88vh,calc(100dvh - var(--fd-view-banner-bottom,0px) - 12px))}
   .fd-app .fd-side::before{content:"";position:absolute;top:8px;left:50%;width:36px;height:5px;margin-left:-18px;border-radius:3px;background:color-mix(in srgb,var(--sub-color) 28%,transparent)}
   .fd-app .fd-side .fd-brand,.fd-app .fd-side .fd-dsearch,.fd-app .fd-side .fd-grp,.fd-app .fd-side > .fd-sp,.fd-app .fd-side [data-tab]{display:none}
   .fd-app .fd-side .fd-low{margin-top:6px;padding-top:6px}

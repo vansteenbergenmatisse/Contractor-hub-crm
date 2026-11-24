@@ -16,12 +16,23 @@ export async function loadSettingsValues(
   onLayout?: (layout: AccountLayout) => void,
 ): Promise<Record<string, string>> {
   if (!tenantId) return {};
+  // Log lines carry a step and a row count only, never a key's value.
+  let rows: readonly Row[];
   try {
-    const rows = await read(tenantId);
+    rows = await read(tenantId);
+  } catch {
+    console.error("Settings values did not load: step=read");
+    return {};
+  }
+  try {
     const values = settingsValuesFrom(rows);
+    if (Object.keys(values).length === 0) {
+      console.error(`Settings values did not load: step=${rows.length === 0 ? "empty" : "none-allowed"} rows=${rows.length}`);
+    }
     onLayout?.({ imageHosts: imageHostsFrom(process.env.LOGO_HOST_ALLOWLIST) });
     return values;
   } catch {
+    console.error("Settings values did not load: step=filter");
     return {};
   }
 }
