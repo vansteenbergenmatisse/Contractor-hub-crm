@@ -2137,6 +2137,9 @@ select.fd-lin{padding:0 10px}
   .fx-tcap{left:8px;right:8px;gap:4px}
   .fd-app .fx-tsrch{width:48px}
   .fd-app .fx-tsrch .fx-tsl{display:none}
+  /* a long label (Communications) gives up width and ends in an ellipsis instead of running into its neighbours; the full text stays in the button, so its accessible name is whole */
+  .fd-app .fx-tcap .fd-tab{min-width:0}
+  .fd-app .fx-tcap .fd-tn{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 }
 /* the smallest phones (under 375px): five tabs need the full width, so Search moves to the top of the More sheet */
 @media (max-width: 374px){
