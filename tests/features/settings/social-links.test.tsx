@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
@@ -36,9 +36,7 @@ describe("the 01a_Social_Links folder", () => {
   it("shows an editable field for each, also when it is still empty", () => {
     const values = { business_name: "Test Co", business_facebook_url: "https://facebook.example/test", business_instagram_url: "", business_yelp_url: "", business_youtube_url: "" };
     render(<PageStateProvider><SettingsPage initialValues={values} initialSection="biz" account={{ imageHosts: [] }} /></PageStateProvider>);
-    const folder = [...document.querySelectorAll(".fd-foldh button")].find((b) => /Social links/.test(b.textContent ?? "")) as HTMLButtonElement;
-    expect(folder).toBeDefined();
-    if (folder.getAttribute("aria-expanded") !== "true") fireEvent.click(folder);
+    expect(screen.getByRole("heading", { level: 2, name: "Social links" })).toBeInTheDocument();
     for (const label of [/^Facebook/, /^Instagram/, /^Yelp/, /^YouTube/]) {
       const input = screen.getByLabelText(label) as HTMLInputElement;
       expect(input.readOnly).toBe(false);

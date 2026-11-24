@@ -5,7 +5,7 @@ const MAX_CHANGES = 20;
 const MAX_KEY_LENGTH = 100;
 const HOUR_MS = 60 * 60 * 1000;
 // Proposals, not measured numbers.
-export const SAVES_PER_HOUR_PER_USER = 10;
+export const SAVES_PER_HOUR_PER_USER = 40;
 export const SAVES_PER_HOUR_PER_TENANT = 30;
 
 type SaveUser = { id: string; role: "owner" | "office" | "admin"; tenantId: string | null };
@@ -58,12 +58,16 @@ function parseChanges(raw: string | null): ValueChange[] | null {
   const seen = new Set<string>();
   const changes: ValueChange[] = [];
   for (const item of list as unknown[]) {
-    if (typeof item !== "object" || item === null || !hasOnly(item, ["key", "expected", "value"])) return null;
-    const { key, expected, value } = item as Record<string, unknown>;
+    if (typeof item !== "object" || item === null) return null;
+    // A clear is explicit: exactly `clear: true` with an empty value.
+    const marked = Object.hasOwn(item, "clear");
+    if (!hasOnly(item, marked ? ["key", "expected", "value", "clear"] : ["key", "expected", "value"])) return null;
+    const { key, expected, value, clear } = item as Record<string, unknown>;
+    if (marked && (clear !== true || value !== "")) return null;
     if (typeof key !== "string" || typeof expected !== "string" || typeof value !== "string") return null;
     if (!key || key.length > MAX_KEY_LENGTH || expected.length > MAX_VALUE_LENGTH || value.length > MAX_VALUE_LENGTH || seen.has(key)) return null;
     seen.add(key);
-    changes.push({ key, expected, value });
+    changes.push(marked ? { key, expected, value, clear: true } : { key, expected, value });
   }
   return changes;
 }

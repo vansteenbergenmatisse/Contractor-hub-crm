@@ -31,11 +31,6 @@ const HOST = "assets.cdn.filesafe.space";
 const account = { imageHosts: [HOST] };
 const page = (values: Record<string, string>, extra: Partial<React.ComponentProps<typeof SettingsPage>> = {}) =>
   render(<PageStateProvider><SettingsPage initialValues={values} initialSection="biz" account={account} {...extra} /></PageStateProvider>);
-const legends = () => [...document.querySelectorAll("legend")].map((l) => l.textContent);
-const idsIn = (legend: string) => {
-  const set = [...document.querySelectorAll("fieldset")].find((f) => f.querySelector("legend")?.textContent === legend);
-  return [...(set?.querySelectorAll("input[type=text]") ?? [])].map((i) => i.id.replace("cv-", ""));
-};
 const fullAccount = () => Object.fromEntries(FIELD_GROUPS.flatMap((g) => g.fields.map((f) => [f.key, ""])));
 
 describe("the key-to-group map", () => {
@@ -72,21 +67,12 @@ describe("the key-to-group map", () => {
 });
 
 describe("Business details sections", () => {
-  it("renders named groups a screen reader can read, in order", () => {
-    page({ ...fullAccount(), business_name: "Test Co" });
-    expect(legends()).toEqual(["Business", "Location", "Hours", "Images", "Links", "Offers"]);
-    expect(idsIn("Business")).toEqual(["business_name", "business_owner_name", "business_phone_number", "business_email", "business_main_keyword", "universal_cta"]);
-    expect(idsIn("Offers")).toEqual(["referral_reward_text", "seasonal_offer_text"]);
-  });
-
-  it("shows each link's folder, and Not filled in yet only while it is empty", () => {
+  it("says Not filled in yet only while a link is empty, and shows no folder name", () => {
     page({ ...fullAccount(), business_name: "Test Co", google_review_request_url: "https://review.example/x" });
     const empty = screen.getByLabelText(/^Bbb review request url/);
     expect(empty).toHaveAccessibleDescription(expect.stringContaining("Not filled in yet"));
-    expect(empty).toHaveAccessibleDescription(expect.stringContaining("01b_Google_Business_Profile"));
-    const filled = screen.getByLabelText(/^Google review request url/);
-    expect(filled).not.toHaveAccessibleDescription(expect.stringContaining("Not filled in yet"));
-    expect(screen.getByLabelText(/^Request a job booking link/)).toHaveAccessibleDescription(expect.stringContaining("01c_booking_links"));
+    expect(empty).not.toHaveAccessibleDescription(expect.stringContaining("01b_Google_Business_Profile"));
+    expect(screen.getByLabelText(/^Google review request url/)).not.toHaveAccessibleDescription(expect.stringContaining("Not filled in yet"));
   });
 
   it("labels logo and favicon SVG", () => {
@@ -173,7 +159,7 @@ describe("color picker", () => {
     expect(screen.getByLabelText(/^Second color/)).toHaveValue("#abc");
     expect(screen.getByLabelText(/^Text$/)).toHaveValue("nope");
     expect(screen.queryByText("You have changes that are not saved yet.")).toBeNull();
-    await userEvent.setup().click(screen.getByRole("button", { name: "Save to your account" }));
+    await userEvent.setup().click(screen.getByRole("button", { name: "Save Brand colors" }));
     expect(send).not.toHaveBeenCalled();
   });
 
@@ -183,7 +169,7 @@ describe("color picker", () => {
     await user.click(picker(/^Pick Main color/));
     fireEvent.change(hex(), { target: { value: "#eeeeee" } });
     await user.keyboard("{Escape}");
-    await user.click(screen.getByRole("button", { name: "Apply for this visit" }));
+    await user.click(screen.getByRole("button", { name: "Apply Brand colors" }));
     expect(screen.getByText("The text on your main color is hard to read. Make Main color darker.")).toBeInTheDocument();
   });
 

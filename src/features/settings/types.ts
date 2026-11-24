@@ -36,11 +36,19 @@ export type SearchFilter = {
 };
 
 // Saving to the account. The page gets `SaveValues` from outside: this feature makes no network call.
-export type ValueChange = { key: string; expected: string; value: string };
+// `clear`: the owner confirmed emptying this value on a review step. Without it an empty value is refused.
+export type ValueChange = { key: string; expected: string; value: string; clear?: true };
 export type SaveStatus = "saved" | "unchanged" | "conflict" | "invalid" | "missing" | "duplicate" | "denied" | "rejected" | "permission" | "retry" | "unknown" | "busy";
 export type SaveResult = { key: string; status: SaveStatus; current?: string };
 export type SaveAnswer = { kind: "results"; results: SaveResult[] } | { kind: "limited" } | { kind: "failed" };
 export type SaveValues = (changes: ValueChange[]) => Promise<SaveAnswer>;
+
+// The account's phone numbers as the server read them. This feature makes no network call.
+export type PhoneNumbersView =
+  | { state: "ok"; numbers: { number: string; name: string | null }[]; complete: boolean }
+  | { state: "no-access" | "not-connected" | "inactive" | "unavailable" };
+// A promise while the server is still reading, so a slow phone read never holds up the page.
+export type PhoneNumbersSource = PhoneNumbersView | undefined | Promise<PhoneNumbersView | undefined>;
 
 // Change image. The page gets the uploader from outside: this feature makes no network call.
 export type ImageKind = "svg" | "photo";

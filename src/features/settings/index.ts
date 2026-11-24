@@ -1,6 +1,6 @@
 // Public API of the settings feature. Other code imports from "@/features/settings" only.
 export { SettingsPage } from "./components/SettingsPage";
-export { contrast, validateValues } from "./api/validate";
+export { contrast, isClearableKey, validateValues } from "./api/validate";
 export { filterSettings } from "./api/search";
 export { initialState, settingsReducer } from "./api/state";
 export type { SettingsAction, SettingsState } from "./api/state";
@@ -13,6 +13,7 @@ export { NOT_AVAILABLE, UNKNOWN_CONNECTIONS, connectionChip } from "./api/connec
 export { sectionFromParam } from "./api/section-param";
 export { applyBrandVars, brandCssVars, brandScopeRule, businessPatchFromValues, safeHttpsUrl } from "./api/live-save";
 export type { BusinessPatch } from "./api/live-save";
+export type { PhoneNumbersView } from "./types";
 export type { ConnectionState, ConnectionStatus, CustomValues, Problem, SectionKey } from "./types";
 export type { SaveAnswer, SaveResult, SaveStatus, SaveValues, ValueChange } from "./types";
 export { imageKindOf } from "./api/image-keys";

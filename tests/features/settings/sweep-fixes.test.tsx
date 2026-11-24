@@ -43,7 +43,7 @@ describe("S2: values that did not load", () => {
     render(<PageStateProvider><SettingsPage initialValues={{}} initialSection="biz" saveValues={vi.fn()} /></PageStateProvider>);
     expect(screen.getByRole("alert")).toHaveTextContent("Your details did not load");
     expect(screen.queryByText("Your account has these values.")).toBeNull();
-    expect(screen.getByRole("button", { name: "Save to your account" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save Business" })).toBeDisabled();
   });
 
   it("does not stick: values that load on a later visit replace the empty ones and keep what was typed", async () => {
@@ -56,7 +56,7 @@ describe("S2: values that did not load", () => {
     view.rerender(tree({ business_name: "Test Co", business_owner_name: "Stored" }, true));
     await waitFor(() => expect(screen.getByLabelText(/^Business name/)).toHaveValue("Test Co"));
     expect(screen.getByLabelText(/^Owner name/)).toHaveValue("Typed");
-    expect(screen.getByRole("button", { name: "Save to your account" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Save Business" })).toBeEnabled();
   });
 });
 
@@ -112,7 +112,7 @@ describe("U1: a stored value with a stray space", () => {
     const phone = screen.getByLabelText(/^Phone/);
     await user.clear(phone);
     await user.type(phone, "222");
-    await user.click(screen.getByRole("button", { name: "Save to your account" }));
+    await user.click(screen.getByRole("button", { name: "Save Business" }));
     await waitFor(() => expect(document.querySelector(".fd-okl")).not.toHaveClass("is-off"));
     expect(screen.getByText("Your account has these values.")).toBeInTheDocument();
   });
@@ -141,7 +141,7 @@ describe("U6: the save status across navigation", () => {
     const phone = screen.getByLabelText(/^Phone/);
     await user.clear(phone);
     await user.type(phone, "222");
-    await user.click(screen.getByRole("button", { name: "Save to your account" }));
+    await user.click(screen.getByRole("button", { name: "Save Business" }));
     view.rerender(tree(send, false));
     view.rerender(tree(send, true));
     expect(screen.getByRole("button", { name: "Saving…" })).toBeDisabled();
@@ -149,7 +149,7 @@ describe("U6: the save status across navigation", () => {
     await act(async () => finish({ kind: "failed" }));
     view.rerender(tree(send, true));
     expect(screen.getByText("Could not save. Nothing new was confirmed. Try again.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Save to your account" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Save Business" })).toBeEnabled();
   });
 
   it("the reducer starts with no save running", () => {

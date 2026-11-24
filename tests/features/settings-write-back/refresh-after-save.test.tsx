@@ -34,9 +34,9 @@ async function saveOnce(response: Response) {
   const field = screen.getByLabelText(/^Phone/);
   await user.clear(field);
   await user.type(field, "222");
-  await user.click(screen.getByRole("button", { name: "Save to your account" }));
+  await user.click(screen.getByRole("button", { name: "Save Business" }));
   await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-  await waitFor(() => expect(screen.getByRole("button", { name: "Save to your account" })).toBeEnabled());
+  await waitFor(() => expect(screen.getByRole("button", { name: "Save Business" })).toBeEnabled());
 }
 
 beforeEach(() => {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
-import { useKeptReducer, usePushed, useShell } from "@/features/app-shell";
+import { useKeptReducer, useShell } from "@/features/app-shell";
 import { COLOR_KEYS, CONNECTIONS, ESSENTIAL_KEYS, SWITCHES, extraKeys, shadowedKeys } from "../api/fields";
 import type { AccountLayout } from "../api/load-values";
 import { NOT_AVAILABLE, connectionRowText } from "../api/connections";
@@ -85,8 +85,6 @@ export function useSettings(
   useEffect(() => {
     updateRef.current = shell.updateBusiness;
   });
-
-  usePushed(state.open && !filter.active);
 
   useEffect(() => {
     const main = document.querySelector(".fd-main");

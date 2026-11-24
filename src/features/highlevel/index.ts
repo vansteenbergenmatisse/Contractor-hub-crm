@@ -161,6 +161,18 @@ export {
   type WorkflowsRead,
 } from "./api/workflows-read";
 export {
+  buildPhoneNumbersReader,
+  createPhoneNumberRequests,
+  createTenantPhoneNumbersReader,
+  parsePhoneNumbers,
+  readPhoneNumbers,
+  type HighLevelPhoneNumber,
+  type PhoneNumberRequests,
+  type PhoneNumbersFailure,
+  type PhoneNumbersRead,
+  type PhoneNumbersRuntime,
+} from "./api/phone-numbers";
+export {
   ESTIMATES_MAX_PAGES,
   ESTIMATES_PAGE_SIZE,
   ESTIMATES_READS_PER_MINUTE,

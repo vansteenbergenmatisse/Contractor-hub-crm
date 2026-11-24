@@ -1,5 +1,5 @@
 import type { CustomValueDetail, CustomValueRead, CustomValueWriteOutcome } from "@/features/highlevel";
-import { isSettingsKeyAllowed, validateValues, type CustomValues, type SaveResult, type SaveStatus, type ValueChange } from "@/features/settings";
+import { isClearableKey, isSettingsKeyAllowed, validateValues, type CustomValues, type SaveResult, type SaveStatus, type ValueChange } from "@/features/settings";
 import { isSafeToWrite } from "./value-rules";
 
 const UNITS_AT_ONCE = 3;
@@ -272,7 +272,8 @@ async function runSave(input: Input, deps: SaveDeps, startedAt?: number): Promis
       const target = byKey.get(key);
       const now = target?.value.trim();
       if (!target || now === undefined) out.set(key, { key, status: "missing" });
-      else if (!value || !isSafeToWrite(key, value)) out.set(key, { key, status: "invalid" });
+      // Empty only with the review step's mark, never for a required value; a mark on a real value is refused.
+      else if (value ? change.clear === true || !isSafeToWrite(key, value) : change.clear !== true || !isClearableKey(key)) out.set(key, { key, status: "invalid" });
       else if (now === value) out.set(key, { key, status: "unchanged" });
       else if (now !== change.expected.trim()) out.set(key, { key, status: "conflict", current: now });
       else candidates.push({ key, value, previous: target.value, target });
