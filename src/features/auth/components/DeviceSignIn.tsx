@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AuthCard } from "./AuthCard";
 import type { DeviceSignInPreview } from "../api/device-sign-in";
 
@@ -11,7 +11,7 @@ import type { DeviceSignInPreview } from "../api/device-sign-in";
 // does not spend the token) and warns when another person is signed in here, so a link someone else
 // sent cannot switch accounts silently. The token is only spent when the person taps Continue, so a
 // link preview or a page opened by someone else's link signs nobody in by itself (login CSRF).
-type State = "checking" | "ready" | "missing" | "busy" | "failed" | "offline" | "limited";
+type State = "checking" | "ready" | "missing" | "busy" | "failed" | "offline" | "limited" | "unchecked";
 
 export function tokenFromHash(hash: string): string | null {
   const value = new URLSearchParams(hash.replace(/^#/, "")).get("t");
@@ -23,6 +23,8 @@ const MESSAGES: Partial<Record<State, string>> = {
   failed: "This link has expired or was already used. Make a new one, or sign in.",
   offline: "No connection. Check your internet and try again.",
   limited: "Too many tries. Wait a minute and try again.",
+  // The server could not look the link up (not a refusal): the link may still be good.
+  unchecked: "Could not check this link. Try again.",
 };
 
 type Props = {
@@ -54,12 +56,15 @@ export function DeviceSignIn({ signedIn = false, currentPerson = null, goTo = re
   const [token, setToken] = useState<string | null>(null);
   const [state, setState] = useState<State>("busy");
   const [preview, setPreview] = useState<DeviceSignInPreview | null>(null);
+  // Set at the first tap, before any re-render, so a double tap redeems once.
+  const redeeming = useRef(false);
 
   async function check(value: string) {
     setState("checking");
     try {
       const response = await post("/api/auth/device-sign-in-preview", value);
       if (response.status === 429) return setState("limited");
+      if (response.status >= 500) return setState("unchecked");
       const body: unknown = response.ok ? await response.json().catch(() => null) : null;
       if (!isPreview(body)) {
         setToken(null);
@@ -90,7 +95,8 @@ export function DeviceSignIn({ signedIn = false, currentPerson = null, goTo = re
   }, []);
 
   async function go() {
-    if (!token || !preview || state === "busy") return;
+    if (!token || !preview || state === "busy" || redeeming.current) return;
+    redeeming.current = true;
     setState("busy");
     try {
       const response = await post("/api/auth/device-sign-in", token);
@@ -102,6 +108,7 @@ export function DeviceSignIn({ signedIn = false, currentPerson = null, goTo = re
       setToken(null);
       setState(response.status === 429 ? "limited" : "failed");
     } catch {
+      redeeming.current = false;
       setState("offline");
     }
   }
@@ -111,6 +118,17 @@ export function DeviceSignIn({ signedIn = false, currentPerson = null, goTo = re
   const shown = token ? preview : null;
   const other = shown?.sameAsCurrent === false;
   const person = shown?.person;
+  const at = shown?.business ? ` at ${shown.business}` : "";
+  // Masked emails can look the same for two people (john@ and jane@gmail.com): then say it is another
+  // account instead of naming the same string twice.
+  let warning: string | null = null;
+  if (other && currentPerson && currentPerson === person) {
+    warning = `You are signed in on this device as another account (${currentPerson}). Continue signs you in as a different account, ${person}${shown?.business ? `, at ${shown.business}` : ""}.`;
+  } else if (other) {
+    warning = `You are signed in as ${currentPerson ?? "another person"} on this device. Continue signs you in as ${person} instead.`;
+  }
+  // This device has a session, but the preview could not read whose it is.
+  const notice = shown && shown.sameAsCurrent === null && (signedIn || currentPerson) ? `Someone may already be signed in on this device. Continue signs you in as ${person}.` : null;
   let action;
   if (token && shown) {
     const continueButton = (
@@ -128,20 +146,17 @@ export function DeviceSignIn({ signedIn = false, currentPerson = null, goTo = re
     );
   } else if (token && state === "checking") {
     action = <button type="button" className="fd-btn is-fill fd-lgo" disabled>Checking the link</button>;
-  } else if (token && (state === "offline" || state === "limited")) {
+  } else if (token && (state === "offline" || state === "limited" || state === "unchecked")) {
     action = <button type="button" className="fd-btn is-fill fd-lgo" onClick={() => void check(token)}>Try again</button>;
   } else {
     action = <a className="fd-btn is-plain fd-lgo" href="/sign-in">Go to sign in</a>;
   }
 
   return (
-    <AuthCard title="Open your CRM" subtitle="Tap Continue to stay signed in on this device.">
-      {shown ? <p className="fd-lsub">{`This link signs in ${shown.person}${shown.business ? ` at ${shown.business}` : ""}.`}</p> : null}
-      {other && !message ? (
-        <p className="fd-lerr" role="alert">
-          {`You are signed in as ${currentPerson ?? "another person"} on this device. Continue signs you in as ${person} instead.`}
-        </p>
-      ) : null}
+    <AuthCard title="Open your CRM" subtitle={shown ? "Tap Continue to stay signed in on this device." : undefined}>
+      {shown ? <p className="fd-lsub">{`This link signs in ${shown.person}${at}.`}</p> : null}
+      {warning && !message ? <p className="fd-lerr" role="alert">{warning}</p> : null}
+      {notice && !message ? <p className="fd-lsub" role="status">{notice}</p> : null}
       {message ? <p className="fd-lerr" role="alert">{message}</p> : null}
       {action}
     </AuthCard>

@@ -153,7 +153,7 @@ describe("device sign-in preview", () => {
     expect((await redeem(auth, token)).status).toBe(200);
   });
 
-  it("is rate limited like the redeem", async () => {
+  it("has its own rate limit: the 11th preview from one address inside a minute answers 429", async () => {
     const { auth } = await setup();
     const statuses: number[] = [];
     for (let i = 0; i < 11; i++) statuses.push((await preview(auth, "A".repeat(43), { "x-forwarded-for": "198.51.100.9" })).status);
@@ -173,5 +173,39 @@ describe("device sign-in preview", () => {
       expect(line).not.toContain("example.test");
     }
     expect(lines.map((line) => (JSON.parse(line) as { outcome: string }).outcome)).toEqual(["ok", "denied"]);
+  });
+
+  it("cleans the business name: control characters and line breaks go, a long name is cut", async () => {
+    const long = "Roofing ".repeat(30);
+    const { auth } = await setup({ tenantName: async () => `<b>Green</b>\nLane\u0000 ${long}` });
+    const body = (await (await preview(auth, await handoffToken(auth))).json()) as { business: string };
+    expect(body.business.startsWith("<b>Green</b> Lane Roofing")).toBe(true);
+    expect(body.business).not.toMatch(/[\u0000-\u001f]/);
+    expect(body.business.length).toBeLessThanOrEqual(80);
+    expect(body.business.endsWith("...")).toBe(true);
+  });
+
+  it("answers a server error, not the expired 403, when the user lookup fails (the token stays usable)", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { auth } = await setup();
+    const token = await handoffToken(auth);
+    const context = await auth.$context;
+    const spy = vi.spyOn(context.internalAdapter, "findUserById").mockRejectedValueOnce(new Error("db down"));
+    const response = await preview(auth, token);
+    expect(response.status).toBeGreaterThanOrEqual(500);
+    expect(await response.text()).not.toContain("db down");
+    spy.mockRestore();
+    error.mockRestore();
+    expect((await preview(auth, token)).status).toBe(200);
+    expect((await redeem(auth, token)).status).toBe(200);
+  });
+
+  it("answers a server error when the token lookup itself fails", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { auth } = await setup();
+    const token = await handoffToken(auth);
+    const context = await auth.$context;
+    vi.spyOn(context.internalAdapter, "findVerificationValue").mockRejectedValueOnce(new Error("db down"));
+    expect((await preview(auth, token)).status).toBeGreaterThanOrEqual(500);
   });
 });

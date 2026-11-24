@@ -5,6 +5,7 @@ import type { BetterAuthPlugin } from "better-auth";
 import { audit } from "./invite-routes";
 import { maskEmail } from "./email-sender";
 import { maskEmailHint } from "./sign-in-hint";
+import { cleanBusinessName } from "./set-password-email";
 
 // Sign a phone or laptop in with the HighLevel login (user decision 2026-11-24, "one login").
 // Two kinds of single-use token, both bound to one CRM user and one tenant:
@@ -73,9 +74,10 @@ export async function consumeDeviceToken(adapter: InternalAdapter, token: string
   return grantFromRow(await adapter.consumeVerificationValue(IDENTIFIER_PREFIX + hashDeviceToken(token)).catch(() => null));
 }
 
-// Read only: the row stays, so only the redeem ever spends a token.
+// Read only: the row stays, so only the redeem ever spends a token. A database error is thrown, not
+// turned into "no token", so the page never calls a link expired because the database was down.
 export async function peekDeviceToken(adapter: InternalAdapter, token: string): Promise<Grant | null> {
-  return grantFromRow(await adapter.findVerificationValue(IDENTIFIER_PREFIX + hashDeviceToken(token)).catch(() => null));
+  return grantFromRow(await adapter.findVerificationValue(IDENTIFIER_PREFIX + hashDeviceToken(token)));
 }
 
 // What the /device-sign-in page may show before the tap. No full email, no ids, no token.
@@ -141,7 +143,8 @@ export function deviceSignInPlugin(options: DeviceSignInOptions): BetterAuthPlug
         return ctx.json({ ok: true });
       }),
       // Who and which business a token signs in, before the tap. Same checks as the redeem, nothing spent,
-      // no cookie set. The same fixed 403 for every failure.
+      // no cookie set. The same fixed 403 for every refusal; a database error is a 500 instead, so it
+      // never reads as an expired link. Its own rate-limit bucket (Better Auth keys on address and path).
       deviceSignInPreview: createAuthEndpoint("/device-sign-in-preview", { method: "POST" }, async (ctx) => {
         ctx.setHeader("cache-control", "no-store");
         const refuse = (reason: string, kind?: DeviceTokenKind) => {
@@ -151,17 +154,27 @@ export function deviceSignInPlugin(options: DeviceSignInOptions): BetterAuthPlug
         if (ctx.request?.headers.get("origin") !== options.appOrigin) throw refuse("origin");
         const token = (ctx.body as { token?: unknown } | null)?.token;
         if (!isDeviceToken(token)) throw refuse("bad_request");
-        const grant = await peekDeviceToken(ctx.context.internalAdapter as unknown as InternalAdapter, token);
+        const failed = () => {
+          audit("device_sign_in_preview", { outcome: "error" });
+          return new APIError("INTERNAL_SERVER_ERROR", { message: "Server error" });
+        };
+        let grant: Grant | null;
+        let user: (ClientUser & { email: string }) | null;
+        try {
+          grant = await peekDeviceToken(ctx.context.internalAdapter as unknown as InternalAdapter, token);
+          user = grant ? ((await ctx.context.internalAdapter.findUserById(grant.userId)) as (ClientUser & { email: string }) | null) : null;
+        } catch {
+          throw failed();
+        }
         if (!grant) throw refuse("invalid_or_used");
-        const user = (await ctx.context.internalAdapter.findUserById(grant.userId).catch(() => null)) as (ClientUser & { email: string }) | null;
         if (!user) throw refuse("no_user", grant.kind);
         if (clientTenant(user) !== grant.tenantId) throw refuse("wrong_user", grant.kind);
         if (await blocked(grant.tenantId)) throw refuse("tenant_blocked", grant.kind);
         let business: string | null = null;
         if (options.describeTenant) {
           try {
-            const name = await options.describeTenant(grant.tenantId);
-            business = typeof name === "string" && name.trim().length > 0 ? name.trim() : null;
+            // The client's admin types this name in HighLevel: same cleaning and length cap as the mail.
+            business = cleanBusinessName(await options.describeTenant(grant.tenantId));
           } catch {
             business = null; // the page then names the person only
           }
