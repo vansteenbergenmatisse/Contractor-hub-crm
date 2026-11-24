@@ -53,6 +53,9 @@ export type WebhookDeps = {
     // The company of a stored tenant, for an UNINSTALL whose payload has none.
     readLocationCompanyId(locationId: string): Promise<string | null>;
   };
+  // HighLevel's `installToFutureLocations` flag for this app and agency (null: unknown). Only read
+  // when a LocationCreate names a location the agency does not list, to stop pointless retries.
+  installsToFutureLocations?: (agencyAccessToken: string, companyId: string) => Promise<boolean | null>;
 };
 
 const MAX_BODY_BYTES = 1_000_000;
@@ -91,10 +94,14 @@ export async function handleWebhook(request: Request, deps: WebhookDeps): Promis
   // The location and user events carry no appId in HighLevel's schemas (read 2026-11-22), so for
   // those four types a MISSING appId is accepted (a present, different one is still dropped). Their
   // handling only re-reads data from HighLevel's API, so a stray event cannot change anything.
-  const APP_LESS = type === "LocationUpdate" || type === "UserCreate" || type === "UserUpdate" || type === "UserDelete";
+  // LocationCreate (an agency-level event: a new sub-account) has no appId either. It only acts
+  // when our own agency's installed list (queried with our appId) names the location.
+  const APP_LESS =
+    type === "LocationCreate" || type === "LocationUpdate" || type === "UserCreate" || type === "UserUpdate" || type === "UserDelete";
   if (payload.appId !== deps.appId && !(APP_LESS && payload.appId === undefined)) return reply(200);
 
-  const locationId = text(payload.locationId);
+  // LocationCreate carries the new location's id in `id`.
+  const locationId = text(payload.locationId) ?? (type === "LocationCreate" ? text(payload.id) : null);
   const companyId = text(payload.companyId);
   // INSTALL and UNINSTALL carry no webhookId in HighLevel's schema. Such an event gets its own id,
   // so a second UNINSTALL after a re-install is never mistaken for a repeat; the actions are safe to
@@ -111,25 +118,13 @@ export async function handleWebhook(request: Request, deps: WebhookDeps): Promis
       const agency = companyId
         ? await confirmNamedAgency(deps, companyId, locationId, now)
         : await findOnlyAgency(deps, locationId, now);
-      if (agency) {
-        const token = await deps.client.mintLocationToken(agency.token, agency.companyId, locationId);
-        const saved = await deps.store.saveLocationConnection({
-          locationId,
-          companyId: agency.companyId,
-          name: null,
-          accessToken: token.accessToken,
-          refreshToken: token.refreshToken,
-          expiresAt: new Date(now.getTime() + token.expiresInSeconds * 1000),
-          ...(agency.listedAt ? { listedAt: agency.listedAt } : {}),
-        });
-        await runHook("onLocationConnected", () =>
-          deps.hooks?.onLocationConnected?.({
-            tenantId: saved.tenantId,
-            companyId: agency.companyId,
-            locationId,
-            accessToken: token.accessToken,
-          }),
-        );
+      if (agency) await connectLocation(deps, agency, locationId, agency.name ?? null, now);
+    } else if (type === "LocationCreate") {
+      // A new sub-account. With "Select all" (future locations) HighLevel installs the app on it,
+      // but the INSTALL event may come late, without companyId, or not at all; this is a second way in.
+      if (locationId && companyId) {
+        const agency = await confirmCreatedLocation(deps, companyId, locationId);
+        if (agency) await connectLocation(deps, agency, locationId, text(payload.name) ?? agency.name ?? null, now);
       }
     } else if (type === "UNINSTALL") {
       if (locationId) {
@@ -155,6 +150,34 @@ export async function handleWebhook(request: Request, deps: WebhookDeps): Promis
   }
 }
 
+type ConfirmedAgency = { companyId: string; token: string; listedAt?: Date; name?: string | null };
+
+// Mint the location token, save the tenant and its connection, then sync its users (a hook failure
+// is logged; the reconcile repairs users later).
+async function connectLocation(deps: WebhookDeps, agency: ConfirmedAgency, locationId: string, name: string | null, now: Date): Promise<void> {
+  const token = await deps.client.mintLocationToken(agency.token, agency.companyId, locationId);
+  const saved = await deps.store.saveLocationConnection({
+    locationId,
+    companyId: agency.companyId,
+    name,
+    accessToken: token.accessToken,
+    refreshToken: token.refreshToken,
+    expiresAt: new Date(now.getTime() + token.expiresInSeconds * 1000),
+    ...(agency.listedAt ? { listedAt: agency.listedAt } : {}),
+  });
+  await runHook("onLocationConnected", () =>
+    deps.hooks?.onLocationConnected?.({
+      tenantId: saved.tenantId,
+      companyId: agency.companyId,
+      locationId,
+      accessToken: token.accessToken,
+    }),
+  );
+}
+
+const listedName = (listed: InstalledLocation[], locationId: string): string | null =>
+  listed.find((item) => item.locationId === locationId)?.name ?? null;
+
 async function runHook(name: string, call: () => Promise<void> | undefined): Promise<void> {
   try {
     await call();
@@ -169,7 +192,7 @@ async function confirmNamedAgency(
   companyId: string,
   locationId: string,
   now: Date,
-): Promise<{ companyId: string; token: string; listedAt?: Date }> {
+): Promise<ConfirmedAgency> {
   const token = await deps.store.readAgencyAccessToken(companyId, now);
   // The token service refreshes an expired agency token; with none at all, retry later.
   if (!token) throw new Error("No usable agency token.");
@@ -180,6 +203,7 @@ async function confirmNamedAgency(
     if (!listed.some((item) => item.locationId === locationId)) {
       throw new Error("Location is not listed as installed.");
     }
+    return { companyId, token, name: listedName(listed, locationId) };
   }
   return { companyId, token };
 }
@@ -191,18 +215,27 @@ async function findOnlyAgency(
   deps: WebhookDeps,
   locationId: string,
   now: Date,
-): Promise<{ companyId: string; token: string; listedAt: Date } | null> {
+): Promise<ConfirmedAgency | null> {
   const { reconcile, companylessInstall: lookup } = deps;
   if (!reconcile || !lookup) return null;
   const companyIds = await lookup.listAgencyCompanyIds();
-  if (companyIds.length !== 1) {
-    console.warn(`HighLevel webhook: ${companyIds.length === 0 ? "install_no_agency" : "install_multiple_agencies"}`);
+  if (companyIds.length === 0) {
+    console.warn("HighLevel webhook: install_no_agency");
     return null;
   }
-  const [companyId] = companyIds;
   // Checked before any token refresh, list or mint: a replay must not touch a connected tenant.
   const tenant = await lookup.findTenant(locationId);
   if (tenant?.status === "connected") return null;
+  let companyId: string;
+  if (companyIds.length === 1) {
+    [companyId] = companyIds;
+  } else if (tenant?.companyId && companyIds.includes(tenant.companyId)) {
+    // Several agencies, but the location is already ours under one of them (a reconnect).
+    companyId = tenant.companyId;
+  } else {
+    console.warn("HighLevel webhook: install_multiple_agencies");
+    return null;
+  }
   // Same refusal as saveLocationConnection, before a token is minted for the wrong agency.
   if (tenant?.companyId && tenant.companyId !== companyId) {
     throw new Error("Location already belongs to a different agency.");
@@ -214,7 +247,38 @@ async function findOnlyAgency(
   if (!listed.some((item) => item.locationId === locationId)) {
     throw new Error("Location is not listed as installed.");
   }
-  return { companyId, token, listedAt };
+  return { companyId, token, listedAt, name: listedName(listed, locationId) };
+}
+
+// LocationCreate: act only for an agency we hold and only when its own installed list (asked with
+// our appId) names the new location. Null means "acknowledge, nothing to do". Throws (so HighLevel
+// retries) while the location is not listed yet, unless HighLevel says the app is not installed on
+// future locations at all.
+async function confirmCreatedLocation(deps: WebhookDeps, companyId: string, locationId: string): Promise<ConfirmedAgency | null> {
+  const { reconcile, companylessInstall: lookup } = deps;
+  if (!reconcile || !lookup) return null;
+  if (!(await lookup.listAgencyCompanyIds()).includes(companyId)) {
+    console.warn("HighLevel webhook: location_create_unknown_agency");
+    return null;
+  }
+  const tenant = await lookup.findTenant(locationId);
+  if (tenant?.status === "connected") return null;
+  if (tenant?.companyId && tenant.companyId !== companyId) {
+    console.warn("HighLevel webhook: location_create_other_agency");
+    return null;
+  }
+  const now = deps.now();
+  const token = await deps.store.readAgencyAccessToken(companyId, now);
+  if (!token) throw new Error("No usable agency token.");
+  const listed = await reconcile.listInstalledLocations(token, companyId);
+  if (listed.some((item) => item.locationId === locationId)) {
+    return { companyId, token, listedAt: now, name: listedName(listed, locationId) };
+  }
+  if ((await deps.installsToFutureLocations?.(token, companyId)) === false) {
+    console.warn("HighLevel webhook: location_create_app_not_installed");
+    return null;
+  }
+  throw new Error("Location is not listed as installed yet.");
 }
 
 // A replayed signed UNINSTALL (captured, sent again after a re-install) must not switch a live tenant

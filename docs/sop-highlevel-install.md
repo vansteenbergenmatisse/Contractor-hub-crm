@@ -7,7 +7,7 @@ Written 2026-11-22 from the code, `docs/greenlane/build-prompt.md` and that day'
 ## The short version
 
 - **You do not install per sub-account.** The intended setup is one install per environment, from the agency, with "all sub-accounts" selected in production.
-- **A new client should then appear by itself (not proven).** Tick **"Select all N sub-accounts"** on HighLevel's install screen. HighLevel then sends an `INSTALL` event for each new sub-account, and the app creates the client and its users, even when the event has no company id. A daily sync at 05:00 UTC is the backstop. `/admin/clients` has a **Connect sub-accounts** button that opens the install link.
+- **A new client should then appear by itself (not proven).** Tick **"Select all N sub-accounts"** on HighLevel's install screen. HighLevel then sends an `INSTALL` event for each new sub-account, and the app creates the client and its users, even when the event has no company id. A `LocationCreate` event is a second way in (switch it on, see "Webhook events" below). Backstops: the daily sync at 05:00 UTC (production only), a background check each time an admin opens `/admin/clients` (at most once per 5 minutes per agency, every environment), and the **Check for new sub-accounts** button there. All of them connect only sub-accounts that HighLevel lists as having the app installed. `/admin/clients` also has a **Connect sub-accounts** button that opens the install link.
 - **Always start the install from our link**, `<environment URL>/api/integrations/oauth/start`, signed in as a CRM admin. An install started from HighLevel's App Marketplace page is not accepted by our callback and leaves the client unconnected.
 
 ## Environments
@@ -27,6 +27,10 @@ Written 2026-11-22 from the code, `docs/greenlane/build-prompt.md` and that day'
 The build prompt lists `marketplace.gohighlevel.com` as the install host. That host failed for our white-label app, so use the value above.
 
 **The Test app has one webhook URL.** On 2026-11-22 its events were arriving on dev, while the build prompt says staging. Point it at the environment you are testing. The other environment then gets no live events and relies on the daily sync. Do not run dev and staging installs at the same time.
+
+## Webhook events (once per HighLevel app)
+
+In the HighLevel developer portal, open the app, then **Advanced Settings**, then **Webhooks**. Set the webhook URL to `<site>/api/integrations/webhooks` and switch on: `INSTALL`/`UNINSTALL` (app events, if listed), **LocationCreate**, LocationUpdate, UserCreate, UserUpdate, UserDelete. Without LocationCreate, a new sub-account connects only through its INSTALL event or the reconcile.
 
 ## Before any install
 
@@ -57,8 +61,8 @@ The build prompt lists `marketplace.gohighlevel.com` as the install host. That h
 1. Create the sub-account in HighLevel and load the JCR snapshot.
 2. Set the sub-account's email and fill in its custom values (`docs/tenant-branding.md`).
 3. Add the client's users in HighLevel.
-4. Check `/admin/clients` on production. The client should appear as **Connected (not proven)**.
-5. If it is missing after a few minutes, check that the app is installed on that sub-account in HighLevel. The daily sync also emails `ADMIN_ALERT_EMAIL` about sub-accounts without the app.
+4. Open `/admin/clients`. The client should appear as **Connected (not proven)**. If it is not there, click **Check for new sub-accounts**: it connects every sub-account HighLevel lists with the app installed and says how many it connected. Reload the page.
+5. If it is still missing, check that the app is installed on that sub-account in HighLevel. The daily sync (production) also emails `ADMIN_ALERT_EMAIL` about sub-accounts without the app.
 6. If the app is missing, repeat the Install steps from our link and include the new sub-account.
 7. Send the client their personal sign-in link from `/admin/clients`.
 

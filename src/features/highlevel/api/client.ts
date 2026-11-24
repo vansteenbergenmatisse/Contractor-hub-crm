@@ -274,6 +274,23 @@ export function createHighLevelClient(config: HighLevelClientConfig) {
     }
   }
 
+  // The `installToFutureLocations` flag of GET /oauth/installed-locations (public docs, read
+  // 2026-11-24; not yet seen on a real answer). Null when HighLevel does not send a boolean, or the
+  // v3 path is missing (404): the caller must then treat it as unknown.
+  async function readInstallToFutureLocations(agencyAccessToken: string, companyId: string): Promise<boolean | null> {
+    const query = new URLSearchParams({ companyId, appId: config.appId, pageSize: "1" });
+    try {
+      const json = await requestJson("installed locations", `/oauth/installed-locations?${query.toString()}`, {
+        method: "GET",
+        headers: { authorization: `Bearer ${agencyAccessToken}`, version: API_VERSION },
+      });
+      return typeof json.installToFutureLocations === "boolean" ? json.installToFutureLocations : null;
+    } catch (error) {
+      if (error instanceof HighLevelHttpError && error.status === 404) return null;
+      throw error;
+    }
+  }
+
   // GET /locations/search (agency token, scope locations.readonly): every sub-account of the agency,
   // installed or not. OpenAPI file: query companyId, skip, limit (default 10).
   async function listAgencyLocations(agencyAccessToken: string, companyId: string): Promise<AgencyLocation[]> {
@@ -537,7 +554,7 @@ export function createHighLevelClient(config: HighLevelClientConfig) {
     }
   }
 
-  return { exchangeAgencyCode, exchangeCode, listAgencyLocations, listCustomValues, listLocationUsers, listInstalledLocations, mintLocationToken, refreshToken, requestContactSearch, requestCustomValues, requestMediaFiles, requestMediaTrash, requestMediaUpload, requestUpdateCustomValue, searchUsers };
+  return { exchangeAgencyCode, exchangeCode, listAgencyLocations, listCustomValues, listLocationUsers, listInstalledLocations, mintLocationToken, readInstallToFutureLocations, refreshToken, requestContactSearch, requestCustomValues, requestMediaFiles, requestMediaTrash, requestMediaUpload, requestUpdateCustomValue, searchUsers };
 }
 
 // Ids of people a parsed user list named but dropped for having no email. They are still in

@@ -4,6 +4,7 @@ import { Fragment, useRef, useState } from "react";
 import { inviteErrorMessage } from "../api/invite-errors";
 import { announceViewChange } from "../api/view-channel";
 import type { ClientRow } from "../types";
+import { CheckSubAccountsButton } from "./CheckSubAccountsButton";
 
 // Plain styling on purpose (build prompt section 4.8). All text states are words, not colors.
 export function ClientsTable({ clients }: { clients: ClientRow[] }) {
@@ -93,6 +94,7 @@ export function ClientsTable({ clients }: { clients: ClientRow[] }) {
         </a>{" "}
         <span>In production, select all sub-accounts so new clients connect automatically.</span>
       </p>
+      <CheckSubAccountsButton />
       {message && !rows.some((row) => row.tenantId === message.tenantId) ? <p role="status">{message.text}</p> : null}
       {rows.length === 0 ? <p>No clients yet. A client appears here after the app is installed on their sub-account.</p> : null}
       {rows.length > 0 ? (

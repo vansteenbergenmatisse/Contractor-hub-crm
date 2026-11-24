@@ -130,7 +130,7 @@ export async function listTenantUsers(tenantId: string): Promise<HighLevelUser[]
 export type OnboardingApi = {
   companyIds(): Promise<string[]>;
   // Null when this agency has no usable token (uninstalled, or refresh refused).
-  agency(companyId: string): Promise<{ installed(): Promise<InstalledLocation[]>; locations(): Promise<AgencyLocation[]>; connect(locationId: string, name: string | null): Promise<{ tenantId: string; accessToken: string }> } | null>;
+  agency(companyId: string): Promise<{ installed(): Promise<InstalledLocation[]>; locations(): Promise<AgencyLocation[]>; connect(locationId: string, name: string | null, listedAt?: Date): Promise<{ tenantId: string; accessToken: string }> } | null>;
   connectedTenants(companyId: string): Promise<Array<{ tenantId: string; locationId: string }>>;
   findTenant(locationId: string): Promise<{ tenantId: string; companyId: string | null; status: string } | null>;
   usersOfTenant(tenantId: string): Promise<HighLevelUser[]>;
@@ -152,10 +152,12 @@ export function getOnboardingApi(): OnboardingApi {
       return {
         installed: () => client.listInstalledLocations(token, companyId),
         locations: () => client.listAgencyLocations(token, companyId),
-        async connect(locationId, name) {
+        // `listedAt`: when the installed list behind this connect was read, so a location uninstalled
+        // after that moment is not revived.
+        async connect(locationId, name, listedAt) {
           const minted = await client.mintLocationToken(token, companyId, locationId);
           const saved = await saveLocationConnection(
-            { locationId, companyId, name, accessToken: minted.accessToken, refreshToken: minted.refreshToken, expiresAt: new Date(Date.now() + minted.expiresInSeconds * 1000) },
+            { locationId, companyId, name, accessToken: minted.accessToken, refreshToken: minted.refreshToken, expiresAt: new Date(Date.now() + minted.expiresInSeconds * 1000), ...(listedAt ? { listedAt } : {}) },
             env.TOKEN_ENCRYPTION_KEY,
           );
           return { tenantId: saved.tenantId, accessToken: minted.accessToken };
@@ -348,5 +350,6 @@ async function handleWebhookRequest(request: Request, publicKeyPem: string | und
       listInstalledLocations: client.listInstalledLocations,
       readLocationCompanyId,
     },
+    installsToFutureLocations: client.readInstallToFutureLocations,
   });
 }
