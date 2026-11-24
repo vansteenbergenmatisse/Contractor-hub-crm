@@ -8,6 +8,10 @@ type Entry = { values: BrandValue[]; brand: Brand };
 // not measured numbers.
 const VERSION_SETTLING_MS = 60_000;
 const SETTLING_TTL_MS = 5_000;
+// An empty custom-values list can be a sub-account still importing its snapshot, so it is kept only
+// briefly; but it is kept, so a tenant whose values really are empty does not reach HighLevel on every
+// request. A proposal, not a measured number.
+const EMPTY_TTL_MS = 30_000;
 
 // Per-tenant brand cache (build prompt section 5: cache per tenant, revalidate on save or on a
 // LocationUpdate webhook through `invalidate`). It keeps the raw custom values next to the brand built
@@ -42,6 +46,11 @@ export function createBrandService(deps: {
     return now + (settling ? Math.min(SETTLING_TTL_MS, deps.ttlMs) : deps.ttlMs);
   }
 
+  function expiryFor(tenantId: string, values: BrandValue[]): number {
+    const normal = expiry(tenantId);
+    return values.length > 0 ? normal : Math.min(normal, deps.now() + Math.min(EMPTY_TTL_MS, deps.ttlMs));
+  }
+
   async function syncVersion(tenantId: string): Promise<void> {
     let version: string | null;
     try {
@@ -63,7 +72,7 @@ export function createBrandService(deps: {
     const values = await deps.fetchValues(tenantId);
     const entry = { values, brand: buildBrand(values) };
     if ((generation.get(tenantId) ?? 0) === started) {
-      cache.set(tenantId, { entry, expiresAt: expiry(tenantId) });
+      cache.set(tenantId, { entry, expiresAt: expiryFor(tenantId, values) });
     }
     return entry;
   }
@@ -95,10 +104,14 @@ export function createBrandService(deps: {
 
   async function loadReadOnly(tenantId: string): Promise<BrandValue[]> {
     const started = generation.get(tenantId) ?? 0;
-    const values = await deps.readStoredValues?.(tenantId).catch(() => null);
+    const values = await deps.readStoredValues?.(tenantId).catch(() => {
+      // The step only: never the error message, a value, a token or an id.
+      console.error("Brand values read (read-only) failed: step=stored-read");
+      return null;
+    });
     if (values) {
       if ((generation.get(tenantId) ?? 0) === started) {
-        cache.set(tenantId, { entry: { values, brand: buildBrand(values) }, expiresAt: expiry(tenantId) });
+        cache.set(tenantId, { entry: { values, brand: buildBrand(values) }, expiresAt: expiryFor(tenantId, values) });
       }
       return values;
     }

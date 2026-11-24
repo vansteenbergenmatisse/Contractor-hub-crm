@@ -7,7 +7,8 @@ import { TokenServiceError } from "./token-service";
 
 // Read-only list of the location's active phone numbers. Scope `phonenumbers.read`. Field names come
 // from HighLevel's public `apps/phone-system.json`, which names `2021-07-28` as the Version; this file
-// sends `v3` because the ticket asks for it. No live call was made, so neither is confirmed.
+// sends `v3` because the ticket asks for it. The marketplace docs show the v3 answer wrapped in `data`,
+// so `parsePhoneNumbers` reads both shapes. No live call was made, so neither is confirmed.
 const PHONE_API_VERSION = "v3";
 const PAGE_SIZE = 1000;
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -68,10 +69,14 @@ export function createPhoneNumberRequests(baseUrl: string, doFetch: typeof fetch
 
 // Keeps the number and its name only, for numbers that can text. A full page may have more behind it.
 export function parsePhoneNumbers(json: unknown): { numbers: HighLevelPhoneNumber[]; complete: boolean } {
-  const body = record(json);
-  if (!body) throw new PhoneShapeError("not-object");
+  const top = record(json);
+  if (!top) throw new PhoneShapeError("not-object");
+  // HighLevel's v3 docs wrap the list in `data`; the older OpenAPI shows it flat. Both are read.
+  const data = record(top.data);
+  const body = data && Array.isArray(data.numbers) ? data : top;
   if (!Array.isArray(body.numbers)) throw new PhoneShapeError(`no-numbers-list keys=${keyNames(body)}`);
-  if (body.accountStatus !== undefined && body.accountStatus !== "active") throw new InactiveAccountError();
+  const accountStatus = body.accountStatus !== undefined ? body.accountStatus : top.accountStatus;
+  if (accountStatus !== undefined && accountStatus !== "active") throw new InactiveAccountError();
   const numbers: HighLevelPhoneNumber[] = [];
   for (const raw of body.numbers as unknown[]) {
     const row = record(raw);
