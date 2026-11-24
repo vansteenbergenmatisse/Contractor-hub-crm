@@ -174,6 +174,8 @@ export function getOnboardingApi(): OnboardingApi {
 }
 
 // The brand source: the sub-account's custom values (scope locations/customValues.readonly).
+// Rejects with CustomValuesNotConnectedError when the tenant has no connection: the brand cache then
+// keeps nothing and the brand falls back to the default, and Settings can say "not connected".
 export async function listTenantCustomValues(tenantId: string): Promise<CustomValue[]> {
   const env = parseEnv("highlevel");
   const client = buildClient(env);
@@ -185,6 +187,7 @@ export async function listTenantCustomValues(tenantId: string): Promise<CustomVa
       listCustomValues: client.listCustomValues,
     },
     tenantId,
+    { throwWhenNotConnected: true },
   );
 }
 

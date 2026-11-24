@@ -13,6 +13,18 @@ export type BrandLogoProps = {
   hideWhenEmpty?: boolean;
 };
 
+// A plain building outline for a tile with neither a logo nor initials (a blank account), so the tile
+// is never an empty colored square. Drawn in the tile's text color.
+function NeutralMark() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      <path d="M4 21V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v16" />
+      <path d="M15 10h4a1 1 0 0 1 1 1v10" />
+      <path d="M3 21h18M8 8h3M8 12h3M8 16h3" />
+    </svg>
+  );
+}
+
 // A logo in the design's round `.fd-logo` tile: the initials stay until the image has loaded, and stay
 // for good when the link is broken. The image is a CSS background of that class, so no remote image
 // host has to be allow-listed. Generic: it knows nothing about whose logo it draws.
@@ -35,7 +47,7 @@ export function BrandLogo({ url, initials, hideWhenEmpty = false }: BrandLogoPro
   const show = href !== null && loaded === href;
   return (
     <span className={`fd-logo${show ? " has-img" : ""}`} aria-hidden="true" style={show ? { backgroundImage: `url("${href}")` } : undefined}>
-      <span className="fd-h">{initials}</span>
+      <span className="fd-h">{initials || <NeutralMark />}</span>
     </span>
   );
 }

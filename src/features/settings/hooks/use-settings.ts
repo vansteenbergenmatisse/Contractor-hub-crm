@@ -47,6 +47,20 @@ export function useSettings(
   useEffect(() => {
     if (notLoaded && initialValues && Object.keys(initialValues).length > 0) dispatch({ type: "loaded", values: initialValues });
   }, [notLoaded, initialValues, dispatch]);
+  // A newer server read replaces kept values the owner has not edited, so a later template copy or an
+  // edit in HighLevel shows up. Runs only when the server's values change, never while a save runs.
+  const stateRef = useRef(state);
+  useEffect(() => {
+    stateRef.current = state;
+  });
+  useEffect(() => {
+    const now = stateRef.current;
+    if (!initialValues || now.saving || Object.keys(now.values).length === 0) return;
+    const newer = Object.entries(initialValues).some(
+      ([key, value]) => now.values[key] !== value && (now.draft[key] ?? "") === (now.values[key] ?? ""),
+    );
+    if (newer) dispatch({ type: "serverValues", values: initialValues });
+  }, [initialValues, dispatch]);
   // A key the reader ignores, or one the account no longer has, gets no field, unless the owner has
   // an unsaved edit in it. An empty read proves nothing, so it removes no field.
   const hidden = useMemo(() => {

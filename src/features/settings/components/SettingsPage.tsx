@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { COLOR_GROUPS, ESSENTIAL_KEYS } from "../api/fields";
 import { imageKindOf } from "../api/image-keys";
-import type { AccountLayout } from "../api/load-values";
+import type { AccountLayout, LoadStatus } from "../api/load-values";
 import { prepareImageFile } from "../api/prepare-image";
 import { scrollBehavior } from "../api/scroll-behavior";
 import { dirtyKeysOf, prepareSave, type SettingsState } from "../api/state";
@@ -30,6 +30,10 @@ type Props = {
   initialSection?: SectionKey;
   // From a good server read: the image hosts. Never a value.
   account?: AccountLayout;
+  // How the server read went. Only `failed` and `not-connected` say the details did not load; a blank
+  // or empty account shows its empty fields. Left out: an empty record on a live or read-only page
+  // counts as a failed read (the older rule).
+  loadStatus?: LoadStatus;
   // The account's phone numbers, read on the server; a promise while that read runs.
   // Left out: the row says "Not available yet".
   phoneNumbers?: PhoneNumbersSource;
@@ -55,7 +59,7 @@ const scrollToCard = (id: string) => document.getElementById(`s-card-${id}`)?.sc
 
 // Page content for /settings, inside the app shell: three tabs, seven steps that save on their own,
 // and the protected Services and areas.
-export function SettingsPage({ initial, initialValues, initialSection, account, phoneNumbers, readOnly = false, saveValues, uploadImage, prepareImage = prepareImageFile }: Props) {
+export function SettingsPage({ initial, initialValues, initialSection, account, loadStatus, phoneNumbers, readOnly = false, saveValues, uploadImage, prepareImage = prepareImageFile }: Props) {
   const live = !!saveValues && !readOnly;
   const { state, dispatch, filter, extras, notLoaded } = useSettings(initial, initialValues, initialSection, UNKNOWN_CONNECTIONS, live, account);
   const remote = useSaveValues(state, dispatch, saveValues);
@@ -80,9 +84,16 @@ export function SettingsPage({ initial, initialValues, initialSection, account, 
   const shownJoined = [...ESSENTIAL_KEYS, ...extras, ...colorKeys].filter((key) => filter.items[`cv-${key}`]).join("|");
   const keys = useMemo(() => keysByStep(shownJoined ? shownJoined.split("|") : []), [shownJoined]);
   const current = useCurrentStep(RAIL_IDS, tab === "det");
-  const loadFailed = notLoaded && (live || readOnly);
+  // Kept values from an earlier visit still show after a failed read; with none, the page says so.
+  const notConnected = loadStatus === "not-connected";
+  const loadFailed = notLoaded && (loadStatus ? loadStatus === "failed" || notConnected : live || readOnly);
   const errShown = !!err && tab === "det" && !!filter.items[`cv-${err.key}`];
-  const topMessage = (errShown ? null : err?.message) ?? (loadFailed ? (readOnly ? "Your details did not load. Reload this page to try again." : "Your details did not load, so nothing can be saved. Reload this page to try again.") : null);
+  const failText = notConnected
+    ? "Your account is not connected yet, so your details cannot load."
+    : live
+      ? "Your details did not load, so nothing can be saved. Reload this page to try again."
+      : "Your details did not load. Reload this page to try again.";
+  const topMessage = (errShown ? null : err?.message) ?? (loadFailed ? failText : null);
 
   // Handlers read the newest state through a ref, so they stay stable and memoized cards do not redraw.
   const latest = useRef({ state, keys, live, remote });

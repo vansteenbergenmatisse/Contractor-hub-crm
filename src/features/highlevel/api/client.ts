@@ -431,7 +431,9 @@ export function createHighLevelClient(config: HighLevelClientConfig) {
   // GET /locations/{locationId}/customValues (scope locations/customValues.readonly). Taken from
   // HighLevel's OpenAPI file, not yet seen on a real response. This call documents Version
   // 2021-07-28 (the others use v3). fieldKey looks like "{{ custom_values.main_color }}"; the key
-  // is the part after "custom_values.". Entries without a usable key or a string value are dropped.
+  // is the part after "custom_values.". A null value is a blank one and reads as "" (the same rule as
+  // custom-value-write.ts), so a blank sub-account still lists its keys. Entries without a usable key,
+  // without a value field, or with a value of another type are dropped.
   async function listCustomValues(accessToken: string, locationId: string): Promise<CustomValue[]> {
     const what = "custom values";
     const json = await requestJson(what, `/locations/${encodeURIComponent(locationId)}/customValues`, {
@@ -445,9 +447,9 @@ export function createHighLevelClient(config: HighLevelClientConfig) {
     for (const raw of json.customValues as unknown[]) {
       if (typeof raw !== "object" || raw === null) continue;
       const item = raw as Record<string, unknown>;
-      if (typeof item.fieldKey !== "string" || typeof item.value !== "string") continue;
+      if (typeof item.fieldKey !== "string" || (item.value !== null && typeof item.value !== "string")) continue;
       const match = /^\{\{\s*custom_values\.([A-Za-z0-9_]+)\s*\}\}$/.exec(item.fieldKey.trim());
-      if (match) values.push({ key: match[1], value: item.value });
+      if (match) values.push({ key: match[1], value: item.value ?? "" });
     }
     return values;
   }

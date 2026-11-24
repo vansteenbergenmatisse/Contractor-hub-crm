@@ -36,8 +36,31 @@ class PhoneShapeError extends Error {
     super(`HighLevel phone read returned an unexpected response (${detail}).`);
   }
 }
+// A 401 or 403 carried in the body of a 200 answer: an access problem, never "no numbers".
+class BodyAccessError extends PhoneShapeError {
+  constructor(readonly status: 401 | 403) {
+    super(`body-status status=${status}`);
+  }
+}
 const PLAIN_KEY = /^[A-Za-z][A-Za-z0-9_]{0,39}$/;
 const keyNames = (body: Record<string, unknown>) => Object.keys(body).filter((key) => PLAIN_KEY.test(key)).slice(0, 5).join(",");
+// A message that says the location has no numbers, e.g. "No phone numbers found" or "Numbers not found".
+const NO_NUMBERS_MESSAGE = /\bno\s+(phone\s+)?numbers?\b|\bnumbers?\s+not\s+found\b/i;
+const isEmptyData = (data: unknown) =>
+  data === null || (Array.isArray(data) && data.length === 0) || (typeof data === "object" && data !== null && Object.keys(data).length === 0);
+
+// An answer that is HighLevel's way of saying "this location has no numbers" (a normal state, not an
+// error): `numbers: null`, an empty `data` with no numbers key, or a 404 in the body whose message says
+// there are no numbers. The live answer had top-level keys status,data,message,statusCode; the values
+// were not seen, so these shapes are a reading of that log line, not a confirmed contract.
+function saysNoNumbers(top: Record<string, unknown>, statusCode: number | null): boolean {
+  const data = top.data;
+  if (top.numbers === null) return true;
+  if (typeof data === "object" && data !== null && !Array.isArray(data) && (data as Record<string, unknown>).numbers === null) return true;
+  if (statusCode === 404) return typeof top.message === "string" && NO_NUMBERS_MESSAGE.test(top.message);
+  if (statusCode !== null && statusCode >= 400) return false;
+  return !("numbers" in top) && "data" in top && isEmptyData(data);
+}
 
 const record = (value: unknown): Record<string, unknown> | null =>
   typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
@@ -71,10 +94,16 @@ export function createPhoneNumberRequests(baseUrl: string, doFetch: typeof fetch
 export function parsePhoneNumbers(json: unknown): { numbers: HighLevelPhoneNumber[]; complete: boolean } {
   const top = record(json);
   if (!top) throw new PhoneShapeError("not-object");
+  const statusCode = typeof top.statusCode === "number" ? top.statusCode : null;
+  if (statusCode === 401 || statusCode === 403) throw new BodyAccessError(statusCode);
   // HighLevel's v3 docs wrap the list in `data`; the older OpenAPI shows it flat. Both are read.
   const data = record(top.data);
   const body = data && Array.isArray(data.numbers) ? data : top;
-  if (!Array.isArray(body.numbers)) throw new PhoneShapeError(`no-numbers-list keys=${keyNames(body)}`);
+  if (!Array.isArray(body.numbers)) {
+    if (!saysNoNumbers(top, statusCode)) throw new PhoneShapeError(`no-numbers-list keys=${keyNames(body)}`);
+    if (top.accountStatus !== undefined && top.accountStatus !== "active") throw new InactiveAccountError();
+    return { numbers: [], complete: true };
+  }
   const accountStatus = body.accountStatus !== undefined ? body.accountStatus : top.accountStatus;
   if (accountStatus !== undefined && accountStatus !== "active") throw new InactiveAccountError();
   const numbers: HighLevelPhoneNumber[] = [];
@@ -139,7 +168,7 @@ export async function readPhoneNumbers(deps: ReadDeps, tenantId: string): Promis
             ? `parse detail=${error.detail}`
             : "parse";
     console.error(`HighLevel phone read failed: step=${step}`);
-    return { ok: false, reason: "unavailable" };
+    return { ok: false, reason: error instanceof BodyAccessError ? "no-access" : "unavailable" };
   }
 }
 

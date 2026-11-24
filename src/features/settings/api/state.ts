@@ -44,6 +44,7 @@ export type SettingsAction =
   | { type: "saveStart"; step?: string }
   | { type: "saveEnd"; problem: string | null }
   | { type: "loaded"; values: CustomValues }
+  | { type: "serverValues"; values: CustomValues }
   | { type: "toggleCols" }
   | { type: "setFolder"; id: string; open: boolean }
   | { type: "switch"; index: 0 | 1 }
@@ -170,6 +171,19 @@ export function settingsReducer(s: SettingsState, a: SettingsAction): SettingsSt
       // The values arrived after a failed read. What the owner typed meanwhile stays in the fields.
       const typed = Object.fromEntries(Object.entries(s.draft).filter(([, v]) => v.trim() !== ""));
       return { ...s, values: { ...a.values }, draft: { ...a.values, ...typed } };
+    }
+    case "serverValues": {
+      // A newer server read (a template copy or an edit in HighLevel since the state was kept). A key
+      // with an unsaved edit keeps both its edit and the value it was based on; the others take the
+      // server's value.
+      const values = { ...s.values };
+      const draft = { ...s.draft };
+      for (const [key, value] of Object.entries(a.values)) {
+        if ((s.draft[key] ?? "") !== (s.values[key] ?? "")) continue;
+        values[key] = value;
+        draft[key] = value;
+      }
+      return { ...s, values, draft };
     }
     case "normalize":
       return { ...s, draft: a.draft, err: null, ok: false };

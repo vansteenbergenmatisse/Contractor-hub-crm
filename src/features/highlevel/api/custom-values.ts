@@ -1,8 +1,18 @@
 import { HighLevelHttpError } from "./client";
 import type { CustomValue, LocationState } from "../types";
 
+// The tenant has no connected sub-account. Callers tell it apart from a failed read by `code`.
+export class CustomValuesNotConnectedError extends Error {
+  readonly code = "not-connected";
+  constructor() {
+    super("HighLevel custom values: the tenant has no connected sub-account.");
+  }
+}
+
 // The custom values of one tenant's sub-account, with one refresh-and-retry on a 401 (same rule as
 // searchUsersWithRetry). The tenant id comes from the server, never from request input.
+// Without a connection it answers [] by default; with `throwWhenNotConnected` it rejects with
+// CustomValuesNotConnectedError, so "not connected" never looks like an account with no values.
 export async function listCustomValuesWithRetry(
   deps: {
     getLocationToken: (tenantId: string, options?: { rejectedToken?: string }) => Promise<string>;
@@ -10,9 +20,13 @@ export async function listCustomValuesWithRetry(
     listCustomValues: (accessToken: string, locationId: string) => Promise<CustomValue[]>;
   },
   tenantId: string,
+  options: { throwWhenNotConnected?: boolean } = {},
 ): Promise<CustomValue[]> {
   const locationId = await deps.readLocationId(tenantId);
-  if (!locationId) return [];
+  if (!locationId) {
+    if (options.throwWhenNotConnected) throw new CustomValuesNotConnectedError();
+    return [];
+  }
   const token = await deps.getLocationToken(tenantId);
   try {
     return await deps.listCustomValues(token, locationId);
