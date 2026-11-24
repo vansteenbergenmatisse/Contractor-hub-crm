@@ -28,6 +28,8 @@ function minutes(raw: string): number | null {
   return ((hour % 12) + (half === "p" ? 12 : 0)) * 60 + minute;
 }
 
+const hasHalf = (raw: string) => /[ap]\.?m\.?\s*$/i.test(raw);
+
 export function parseBusinessHours(text: string | null | undefined): WeekHours | null {
   const line = text?.replace(/[‒-―]/g, "-").trim();
   if (!line) return null;
@@ -43,6 +45,8 @@ export function parseBusinessHours(text: string | null | undefined): WeekHours |
       const open = minutes(match[4]);
       const close = minutes(match[5]);
       if (open === null || close === null || close <= open) return null;
+      // AM or PM on one side only: "01:00 - 05:00 PM" could mean 1 AM or 1 PM, so it is refused.
+      if (hasHalf(match[4]) !== hasHalf(match[5])) return null;
       hours = { open, close };
     }
     for (let k = 0; k <= (last - first + 7) % 7; k += 1) {

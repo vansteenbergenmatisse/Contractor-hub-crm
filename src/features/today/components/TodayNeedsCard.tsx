@@ -40,7 +40,7 @@ export function TodayNeedsCard({ leads, toSend, timeZone: locationZone }: { lead
       <div className="fd-ch"><h2 className="fd-ct" id="fd-need-h">Needs you</h2></div>
       {rows.length ? (
         <ul className="fd-rows">
-          {rows.map((row) => <li key={row.href} className="fd-row"><div className="fd-rx"><p className="fd-rt"><Link href={row.href}>{row.text}</Link></p></div></li>)}
+          {rows.map((row) => <li key={row.href} className="fd-row fd-nr"><Link className="fd-nl" href={row.href}><div className="fd-rx"><p className="fd-rt">{row.text}</p></div></Link></li>)}
         </ul>
       ) : null}
       {!rows.length && !missing.length ? <div className="fd-none fx-none" role="status"><p>Nothing needs you right now.</p></div> : null}
