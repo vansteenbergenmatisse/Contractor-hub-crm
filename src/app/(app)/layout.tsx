@@ -15,7 +15,7 @@ const SEARCH_ROWS: readonly SearchRow[] = [];
 
 // Every signed-in tenant page. Signed out goes to /sign-in; an admin has no tenant data and goes to
 // the admin page. The tenant comes from the session only.
-export default async function AppLayout({ children }: { children: ReactNode }) {
+export default async function AppLayout({ children, newLead }: { children: ReactNode; newLead?: ReactNode }) {
   const user = await getRequestUser();
   if (!user) redirect("/sign-in");
   // An admin only gets here with a tenant through the read-only client view.
@@ -35,6 +35,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       {viewing ? <ClientViewBanner name={business.name} /> : null}
       {mailboxPrompt.show ? <MailboxPromptCard token={mailboxPrompt.token} /> : null}
       {children}
+      {newLead}
     </AppShell>
   );
 }

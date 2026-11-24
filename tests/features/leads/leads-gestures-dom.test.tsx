@@ -199,7 +199,7 @@ describe("the phone add sheet", () => {
     const cancel = within(dialog).getByRole("button", { name: "Cancel" });
     cancel.focus();
     await user.tab();
-    expect(screen.getByLabelText("Name")).toHaveFocus();
+    expect(screen.getByLabelText("Where the lead came from")).toHaveFocus();
     await user.tab({ shift: true });
     expect(cancel).toHaveFocus();
     for (let n = 0; n < 8; n++) {
