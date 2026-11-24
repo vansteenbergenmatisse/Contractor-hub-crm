@@ -4,6 +4,7 @@ import type { AddressSuggestion } from "@/shared/lib/places-search";
 import { buildLeadsCsv, type ExportRow } from "./leads-csv";
 import { isLeadsReadDisabled } from "./read-flag";
 import { canExportLeads } from "./export-access";
+import { stayAnswer, stayFailure, wantsStay } from "./export-stay";
 
 // HTTP handlers for Leads. Tenant and user come from the session only. Logs and audit lines hold ids
 // and counts, never a name, phone, email, address or search text.
@@ -100,12 +101,15 @@ const forbidden = (request: Request) => isFormPost(request)
 
 // The answer when the export throws, also used by the route for a failure before the handler runs.
 export function exportFailure(request: Request): Response {
+  if (wantsStay(request)) return stayFailure();
   return isFormPost(request) ? backToLeads("failed") : reply(500, { error: "failed" });
 }
 
 export async function handleLeadsExport(request: Request, deps: LeadsExportDeps): Promise<Response> {
   try {
-    return await runLeadsExport(request, deps);
+    const response = await runLeadsExport(request, deps);
+    // A post from another site gets the plain refusal and never a cookie.
+    return wantsStay(request) && request.headers.get("origin") === deps.appOrigin ? stayAnswer(response) : response;
   } catch {
     console.error("Lead export failed.");
     return exportFailure(request);

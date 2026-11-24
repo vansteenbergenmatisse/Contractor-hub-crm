@@ -2,6 +2,7 @@
 const ANSWER: Record<string, string> = {
   busy: "Too many exports. Try again later.",
   failed: "The export did not work. Try again.",
+  forbidden: "This account cannot export leads from here.",
 };
 
 export function exportAnswer(code: string | null | undefined): string | null {

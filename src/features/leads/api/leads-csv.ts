@@ -1,11 +1,12 @@
 // The export file: RFC 4180 quoting, CRLF line ends, and no cell a spreadsheet would run as a formula.
 export type ExportRow = { name: string; source: string; date: string; phone: string; email: string; address: string };
 
-const FORMULA_START = /^[\s ]*[=+\-@\t\r\n]/;
+const FORMULA_START = /^[\s "']*[=+\-@\t\r\n]/;
 
-// A reader using ; or tab as its delimiter, or splitting lines first, ignores this file's quotes, so
-// text after one of those characters can become its own cell. The guard goes right before the trigger.
-const FORMULA_AFTER_DELIMITER = /([;\t\r\n]\s*)(?=[=+\-@])/g;
+// A reader using another delimiter, or splitting lines first, ignores this file's quotes, so text after
+// a delimiter can become its own cell, and a quote there is stripped as the cell's opening quote. The
+// guard goes right before the trigger.
+const FORMULA_AFTER_DELIMITER = /([,;\t\r\n][\s"']*)(?=[=+\-@])/g;
 
 export function neutralize(value: string): string {
   const inner = value.replace(FORMULA_AFTER_DELIMITER, "$1'");

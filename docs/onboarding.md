@@ -44,8 +44,9 @@ Built 2026-11-22. Source of the facts: HighLevel's OpenAPI files and webhook doc
 
 ## Leads export
 - **Foreign rows:** if any row in a HighLevel answer names another location, the export stops and no file is made. Phone and email come only from the row that passed the location check.
-- **Delimiters:** the file is comma-separated (RFC 4180). A cell holding `;` or a tab is quoted, and a formula character after `;`, a tab or a line break gets a `'` in front, so opening the file with another delimiter does not create a formula cell. Not checked in real Excel or Sheets.
-- **Failures:** the export is a native form post. A failure redirects to `/leads?export=<reason>`, and refused access gets a small page with a link back. Open gap: that navigation reloads the page, so hand-added leads and drafts are still lost, and the button has no pending state or double-submit guard. An in-page submit needs `fetch`, which `tests/features/leads/leads-page.test.tsx` forbids in the Leads feature, so it waits for the user's decision.
+- **Delimiters:** the file is comma-separated (RFC 4180). A cell holding `;` or a tab is quoted, and a formula character after a comma, `;`, a tab or a line break, even with spaces or quotes between, gets a `'` in front, so opening the file with another delimiter does not create a formula cell. Not checked in real Excel or Sheets.
+- **Failures:** with JavaScript, the button posts to `/api/leads/export?respond=stay`. A failure answers `204`, which leaves the page, hand-added leads and drafts in place. Every answer sets the short-lived `leads-export-result` cookie (result only, no lead data), and the panel listens for it through `cookieStore` to end the busy state and show the reason. A hidden iframe cannot do this because `/api/*` must never be framed.
+- **Fallback:** without `cookieStore`, or when the cookie is blocked, the panel uses the plain post: a failure redirects to `/leads?export=<reason>`, which reloads the page, and there is no busy state or double-submit guard. A platform error or lost connection outside the handler also leaves the page. Not checked in a real browser.
 
 ## Runbook notes
 - **Rotate `CRON_SECRET`:** set the new value in Vercel (the cron picks it up on the next deploy); until then the sync answers 401.
