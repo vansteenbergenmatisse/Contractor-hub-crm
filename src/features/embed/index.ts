@@ -2,6 +2,7 @@
 export { decryptUserContext, EmbedError } from "./api/decrypt";
 export { resolveEmbedAccess, resolveEmbedUser } from "./api/resolve";
 export { startHandshake } from "./api/handshake";
+export { claimAutoJump, FULL_SCREEN_PATH, fullScreenUrl, tryTopNavigation } from "./api/full-screen";
 export { findEmbedCandidate, findEmbedTenant } from "./db/candidate";
 export { EmbedBridge } from "./components/EmbedBridge";
 export type { HandshakeDeps, HandshakeResult } from "./api/handshake";

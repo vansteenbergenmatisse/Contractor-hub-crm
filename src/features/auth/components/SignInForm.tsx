@@ -7,8 +7,11 @@ import { AuthCard } from "./AuthCard";
 import { Field } from "./Field";
 import { clientHref } from "./client-href";
 import type { SignInBrand } from "@/features/brand";
+import type { HighLevelSignIn } from "../api/highlevel-sign-in";
 
-export function SignInForm({ brand }: { brand?: SignInBrand | null }) {
+// With `highLevel`, "Sign in with HighLevel" is the main action (user decision 2026-11-24: one login,
+// the HighLevel one) and email and password stay as the second way in.
+export function SignInForm({ brand, highLevel }: { brand?: SignInBrand | null; highLevel?: HighLevelSignIn | null }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -46,7 +49,18 @@ export function SignInForm({ brand }: { brand?: SignInBrand | null }) {
   }
 
   return (
-    <AuthCard title="Sign in" subtitle="Use the email and password for your account." brand={brand}>
+    <AuthCard title="Sign in" subtitle={highLevel ? "Use your HighLevel login." : "Use the email and password for your account."} brand={brand}>
+      {highLevel ? (
+        <div className="fd-lhl">
+          <a className="fd-btn is-fill fd-lgo" href={highLevel.href} rel="noopener noreferrer" aria-describedby="fd-lhl-hint">Sign in with HighLevel</a>
+          <p className="fd-lsub" id="fd-lhl-hint">
+            {highLevel.direct
+              ? "HighLevel opens your CRM page. Sign in there if it asks, then you come back here."
+              : "Sign in to HighLevel if it asks, open your business, then tap CRM in the left menu."}
+          </p>
+          <p className="fd-lor">Or use your email and password</p>
+        </div>
+      ) : null}
       <form className="fd-lf" onSubmit={submit} noValidate>
         <Field label="Email" name="email" type="email" autoComplete="username" value={email} onChange={setEmail} />
         <Field label="Password" name="password" type="password" autoComplete="current-password" value={password} onChange={setPassword} />
@@ -58,7 +72,7 @@ export function SignInForm({ brand }: { brand?: SignInBrand | null }) {
           <Link className="fd-link fd-lforgot" href={clientHref("/forgot-password", brand)}>Forgot password?</Link>
         </div>
         {error ? <p className="fd-lerr" role="alert">{error}</p> : null}
-        <button type="submit" className="fd-btn is-fill fd-lgo" disabled={busy || email.length === 0 || password.length === 0}>
+        <button type="submit" className={`fd-btn ${highLevel ? "is-plain" : "is-fill"} fd-lgo`} disabled={busy || email.length === 0 || password.length === 0}>
           {busy ? "Signing in" : "Sign in"}
         </button>
       </form>

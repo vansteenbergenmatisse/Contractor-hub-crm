@@ -156,3 +156,21 @@ Read with a summarising fetch tool from `marketplace.gohighlevel.com/docs/webhoo
 - Whether loading a snapshot carries the app (no page read says so).
 
 **How the code uses this (2026-11-24):** INSTALL (with or without `companyId`) and LocationCreate both connect a location only when our agency's `/oauth/installed-locations` list (asked with our `appId`) names it; not listed yet answers 500 so HighLevel retries. A LocationCreate whose location is not listed and whose agency reports `installToFutureLocations: false` is acknowledged without retries. The reconcile (daily cron on production, an admin opening `/admin/clients` at most once per 5 minutes per agency, and the "Check for new sub-accounts" button) connects any listed location the webhooks missed.
+
+# Sign in with HighLevel and the jump to full screen: facts read from the public docs (2026-11-24)
+
+Sources read in this session: help.gohighlevel.com article 48001185767 (custom menu links), marketplace.gohighlevel.com/docs/marketplace-modules/CustomPages, and search results over marketplace.gohighlevel.com/docs/ghl/custom-menus/*. The user context handshake is in the `/embed` section above.
+
+**Confirmed (stated on a page read):**
+- A custom menu link is made in agency Settings > Custom Menu Links: icon, title, URL (must start with `http://` or `https://`), sidebar (agency, sub-account or both; for sub-accounts you pick which ones), role visibility (All, User, Admin).
+- "Open in" has three choices: Embedded Page (iFrame), New Browser Tab, Current (Browser) Tab. The custom menus API names them `openMode`: `iframe`, `new_tab`, `current_tab`. Current Tab moves the HighLevel tab away from HighLevel.
+- The link URL (our side) may hold placeholders HighLevel fills on click: `{{location.id}}`, `{{location.name}}`, `{{user.email}}`, `{{user.first_name}}`, `{{location_owner.email}}`, `{{custom_values.<name>}}`; location and custom values only in a sub-account sidebar. The article warns these values end up in history and logs. We do not use them: identity comes only from the encrypted user context.
+- Custom Pages (marketplace app) render in an iframe; the host must allow framing (`frame-ancestors`), and cookies must be checked in a cross-site iframe.
+
+**Not stated on any page read (unknown until the live test):**
+- The address of the CRM page INSIDE a sub-account (what the address bar shows after clicking the menu item). It is often seen as `https://<highlevel-host>/v2/location/<locationId>/custom-menu-link/<menuLinkId>` (or `.../custom-page-link/<id>` for a marketplace custom page), but no official page states it. The code does not hard-code it: the operator copies it once into `HIGHLEVEL_CRM_MENU_URL` with the sub-account id replaced by `{locationId}`.
+- Whether an agency custom menu link opened as an iframe answers `REQUEST_USER_DATA` like a marketplace Custom Page. The docs describe the user context for marketplace apps only. If it does not answer, `/embed` shows "HighLevel did not answer", and the CRM menu item must be the marketplace app's Custom Page instead.
+- The iframe's `sandbox` attributes (`allow-top-navigation`, `allow-top-navigation-by-user-activation`, `allow-popups`). So it is not known whether `/embed` may move the whole tab (`window.top.location`) or open a new tab. Browsers also stop a cross-origin frame from moving the top window without a tap. The code tries once and always shows "Open full screen" (target `_top`) and "Open in a new tab" (target `_blank`) for a tap.
+- Third-party cookies in the iframe (Safari blocks them). The full-screen path does not need them: the handoff token comes back in the `/api/auth/embed-login` response body, and the new session is set first-party on `/device-sign-in`.
+
+**Choice made (reversible):** one env value, `HIGHLEVEL_CRM_MENU_URL`, a template with `{locationId}`. An agency-level custom menu link has one id for every sub-account it is shown in (Claude's reading of "one link, pick the sub-accounts"; not stated outright), so one template covers every client, and a white-label host works the same way. A per-tenant admin field was not chosen: it needs a new table (migration) and a paste per client for a value that should be the same everywhere. If the live test shows the id differs per sub-account, switch to a per-tenant value then.

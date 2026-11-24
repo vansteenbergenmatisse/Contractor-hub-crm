@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth";
 import type { EmailSender } from "./email-sender";
 import { embedLoginPlugin, type EmbedLoginOptions } from "./embed-login";
+import { deviceSignInPlugin } from "./device-sign-in";
 import { normalizeEmail } from "./invite-check";
 import { SET_PASSWORD_LINK_HOURS, setPasswordEmail } from "./set-password-email";
 import { isRole, MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, type Role } from "../types";
@@ -30,6 +31,9 @@ export type CreateAuthOptions = {
   tenantName?: (tenantId: string) => Promise<string | null>;
   // Where people sign in (the mail names it). Defaults to baseURL.
   appUrl?: string;
+  // "Open on this device": handoff from the /embed sign-in and pairing by QR code or link
+  // (api/device-sign-in.ts). Left out, those endpoints do not exist and /embed gives no handoff.
+  deviceSignIn?: boolean;
 };
 
 export function createAuth(options: CreateAuthOptions) {
@@ -38,9 +42,12 @@ export function createAuth(options: CreateAuthOptions) {
     secret: options.secret,
     baseURL: options.baseURL,
     trustedOrigins: [options.baseURL],
-    plugins: options.embedLogin
-      ? [embedLoginPlugin({ ...options.embedLogin, appOrigin: new URL(options.baseURL).origin })]
-      : [],
+    plugins: [
+      ...(options.embedLogin
+        ? [embedLoginPlugin({ handoff: options.deviceSignIn === true, ...options.embedLogin, appOrigin: new URL(options.baseURL).origin })]
+        : []),
+      ...(options.deviceSignIn ? [deviceSignInPlugin({ appOrigin: new URL(options.baseURL).origin, isTenantBlocked: options.isTenantBlocked })] : []),
+    ],
     emailAndPassword: {
       enabled: true,
       disableSignUp: true,

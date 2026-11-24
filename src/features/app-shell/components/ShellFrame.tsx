@@ -19,6 +19,7 @@ import { useEdgeSwipe } from "../hooks/use-edge-swipe";
 import { usePullToRefresh } from "../hooks/use-pull-to-refresh";
 import type { Business, PageKey, ReasonRequest, SearchRow, SendTimerRequest } from "../types";
 import { FeedbackSheet } from "./FeedbackSheet";
+import { DeviceLinkSheet } from "./DeviceLinkSheet";
 import { useGestures } from "./GestureLayer";
 import { Icon } from "./Icon";
 import { PageStateProvider } from "./PageState";
@@ -93,6 +94,8 @@ export function ShellFrame({ business: serverBusiness, searchRows, initialInboxC
   }, [override, router, startNav]);
   const [drawerBack] = useState(createFocusReturn);
   const [feedbackBack] = useState(createFocusReturn);
+  const [device, setDevice] = useState(false);
+  const [deviceBack] = useState(createFocusReturn);
   const drawerClose = useRef<HTMLButtonElement>(null);
   const navRef = useRef<HTMLElement>(null);
   const mainRef = useRef<HTMLElement>(null);
@@ -196,6 +199,18 @@ export function ShellFrame({ business: serverBusiness, searchRows, initialInboxC
   const closeFeedback = () => {
     setFeedback(false);
     feedbackBack.restore();
+  };
+  // "Open on my phone or laptop" (DeviceLinkSheet). Focus goes back to the menu's opener on close.
+  const openDevice = () => {
+    setDrawer(false);
+    drawerBack.forget();
+    setFeedback(false);
+    deviceBack.remember(document.activeElement);
+    setDevice(true);
+  };
+  const closeDevice = () => {
+    setDevice(false);
+    deviceBack.restore();
   };
   const closeHelp = useCallback(() => setHelp(false), []);
   // The open drawer is a sheet: Escape closes it, Tab stays inside, focus goes back to More / Menu.
@@ -347,6 +362,7 @@ export function ShellFrame({ business: serverBusiness, searchRows, initialInboxC
           <div className="fd-low">
             <button type="button" className={navClass("settings")} aria-current={page === "settings" ? "page" : undefined} onClick={() => go("settings")}><Icon name="settings" /><span className="fd-nl">Settings</span></button>
             <button type="button" className="fd-nav" onClick={api.openFeedback}><Icon name="feedback" /><span className="fd-nl">Send feedback</span></button>
+            <button type="button" className="fd-nav" onClick={openDevice}><Icon name="device" /><span className="fd-nl">Open on my phone or laptop</span></button>
           </div>
           <div className="fd-me">
             <span className="fd-av" aria-hidden="true"><span>{business.ownerInit}</span></span>
@@ -392,6 +408,7 @@ export function ShellFrame({ business: serverBusiness, searchRows, initialInboxC
           <button type="button" className="fx-tsrch" aria-label="Search" onClick={api.openSearch}><Icon name="search" size={22} strokeWidth={2} /><span className="fx-tsl">Search</span></button>
         </div>
         <FeedbackSheet open={feedback} first={business.first} onClose={closeFeedback} />
+        <DeviceLinkSheet open={device} onClose={closeDevice} />
         <ReasonDialog request={reason} onClose={() => setReason(null)} />
         {send ? <SendTimerDialog key={send.id} request={send.request} onClose={() => setSend(null)} /> : null}
         <p className="fx-live" aria-live="polite">{said}</p>
