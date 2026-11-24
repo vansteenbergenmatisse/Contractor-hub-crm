@@ -21,4 +21,6 @@ export { CalendarLivePage } from "./components/CalendarLivePage";
 export { CalendarSkeleton } from "./components/CalendarSkeleton";
 export { calendarTimeZone, loadCalendar } from "./api/load-calendar";
 export { weekRange } from "./api/live-week";
-export type { CalendarEventRow, CalendarResult, CalendarWeekInfo, CalendarWeekReader, LiveStop } from "./types";
+export { parseBusinessHours, type DayHours, type WeekHours } from "./api/business-hours";
+export { liveFreeTimes } from "./api/live-free-times";
+export type { CalendarEventRow, CalendarResult, CalendarWeekInfo, CalendarWeekReader, FreeSlot, LiveFreeTimes, LiveStop } from "./types";

@@ -4,9 +4,8 @@ import { GRID_ROWS } from "./dates";
 // Length of a new stop in half hours: an estimate visit is 1 hour, a job day is 6 hours.
 export const NEW_LEN: Record<StopKind, number> = { E: 2, J: 12 };
 
-// Proposal, not a business rule: the start times offered first (half hours from 7:00 AM), and no
-// Sundays (the design offers none and the business hours read Mon - Sat). Phase 3 replaces this
-// with the real business hours and the connected calendar's busy times.
+// Sample board only (`CalendarPage`, which no route renders): fixed starts from 7:00 AM and no
+// Sundays. The real page uses `liveFreeTimes`, which reads the client's own hours and bookings.
 export const CANDIDATE_STARTS: Record<StopKind, readonly number[]> = { E: [4, 8, 12, 16, 18], J: [2, 4] };
 const SEARCH_DAYS = 14;
 const FIRST_MINUTE = 7 * 60;

@@ -17,3 +17,6 @@ export { MoneyCards } from "./components/MoneyCards";
 export { NeedsCard } from "./components/NeedsCard";
 export { TodayLeadsCard } from "./components/TodayLeadsCard";
 export { useToday } from "./hooks/use-today";
+export { CountTile } from "./components/CountTile";
+export { TodayNeedsCard } from "./components/TodayNeedsCard";
+export { bookedThisWeek, invoicesToSend, jobsThisWeek, moneyOwed, quotesOut, type TodayInvoices, type TodayQuotes } from "./api/week-summary";

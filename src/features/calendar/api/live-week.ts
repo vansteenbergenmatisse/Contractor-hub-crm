@@ -62,7 +62,7 @@ export function weekRange(timeZone: string, week: string | null | undefined, now
   };
 }
 
-const minuteLabel = (minutes: number): string => {
+export const minuteLabel = (minutes: number): string => {
   const h = Math.floor(minutes / 60) % 24;
   const m = minutes % 60;
   return `${((h + 11) % 12) + 1}:${m < 10 ? "0" : ""}${m} ${h < 12 ? "AM" : "PM"}`;
@@ -112,7 +112,7 @@ export function toStops(events: readonly CalendarEventRow[], range: WeekRange, t
       const start = Math.min(Math.max(Math.floor((startMinute - FIRST_MINUTE) / 30), 0), GRID_ROWS - 1);
       const endRow = Math.min(Math.max(Math.ceil((endMinute - FIRST_MINUTE) / 30), start + 1), GRID_ROWS);
       stops.push({
-        id: `${event.id}:${day}`, eventId: event.id, day, start, startMinute, startedEarlier: event.startMs < dayStart, len: endRow - start, lane: 0, lanes: 1,
+        id: `${event.id}:${day}`, eventId: event.id, day, start, startMinute, endMinute, startedEarlier: event.startMs < dayStart, len: endRow - start, lane: 0, lanes: 1,
         name: event.title ?? "Appointment", service: event.calendarName ?? "", address: event.address ?? "",
         statusLabel: STATUS_LABELS[event.status?.toLowerCase() ?? ""] ?? "",
         startLabel: minuteLabel(startMinute), endLabel: minuteLabel(endMinute), past: event.endMs <= nowMs,
