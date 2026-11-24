@@ -58,15 +58,40 @@ In the HighLevel developer portal, open the app, then **Advanced Settings**, the
 
 ## Add a new client (after the install)
 
+Updated 2026-11-24 (branch `integrate/onboarding`, not yet merged into `develop`).
+
+**How a new sub-account gets connected (the reconcile).** Four ways in, all of which connect a sub-account only when HighLevel's installed list for our agency (queried with our app id) names it. The agency's other sub-accounts are never connected.
+- The `INSTALL` webhook, with or without a company id.
+- The `LocationCreate` webhook (switch it on, see "Webhook events"). If the new sub-account is not in the installed list yet, the app answers 500 so HighLevel retries. If HighLevel says `installToFutureLocations` is false, it answers 200 and creates nothing.
+- A background check each time an admin opens `/admin/clients`, in every environment: at most once per 5 minutes per agency, no admin emails. It also re-reads the users of known clients (deactivations, and set-password mails when `ONBOARDING_SEND_SET_PASSWORD=true`).
+- The **Check for new sub-accounts** button on `/admin/clients` (admin only, 3 per minute per admin, new sub-accounts only). It reports how many it connected.
+- The daily sync at 05:00 UTC still runs, on production only.
+
+**Steps, from new sub-account to owner signed in:**
 1. Create the sub-account in HighLevel and load the JCR snapshot.
 2. Set the sub-account's email and fill in its custom values (`docs/tenant-branding.md`).
-3. Add the client's users in HighLevel.
-4. Open `/admin/clients`. The client should appear as **Connected (not proven)**. If it is not there, click **Check for new sub-accounts**: it connects every sub-account HighLevel lists with the app installed and says how many it connected. Reload the page.
-5. If it is still missing, check that the app is installed on that sub-account in HighLevel. The daily sync (production) also emails `ADMIN_ALERT_EMAIL` about sub-accounts without the app.
-6. If the app is missing, repeat the Install steps from our link and include the new sub-account.
-7. Send the client their personal sign-in link from `/admin/clients`.
+3. Add the client's users in HighLevel (the owner as a sub-account admin becomes our `owner`).
+4. Open `/admin/clients`. The background check runs on that visit. If the client is not there, click **Check for new sub-accounts**, then reload.
+5. If it is still missing, the app is not installed on that sub-account. Check in HighLevel, then repeat the Install steps from our link and include it. The daily sync (production) also emails `ADMIN_ALERT_EMAIL` about sub-accounts without the app.
+6. The client row shows the CRM tenant id with **Copy id**. Use it for the per-client flags in Vercel (`docs/onboarding.md`, `.env.example`).
+7. Give the owner a password. Either:
+   - **Automatic:** with `ONBOARDING_SEND_SET_PASSWORD=true`, every new HighLevel user gets a "set your password" email when the account is created (24-hour link, at most 50 per client per day). Leave it off wherever the JCR owner could be emailed.
+   - **By hand:** click **Users** on the client row. It lists the client's users and whether they signed in. **Send sign-in email** (for people who never signed in) makes a fresh 24-hour set-password link, emails it if the email guard allows, and always shows the link with **Copy link**. The page says exactly when the email was held back, the daily limit was hit or the email service refused it. Only the newest link works, so a second click cancels the first email's link.
+   - **Invite owner** on an email that already has a never-used account in the same client now returns a set-password link instead of `email_taken`. A used account gets "ask them to use Forgot password"; a turned-off or removed account gets "login is turned off".
+8. The owner opens the link, sets a password and signs in at `<site>/sign-in`. **Forgot password** on the sign-in page works for synced users too (24-hour link).
 
-On dev and staging, a new test sub-account is not picked up automatically because only selected accounts have the app. Repeat the Install steps and select it.
+**Email env vars (names only):** `RESEND_API_KEY`, `EMAIL_FROM`, `EMAIL_DELIVERY_MODE` (`allowlist` or `live`), `EMAIL_ALLOWED_RECIPIENTS` (allowlist mode), `APP_URL`, and `ONBOARDING_SEND_SET_PASSWORD=true` only if the sync should mail new users itself. Keep dev on `allowlist`: in `live` mode **Send sign-in email** for the JCR owner would really email them.
+
+**Not proven yet (no real new sub-account has been tried):**
+- whether a sub-account added through "future locations" gets an `INSTALL` event at all, and how late;
+- how soon it appears in `/oauth/installed-locations`, and whether minting its token fails before the install finishes;
+- whether `installToFutureLocations` is really sent, and the real `LocationCreate` payload;
+- whether a snapshot carries the app;
+- that a real email arrives (no mail was sent; the Resend From domain is unchecked);
+- the button, the Users panel and the background check in a browser (component tests only).
+- **Invite owner** on an existing account is not under the 50-per-day client cap (only the per-admin invite limit). An account made before the `UnusedAccountMarker` migration can't be proven unused, so it gets no admin link; that person uses Forgot password.
+
+On dev and staging, a new test sub-account is picked up only if the app is installed on it (the Test app install selects only the test account). Repeat the Install steps and select it, or install with "Select all" after the user approves creating CRM accounts for the agency's other sub-accounts.
 
 ## Troubleshooting
 
