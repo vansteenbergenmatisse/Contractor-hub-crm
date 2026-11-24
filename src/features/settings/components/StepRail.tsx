@@ -5,6 +5,8 @@ import type { CustomValues } from "../types";
 import { RailStep } from "./RailStep";
 
 type Props = {
+  // Every step id on the page in order, search or not: numbers and the count come from it.
+  order: readonly string[];
   // The steps on screen (from the layout and the keys present), protected ones apart.
   steps: readonly Step[];
   protectedSteps: readonly Step[];
@@ -21,7 +23,7 @@ type Props = {
 };
 
 // The step list with real progress, counted from the saved values. On a phone it is a bottom sheet.
-export function StepRail({ steps, protectedSteps, keys, longKeys, values, dirtyKeys, current, sheetOpen, onlyEmpty, onOnlyEmpty, onJump, onCloseSheet }: Props) {
+export function StepRail({ order, steps, protectedSteps, keys, longKeys, values, dirtyKeys, current, sheetOpen, onlyEmpty, onOnlyEmpty, onJump, onCloseSheet }: Props) {
   const root = useRef<HTMLDivElement>(null);
   useStepSheet(root, sheetOpen, onCloseSheet);
   const main = steps.filter((step) => keys[step.id].length > 0);
@@ -54,10 +56,10 @@ export function StepRail({ steps, protectedSteps, keys, longKeys, values, dirtyK
         </span>
       </div>
       <nav className="ga-list sv-card" aria-label="Your details">
-        <p className="ga-lh">Your details in {main.length} steps</p>
+        <p className="ga-lh">Your details in {Math.max(order.length, main.length)} steps</p>
         <ol className="ga-steps">
           {main.map((step) => (
-            <RailStep key={step.id} id={step.id} title={step.title} sub={sub(step.id)} mark={String(main.indexOf(step) + 1)} done={filledCount(keys[step.id], values, longKeys) === keys[step.id].length} current={current === step.id} onJump={onJump} />
+            <RailStep key={step.id} id={step.id} title={step.title} sub={sub(step.id)} mark={String((order.indexOf(step.id) + 1) || main.indexOf(step) + 1)} done={filledCount(keys[step.id], values, longKeys) === keys[step.id].length} current={current === step.id} onJump={onJump} />
           ))}
         </ol>
       </nav>

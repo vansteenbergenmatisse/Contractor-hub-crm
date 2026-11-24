@@ -18,7 +18,6 @@ vi.mock("@/features/app-shell", async (importOriginal) => {
 
 import { PageStateProvider } from "@/features/app-shell";
 import { SettingsPage, type SaveValues, type ValueChange } from "@/features/settings";
-import { arrangeSteps, keysByStep } from "../../../src/features/settings/api/steps";
 import { chunkChanges } from "../../../src/features/settings/hooks/use-save-values";
 
 afterEach(cleanup);
@@ -50,8 +49,9 @@ describe("the guided structure", () => {
   it("has three tabs and one step per folder with values, in order", () => {
     page();
     expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Your details", "Connections", "Your choices"]);
-    const { steps } = arrangeSteps(Object.keys(VALUES));
-    expect(steps.map((s) => s.title)).toEqual(["Business", "Social links", "Google Business Profile", "Booking links", "Brand colors", "Our work"]);
+    // Review fix: the step cards on screen, not arrangeSteps' own answer.
+    const titles = [...document.querySelectorAll(".ga-stack > [id^='s-card-'] h2")].map((h) => h.textContent);
+    expect(titles).toEqual(["Business", "Social links", "Google Business Profile", "Booking links", "Brand colors", "Our work"]);
     expect(screen.getByRole("heading", { level: 2, name: "Business" })).toBeInTheDocument();
     expect(screen.getByText("Step 6 of 6")).toBeInTheDocument();
   });
@@ -98,10 +98,8 @@ describe("the guided structure", () => {
 
   it("counts progress from the saved values", () => {
     page({ account: { imageHosts: [] } });
-    // Changed 2026-11-24: the steps come from arrangeSteps, not a fixed STEPS list.
-    const keys = keysByStep(Object.keys(VALUES));
-    const total = arrangeSteps(Object.keys(VALUES)).steps.reduce((sum, s) => sum + keys[s.id].length, 0);
-    expect(screen.getByText(`${total - 1} of ${total} filled`)).toBeInTheDocument();
+    // Changed 2026-11-24 (review fix): a fixed number, not one worked out with the functions under test.
+    expect(screen.getByText("10 of 11 filled")).toBeInTheDocument();
   });
 
   it("filters to empty fields with the switch", async () => {

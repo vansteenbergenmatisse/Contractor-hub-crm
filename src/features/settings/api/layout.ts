@@ -146,7 +146,7 @@ export const LAYOUT: readonly LayoutFolder[] = [
     protected: true,
     groups: [
       { id: "intro", title: "Services page", patterns: [/^residentialservice0+content$/] },
-      { id: "service", title: "Residential service {n}", repeat: { pattern: /^residentialservice0*(\d+)(content|path)?$/, parts: SERVICE_PARTS } },
+      { id: "service", title: "Residential service {n}", repeat: { pattern: /^residentialservice0*([1-9]\d*)(content|path)?$/, parts: SERVICE_PARTS } },
     ],
   },
   {
@@ -157,7 +157,7 @@ export const LAYOUT: readonly LayoutFolder[] = [
     protected: true,
     groups: [
       { id: "intro", title: "Services page", patterns: [/^commercialservice0+content$/] },
-      { id: "service", title: "Commercial service {n}", repeat: { pattern: /^commercialservice0*(\d+)(content|path)?$/, parts: SERVICE_PARTS } },
+      { id: "service", title: "Commercial service {n}", repeat: { pattern: /^commercialservice0*([1-9]\d*)(content|path)?$/, parts: SERVICE_PARTS } },
     ],
   },
   {
@@ -168,7 +168,7 @@ export const LAYOUT: readonly LayoutFolder[] = [
     protected: true,
     // `0_servicetypename` (the folder's title) never shows: the classifier hides every 0_ key.
     groups: [
-      { id: "type", title: "Service type {n}", repeat: { pattern: /^servicetype0*(\d+)(content|path)?$/, parts: SERVICE_PARTS } },
+      { id: "type", title: "Service type {n}", repeat: { pattern: /^servicetype0*([1-9]\d*)(content|path)?$/, parts: SERVICE_PARTS } },
     ],
   },
   {
@@ -178,9 +178,10 @@ export const LAYOUT: readonly LayoutFolder[] = [
     line: "The cities and county you work in. Each one builds a page on your website.",
     protected: true,
     groups: [
-      // The catalogue read these spellings from a small screenshot; the pattern takes either order.
-      { id: "main", title: "Main city and county", patterns: [/^bizarea0+main(city|county)(content|path)?$/] },
-      { id: "area", title: "Service area {n}", repeat: { pattern: /^bizarea0*(\d+)(content|path)?$/, parts: SERVICE_PARTS } },
+      // The catalogue read these spellings from a small screenshot, so both word orders are taken
+      // (`bizarea00maincity` and `bizarea00citymain`).
+      { id: "main", title: "Main city and county", patterns: [/^bizarea0+(main(city|county)|(city|county)main)(content|path)?$/] },
+      { id: "area", title: "Service area {n}", repeat: { pattern: /^bizarea0*([1-9]\d*)(content|path)?$/, parts: SERVICE_PARTS } },
     ],
   },
   // GUESS (the whole folder): the key names of 07.1_Sections_Partners were never seen. Seven values,
@@ -294,11 +295,13 @@ function byRules(key: string, rule: "patterns" | "fallback"): Placement | null {
 }
 
 // Where `key` shows. Null: no rule places it, so it goes to the catch-all folder.
+// The cache is shared by every tenant on this server, so it stops growing at CACHE_LIMIT keys.
+const CACHE_LIMIT = 5_000;
 export function placeKey(key: string): Placement | null {
   const known = cache.get(key);
   if (known) return known;
   const found = exactPlacements().get(key) ?? byRules(key, "patterns") ?? byRules(key, "fallback");
-  if (found) cache.set(key, found);
+  if (found && cache.size < CACHE_LIMIT) cache.set(key, found);
   return found;
 }
 

@@ -42,7 +42,10 @@ export async function loadSettingsValues(
     return {};
   }
   try {
-    const { values, longKeys } = settingsReadFrom(rows);
+    const { values, longKeys, hiddenKeys } = settingsReadFrom(rows);
+    // Names only: keys kept on the server (secret name or secret-looking value), so a re-run of the
+    // layout, or a person checking why a value is missing, knows they exist.
+    if (hiddenKeys && hiddenKeys.length > 0) console.warn(`Settings layout: hidden keys=${hiddenKeys.join(",")}`);
     const empty = Object.keys(values).length === 0 && longKeys.length === 0;
     if (empty) {
       console.error(`Settings values did not load: step=${rows.length === 0 ? "empty" : "none-allowed"} rows=${rows.length}`);

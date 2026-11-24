@@ -7,7 +7,9 @@ export { saveProblem } from "./api/save-summary";
 export type { SettingsAction, SettingsState } from "./api/state";
 export { COLOR_KEYS, ESSENTIAL_KEYS, LINK_KEYS, isLinkKey, labelOfKey, sectionOfKey } from "./api/fields";
 export { MOCK_CUSTOM_VALUES } from "./mock";
-export { MAX_VALUE_LENGTH, classifyKey, isKeyAllowedBy, isSettingsKeyAllowed, settingsReadFrom, settingsValuesFrom } from "./api/allowlist";
+export { MAX_VALUE_LENGTH, classifyKey, isKeyAllowedBy, isSecretValue, isSettingsKeyAllowed, settingsReadFrom, settingsValuesFrom } from "./api/allowlist";
+export { UNLOCK_ID, writeGuardOf } from "./api/write-guard";
+export type { WriteGuard } from "./api/write-guard";
 export { loadSettingsValues } from "./api/load-values";
 export type { AccountLayout, LoadStatus } from "./api/load-values";
 export { NOT_AVAILABLE, UNKNOWN_CONNECTIONS, connectionChip } from "./api/connections";
@@ -16,6 +18,6 @@ export { applyBrandVars, brandCssVars, brandScopeRule, businessPatchFromValues, 
 export type { BusinessPatch } from "./api/live-save";
 export type { PhoneNumbersView } from "./types";
 export type { ConnectionState, ConnectionStatus, CustomValues, Problem, SectionKey } from "./types";
-export type { SaveAnswer, SaveResult, SaveStatus, SaveValues, ValueChange } from "./types";
+export type { SaveAnswer, SaveOptions, SaveResult, SaveStatus, SaveValues, ValueChange } from "./types";
 export { imageKindOf } from "./api/image-keys";
 export type { ImageAnswer, ImageFormat, ImageKind, ImageOldFile, ImageStatus, ImageUploader, PreparedImage, PrepareImage, SvgProblemCode } from "./types";

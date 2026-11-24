@@ -41,7 +41,10 @@ export type ValueChange = { key: string; expected: string; value: string; clear?
 export type SaveStatus = "saved" | "unchanged" | "conflict" | "invalid" | "missing" | "duplicate" | "denied" | "rejected" | "permission" | "retry" | "unknown" | "busy";
 export type SaveResult = { key: string; status: SaveStatus; current?: string };
 export type SaveAnswer = { kind: "results"; results: SaveResult[] } | { kind: "limited" } | { kind: "failed" };
-export type SaveValues = (changes: ValueChange[]) => Promise<SaveAnswer>;
+// `unlocked`: the protected folder this save was made in (after its extra unlock step). The server
+// writes a protected folder's keys only in a save that names that folder.
+export type SaveOptions = { unlocked: string };
+export type SaveValues = (changes: ValueChange[], options?: SaveOptions) => Promise<SaveAnswer>;
 
 // The account's phone numbers as the server read them. This feature makes no network call.
 export type PhoneNumbersView =

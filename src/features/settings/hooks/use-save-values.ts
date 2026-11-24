@@ -10,7 +10,8 @@ import type { SaveResult, SaveValues, ValueChange } from "../types";
 export const MAX_AT_ONCE = 20;
 const PARTLY_SAVED = "Some changes were saved, the rest were not.";
 
-export type SaveScope = { step: string; keys: readonly string[]; allowClear?: boolean };
+// `unlocked`: the protected folder the save was made in, sent so the server lets its keys through.
+export type SaveScope = { step: string; keys: readonly string[]; allowClear?: boolean; unlocked?: string };
 
 export function chunkChanges(changes: readonly ValueChange[]): ValueChange[][] {
   const out: ValueChange[][] = [];
@@ -50,7 +51,7 @@ export function useSaveValues(state: SettingsState, dispatch: Dispatch<SettingsA
     let stopped: string | null = null;
     try {
       for (const part of chunkChanges(changes)) {
-        const answer = await send(part);
+        const answer = await (scope.unlocked ? send(part, { unlocked: scope.unlocked }) : send(part));
         if (answer.kind === "results") results.push(...answer.results);
         else {
           stopped = answer.kind === "limited" ? SAVE_LIMITED : SAVE_FAILED;

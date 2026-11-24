@@ -1,4 +1,4 @@
-import { MAX_VALUE_LENGTH, type SaveResult, type ValueChange } from "@/features/settings";
+import { MAX_VALUE_LENGTH, UNLOCK_ID, type SaveResult, type ValueChange } from "@/features/settings";
 
 const MAX_BODY_BYTES = 64 * 1024;
 const MAX_CHANGES = 20;
@@ -14,7 +14,7 @@ export type SaveRouteDeps = {
   currentUser: (request: Request) => Promise<SaveUser | null>;
   isEnabled: (tenantId: string) => boolean;
   hit: (key: string, limit: number, windowMs: number, now: Date) => Promise<boolean>;
-  save: (input: { tenantId: string; actorId: string; changes: ValueChange[] }) => Promise<{ results: SaveResult[] }>;
+  save: (input: { tenantId: string; actorId: string; changes: ValueChange[]; unlocked?: string }) => Promise<{ results: SaveResult[] }>;
 };
 
 const reply = (status: number, body: unknown) =>
@@ -43,8 +43,11 @@ async function readBody(request: Request): Promise<string | null> {
 
 const hasOnly = (value: object, keys: readonly string[]) => Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
 
-// Strict: any other field, including a tenant id, refuses the whole request.
-function parseChanges(raw: string | null): ValueChange[] | null {
+type Parsed = { changes: ValueChange[]; unlocked?: string };
+
+// Strict: any other field, including a tenant id, refuses the whole request. `unlocked` (optional) names
+// the protected folder the save was made in; write-back checks it against each key.
+function parseChanges(raw: string | null): Parsed | null {
   if (raw === null) return null;
   let json: unknown;
   try {
@@ -52,7 +55,11 @@ function parseChanges(raw: string | null): ValueChange[] | null {
   } catch {
     return null;
   }
-  if (typeof json !== "object" || json === null || !hasOnly(json, ["changes"])) return null;
+  if (typeof json !== "object" || json === null) return null;
+  const withUnlock = Object.hasOwn(json, "unlocked");
+  if (!hasOnly(json, withUnlock ? ["changes", "unlocked"] : ["changes"])) return null;
+  const unlocked = (json as { unlocked?: unknown }).unlocked;
+  if (withUnlock && (typeof unlocked !== "string" || !UNLOCK_ID.test(unlocked))) return null;
   const list = (json as { changes: unknown }).changes;
   if (!Array.isArray(list) || list.length === 0 || list.length > MAX_CHANGES) return null;
   const seen = new Set<string>();
@@ -69,7 +76,7 @@ function parseChanges(raw: string | null): ValueChange[] | null {
     seen.add(key);
     changes.push(marked ? { key, expected, value, clear: true } : { key, expected, value });
   }
-  return changes;
+  return withUnlock ? { changes, unlocked: unlocked as string } : { changes };
 }
 
 // User and tenant come from the session only. Owners of a tenant only: an admin, also during a client
@@ -90,7 +97,7 @@ export async function handleSaveValues(request: Request, deps: SaveRouteDeps): P
     console.error("Settings save failed: step=limiter");
   }
   if (!allowed) return reply(429, { error: "too_many" });
-  const changes = parseChanges(await readBody(request));
-  if (!changes) return reply(400, { error: "invalid" });
-  return reply(200, await deps.save({ tenantId, actorId: user.id, changes }));
+  const parsed = parseChanges(await readBody(request));
+  if (!parsed) return reply(400, { error: "invalid" });
+  return reply(200, await deps.save({ tenantId, actorId: user.id, ...parsed }));
 }

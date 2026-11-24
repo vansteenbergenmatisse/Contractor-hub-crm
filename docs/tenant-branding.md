@@ -59,6 +59,10 @@ Every client sub-account has these keys; only the values differ. Key names only 
 
 Use in the app (plan, not built): service names (residential, commercial, service types) feed the service choices in Leads, Quotes and Pipeline and the search; service areas feed the Leads service area line and Settings; `*content` (HTML) is website copy and is never rendered as HTML in the CRM (XSS) and never sent to the browser unless shown as plain text; `*path` slugs are website links and only used as text or with the client's own https website URL.
 
+### Settings shows every key (2026-11-24)
+
+Settings no longer uses a fixed list of these keys. It shows every custom value the sub-account has, grouped by folder through `src/features/settings/api/layout.ts`, except keys the server classifier keeps back: secret-looking names (`DENY` in `src/features/settings/api/allowlist.ts`), names starting with `0_` or `_`, and keys whose value looks like a token, a webhook link or a link with a password. Do not store credentials in custom values under other names. Details, the write rules for protected folders and the re-run procedure: [docs/settings-layout.md](settings-layout.md).
+
 ## Settings write-back (built 2026-11-22, off by default)
 
 An owner's Save can update the sub-account's custom values. It runs only for tenants named in `SETTINGS_WRITE_BACK_TENANTS` while `SETTINGS_WRITE_BACK_ENABLED=true`. No sub-account has it on yet. Rules and rollback: `openspec/changes/settings-write-back/proposal.md`.

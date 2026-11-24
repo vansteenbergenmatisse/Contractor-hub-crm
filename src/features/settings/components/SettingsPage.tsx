@@ -7,7 +7,7 @@ import type { AccountLayout, LoadStatus } from "../api/load-values";
 import { prepareImageFile } from "../api/prepare-image";
 import { scrollBehavior } from "../api/scroll-behavior";
 import { dirtyKeysOf, prepareSave, type SettingsState } from "../api/state";
-import { LAYOUT_STEPS, arrangeSteps, clearedKeys, type ProtectedId } from "../api/steps";
+import { LAYOUT_STEPS, PROTECTED_IDS, arrangeSteps, clearedKeys, type ProtectedId } from "../api/steps";
 import { UNKNOWN_CONNECTIONS } from "../api/connections";
 import { isClearableKey } from "../api/validate";
 import { useCurrentStep } from "../hooks/use-current-step";
@@ -83,8 +83,12 @@ export function SettingsPage({ initial, initialValues, initialSection, account, 
   const tab = tabOf(state.sec);
   const dirtyKeys = dirtyKeysOf(values, draft);
   const colorKeys = COLOR_GROUPS.flatMap((g) => g.fields.map((f) => f.key));
-  const shownJoined = [...ESSENTIAL_KEYS, ...extras, ...colorKeys].filter((key) => filter.items[`cv-${key}`]).join("|");
+  const pageKeys = [...ESSENTIAL_KEYS, ...extras, ...colorKeys];
+  const shownJoined = pageKeys.filter((key) => filter.items[`cv-${key}`]).join("|");
+  const allJoined = pageKeys.join("|");
   const arranged = useMemo(() => arrangeSteps(shownJoined ? shownJoined.split("|") : []), [shownJoined]);
+  // Step numbers and the step count come from every key on the page, so a search never renumbers them.
+  const order = useMemo(() => arrangeSteps(allJoined ? allJoined.split("|") : []).steps.map((step) => step.id), [allJoined]);
   const { steps, protectedSteps, keys } = arranged;
   const allSteps = [...steps, ...protectedSteps];
   const current = useCurrentStep(allSteps.map((step) => step.id), tab === "det");
@@ -108,7 +112,7 @@ export function SettingsPage({ initial, initialValues, initialSection, account, 
     const stepKeys = all[id as keyof typeof all] ?? [];
     reviewOpener.current = null;
     setReviewStep(null);
-    if (isLive) return saver.save({ step: id, keys: stepKeys, allowClear });
+    if (isLive) return saver.save({ step: id, keys: stepKeys, allowClear, ...(PROTECTED_IDS.includes(id) ? { unlocked: id } : {}) });
     // Nothing can reach HighLevel: never mark the values saved or apply them to this session.
     if (off) {
       dispatch({ type: "saveOff", step: id, reason: off });
@@ -226,7 +230,8 @@ export function SettingsPage({ initial, initialValues, initialSection, account, 
 
   const visible = (id: string) => {
     if (!onlyEmpty) return keys[id];
-    return keys[id].filter((key) => (values[key] ?? "").trim() === "" || err?.key === key);
+    // A long value is not sent, but it is filled in, so it never counts as empty.
+    return keys[id].filter((key) => (!longKeys.has(key) && (values[key] ?? "").trim() === "") || err?.key === key);
   };
   const errorFor = (stepKeys: readonly string[]) => (err && errShown && stepKeys.includes(err.key) ? err : null);
   const dirtyStep = allSteps.find((step) => keys[step.id].some((key) => dirtyKeys.includes(key)));
@@ -238,7 +243,7 @@ export function SettingsPage({ initial, initialValues, initialSection, account, 
     <div className="sv-app" data-sec={state.sec} data-open={state.open ? "1" : "0"} data-q={filter.active ? "1" : "0"}>
       <div className="sv-head">
         <h1 className="sv-h1">Settings</h1>
-        <p className="sv-lead">Your business details in {steps.length} steps, all on one page. Fill them top to bottom and save each step.</p>
+        <p className="sv-lead">Your business details in {order.length} steps, all on one page. Fill them top to bottom and save each step.</p>
       </div>
 
       <div className="sv-segw">
@@ -254,14 +259,14 @@ export function SettingsPage({ initial, initialValues, initialSection, account, 
       {saveOff ? <p className="ga-note">{saveOff}</p> : !live && !readOnly ? <p className="ga-note">Changes last until you close or reload this page.</p> : null}
 
       <div className="ga-grid" hidden={tab !== "det"}>
-        <StepRail steps={steps} protectedSteps={protectedSteps} keys={keys} longKeys={longKeys} values={values} dirtyKeys={dirtyKeys} current={current} sheetOpen={sheetOpen} onlyEmpty={onlyEmpty} onOnlyEmpty={() => setOnlyEmpty((on) => !on)} onJump={jump} onCloseSheet={closeSheet} />
+        <StepRail order={order} steps={steps} protectedSteps={protectedSteps} keys={keys} longKeys={longKeys} values={values} dirtyKeys={dirtyKeys} current={current} sheetOpen={sheetOpen} onlyEmpty={onlyEmpty} onOnlyEmpty={() => setOnlyEmpty((on) => !on)} onJump={jump} onCloseSheet={closeSheet} />
         <div className="ga-stack" inert={sheetOpen}>
           {steps.map((step, i) => (
             <StepCard
               key={step.id}
               step={step}
-              number={i + 1}
-              total={steps.length}
+              number={order.indexOf(step.id) + 1 || i + 1}
+              total={Math.max(order.length, steps.length)}
               keys={keys[step.id]}
               shownKeys={visible(step.id)}
               values={values}
