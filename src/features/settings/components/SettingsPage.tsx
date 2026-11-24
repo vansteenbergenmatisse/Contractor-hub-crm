@@ -5,6 +5,7 @@ import { COLOR_GROUPS, ESSENTIAL_KEYS } from "../api/fields";
 import { imageKindOf } from "../api/image-keys";
 import type { AccountLayout } from "../api/load-values";
 import { prepareImageFile } from "../api/prepare-image";
+import { scrollBehavior } from "../api/scroll-behavior";
 import { dirtyKeysOf, prepareSave, type SettingsState } from "../api/state";
 import { PROTECTED_STEPS, STEPS, clearedKeys, keysByStep, type ProtectedId } from "../api/steps";
 import { UNKNOWN_CONNECTIONS } from "../api/connections";
@@ -50,7 +51,7 @@ const tabOf = (section: SectionKey): Tab => (section === "conn" ? "conn" : secti
 const ALL_STEPS = [...STEPS, ...PROTECTED_STEPS];
 const RAIL_IDS = ALL_STEPS.map((step) => step.id);
 const titleOf = (id: string) => ALL_STEPS.find((step) => step.id === id)?.title ?? "";
-const scrollToCard = (id: string) => document.getElementById(`s-card-${id}`)?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+const scrollToCard = (id: string) => document.getElementById(`s-card-${id}`)?.scrollIntoView?.({ behavior: scrollBehavior(), block: "start" });
 
 // Page content for /settings, inside the app shell: three tabs, seven steps that save on their own,
 // and the protected Services and areas.
@@ -165,7 +166,7 @@ export function SettingsPage({ initial, initialValues, initialSection, account, 
     if (!reviewShown) return;
     const heading = document.getElementById(`s-r-${reviewShown.id}`);
     heading?.focus({ preventScroll: true });
-    heading?.closest(".ga-rv")?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    heading?.closest(".ga-rv")?.scrollIntoView?.({ behavior: scrollBehavior(), block: "start" });
   }, [reviewShown]);
 
   // The save result sits in the card footer, which can be off-screen behind the phone bar.
@@ -173,7 +174,7 @@ export function SettingsPage({ initial, initialValues, initialSection, account, 
     if (!reveal) return;
     const message = document.querySelector<HTMLElement>(`#s-card-${reveal.id} .ga-foot :is(.ga-fe, .fd-okl)`);
     message?.focus({ preventScroll: true });
-    message?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    message?.scrollIntoView?.({ behavior: scrollBehavior(), block: "center" });
   }, [reveal]);
 
   const imageControl = useCallback((f: Field, saved: string, dirty: boolean) => {
