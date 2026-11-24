@@ -1548,10 +1548,17 @@ select.fd-lin{padding:0 10px}
 @media (max-width: 359px){
   .fd-app [data-pg=calendar] .fd-cal .fd-cdays{margin-inline:-14px;gap:1px}
 }
+/* keyboard focus stops clear of the 64px top bar and the floating bars */
+@media (max-width: 1023px){
+  .fd-app .fd-main:has([data-pg=today],[data-pg=calendar],[data-pg=routes]){scroll-padding-top:72px}
+  .fd-app .fd-main:has([data-pg=today],[data-pg=calendar],[data-pg=routes]).fx-cap{scroll-padding-bottom:calc(100px + env(safe-area-inset-bottom,0px))}
+  .fd-app .fd-main:has([data-pg=today],[data-pg=calendar],[data-pg=routes]).fx-cap.fx-capacc{scroll-padding-bottom:calc(164px + env(safe-area-inset-bottom,0px))}
+}
 /* short landscape phones: two bars would take almost half the screen, so the actions return to the page */
 @media (max-width: 1023px) and (max-height: 500px){
   .fd-app:has([data-pg=calendar]) .fx-acc{display:none}
   .fd-app .fd-main.fx-cap.fx-capacc:has([data-pg=calendar]){padding-bottom:calc(100px + env(safe-area-inset-bottom,0px))}
+  .fd-app .fd-main:has([data-pg=calendar]).fx-cap.fx-capacc{scroll-padding-bottom:calc(100px + env(safe-area-inset-bottom,0px))}
   .fd-app [data-pg=calendar] .fd-cal .fd-cnav{display:flex}
   .fd-app [data-pg=calendar] .fd-cal .fd-cadd{display:inline-flex;align-items:center;justify-content:center}
   .fd-app [data-pg=calendar] .fd-cal .fd-csyncl{max-width:none}
