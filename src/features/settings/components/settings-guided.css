@@ -289,10 +289,15 @@
 @media (max-width: 1023px){
   /* A focused field stops below the top bar and above the phone bars. */
   .fd-main:has(.sv-app){scroll-padding-top:80px;scroll-padding-bottom:calc(166px + env(safe-area-inset-bottom,0px))}
+  /* The shell's 16px gutter covers part of a notch. This adds the rest. */
+  .sv-app{padding-left:max(0px,calc(env(safe-area-inset-left,0px) - 16px));padding-right:max(0px,calc(env(safe-area-inset-right,0px) - 16px))}
+  /* A step focused in the sheet stops below its sticky 56px header. */
+  .ga-rail{scroll-padding-top:64px}
 }
 /* A phone on its side: the bars must not take the whole screen. */
 @media (max-width: 1023px) and (max-height: 500px){
-  .fd-main:has(.sv-app){scroll-padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+  /* Clears the Jump to a step bar, which sits above the tab bar. */
+  .fd-main:has(.sv-app){scroll-padding-bottom:calc(142px + env(safe-area-inset-bottom,0px))}
   .ga-acc{left:auto;width:min(220px,60vw);padding:0 6px}
   .ga-accs{min-height:44px}
   .ga-acc2{display:none}
