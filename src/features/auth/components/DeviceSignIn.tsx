@@ -1,13 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { AuthCard } from "./AuthCard";
+import type { DeviceSignInPreview } from "../api/device-sign-in";
 
 // /device-sign-in#t=<token>: finish signing this device in with a handoff or pairing token.
 // The token comes from the URL fragment (never sent to a server by the browser) and is removed from the
-// address bar at once. It is only spent when the person taps Continue, so a link preview or a page
-// opened by someone else's link signs nobody in by itself (login CSRF).
-type State = "ready" | "missing" | "busy" | "failed" | "offline" | "limited";
+// address bar at once. The page first asks who and which business the link signs in (a preview that
+// does not spend the token) and warns when another person is signed in here, so a link someone else
+// sent cannot switch accounts silently. The token is only spent when the person taps Continue, so a
+// link preview or a page opened by someone else's link signs nobody in by itself (login CSRF).
+type State = "checking" | "ready" | "missing" | "busy" | "failed" | "offline" | "limited" | "unchecked";
 
 export function tokenFromHash(hash: string): string | null {
   const value = new URLSearchParams(hash.replace(/^#/, "")).get("t");
@@ -19,6 +23,8 @@ const MESSAGES: Partial<Record<State, string>> = {
   failed: "This link has expired or was already used. Make a new one, or sign in.",
   offline: "No connection. Check your internet and try again.",
   limited: "Too many tries. Wait a minute and try again.",
+  // The server could not look the link up (not a refusal): the link may still be good.
+  unchecked: "Could not check this link. Try again.",
 };
 
 type Props = {
@@ -26,15 +32,50 @@ type Props = {
   // user's). A token is still redeemed on Continue and replaces it; without a token the visitor goes
   // to the app once.
   signedIn?: boolean;
+  // The masked email of whoever is signed in on this device (j•••@gmail.com), or null.
+  currentPerson?: string | null;
   goTo?: (url: string) => void;
 };
 
 // A full load, so the new cookie is sent with the first request.
 const replaceLocation = (url: string) => window.location.replace(url);
 
-export function DeviceSignIn({ signedIn = false, goTo = replaceLocation }: Props) {
+const post = (url: string, token: string) =>
+  fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token }), credentials: "same-origin" });
+
+function isPreview(value: unknown): value is DeviceSignInPreview {
+  const v = value as Partial<DeviceSignInPreview> | null;
+  return (
+    typeof v === "object" && v !== null && typeof v.person === "string" &&
+    (v.business === null || typeof v.business === "string") &&
+    (v.sameAsCurrent === null || typeof v.sameAsCurrent === "boolean")
+  );
+}
+
+export function DeviceSignIn({ signedIn = false, currentPerson = null, goTo = replaceLocation }: Props) {
   const [token, setToken] = useState<string | null>(null);
   const [state, setState] = useState<State>("busy");
+  const [preview, setPreview] = useState<DeviceSignInPreview | null>(null);
+  // Set at the first tap, before any re-render, so a double tap redeems once.
+  const redeeming = useRef(false);
+
+  async function check(value: string) {
+    setState("checking");
+    try {
+      const response = await post("/api/auth/device-sign-in-preview", value);
+      if (response.status === 429) return setState("limited");
+      if (response.status >= 500) return setState("unchecked");
+      const body: unknown = response.ok ? await response.json().catch(() => null) : null;
+      if (!isPreview(body)) {
+        setToken(null);
+        return setState("failed");
+      }
+      setPreview(body);
+      setState("ready");
+    } catch {
+      setState("offline");
+    }
+  }
 
   useEffect(() => {
     const found = tokenFromHash(window.location.hash);
@@ -47,21 +88,18 @@ export function DeviceSignIn({ signedIn = false, goTo = replaceLocation }: Props
     // Reading the address bar is a client-only fact, so it is set after the first render.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setToken(found);
-    setState(found ? "ready" : "missing");
+    if (found) void check(found);
+    else setState("missing");
     // Once, on arrival: the fragment is read and cleared a single time.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function go() {
-    if (!token || state === "busy") return;
+    if (!token || !preview || state === "busy" || redeeming.current) return;
+    redeeming.current = true;
     setState("busy");
     try {
-      const response = await fetch("/api/auth/device-sign-in", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ token }),
-        credentials: "same-origin",
-      });
+      const response = await post("/api/auth/device-sign-in", token);
       if (response.ok) {
         setToken(null);
         goTo("/");
@@ -70,21 +108,57 @@ export function DeviceSignIn({ signedIn = false, goTo = replaceLocation }: Props
       setToken(null);
       setState(response.status === 429 ? "limited" : "failed");
     } catch {
+      redeeming.current = false;
       setState("offline");
     }
   }
 
   const message = MESSAGES[state];
+  // The preview is shown only while its token can still be used.
+  const shown = token ? preview : null;
+  const other = shown?.sameAsCurrent === false;
+  const person = shown?.person;
+  const at = shown?.business ? ` at ${shown.business}` : "";
+  // Masked emails can look the same for two people (john@ and jane@gmail.com): then say it is another
+  // account instead of naming the same string twice.
+  let warning: string | null = null;
+  if (other && currentPerson && currentPerson === person) {
+    warning = `You are signed in on this device as another account (${currentPerson}). Continue signs you in as a different account, ${person}${shown?.business ? `, at ${shown.business}` : ""}.`;
+  } else if (other) {
+    warning = `You are signed in as ${currentPerson ?? "another person"} on this device. Continue signs you in as ${person} instead.`;
+  }
+  // This device has a session, but the preview could not read whose it is.
+  const notice = shown && shown.sameAsCurrent === null && (signedIn || currentPerson) ? `Someone may already be signed in on this device. Continue signs you in as ${person}.` : null;
+  let action;
+  if (token && shown) {
+    const continueButton = (
+      <button type="button" className="fd-btn is-fill fd-lgo" onClick={go} disabled={state === "busy"}>
+        {state === "busy" ? "Signing in" : other ? `Continue as ${person}` : "Continue"}
+      </button>
+    );
+    action = other ? (
+      <div className="fd-lhl">
+        {continueButton}
+        <Link className="fd-btn is-plain fd-lgo" href="/">{currentPerson ? `Stay signed in as ${currentPerson}` : "Stay signed in"}</Link>
+      </div>
+    ) : (
+      continueButton
+    );
+  } else if (token && state === "checking") {
+    action = <button type="button" className="fd-btn is-fill fd-lgo" disabled>Checking the link</button>;
+  } else if (token && (state === "offline" || state === "limited" || state === "unchecked")) {
+    action = <button type="button" className="fd-btn is-fill fd-lgo" onClick={() => void check(token)}>Try again</button>;
+  } else {
+    action = <a className="fd-btn is-plain fd-lgo" href="/sign-in">Go to sign in</a>;
+  }
+
   return (
-    <AuthCard title="Open your CRM" subtitle="Tap Continue to stay signed in on this device.">
+    <AuthCard title="Open your CRM" subtitle={shown ? "Tap Continue to stay signed in on this device." : undefined}>
+      {shown ? <p className="fd-lsub">{`This link signs in ${shown.person}${at}.`}</p> : null}
+      {warning && !message ? <p className="fd-lerr" role="alert">{warning}</p> : null}
+      {notice && !message ? <p className="fd-lsub" role="status">{notice}</p> : null}
       {message ? <p className="fd-lerr" role="alert">{message}</p> : null}
-      {token ? (
-        <button type="button" className="fd-btn is-fill fd-lgo" onClick={go} disabled={state === "busy"}>
-          {state === "busy" ? "Signing in" : "Continue"}
-        </button>
-      ) : (
-        <a className="fd-btn is-plain fd-lgo" href="/sign-in">Go to sign in</a>
-      )}
+      {action}
     </AuthCard>
   );
 }
