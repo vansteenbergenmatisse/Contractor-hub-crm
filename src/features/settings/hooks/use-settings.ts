@@ -11,7 +11,11 @@ import { initialState, settingsReducer, type SettingsState } from "../api/state"
 import type { ConnectionStatus, SectionKey } from "../types";
 
 // The shell's `updateBusiness`; when a shell does not offer it (a page rendered alone) the call is skipped.
-type ShellWithUpdate = { updateBusiness?: (patch: Partial<BusinessPatch>, options?: { expires?: boolean }) => void };
+// How long after a good save a newer server read is ignored. Same window as the brand cache's
+// VERSION_SETTLING_MS (60s); a proposal, not a measured HighLevel delay.
+const SAVE_SETTLING_MS = 60_000;
+
+type ShellWithUpdate ={ updateBusiness?: (patch: Partial<BusinessPatch>, options?: { expires?: boolean }) => void };
 
 // Settings state plus its side effects: the pushed detail screen on a phone, the cursor in a bad
 // field after Save, scrolling to the top when a section opens, and after a good Save the new colors
@@ -48,14 +52,18 @@ export function useSettings(
     if (notLoaded && initialValues && Object.keys(initialValues).length > 0) dispatch({ type: "loaded", values: initialValues });
   }, [notLoaded, initialValues, dispatch]);
   // A newer server read replaces kept values the owner has not edited, so a later template copy or an
-  // edit in HighLevel shows up. Runs only when the server's values change, never while a save runs.
+  // edit in HighLevel shows up. Runs only when the server's values change, never while a save runs and
+  // never just after a good save: HighLevel can still answer with the old value then (the refresh that
+  // follows a save), and that read must not put the old value or the old brand back.
   const stateRef = useRef(state);
+  const savedAt = useRef(0);
   useEffect(() => {
     stateRef.current = state;
   });
   useEffect(() => {
     const now = stateRef.current;
     if (!initialValues || now.saving || Object.keys(now.values).length === 0) return;
+    if (Date.now() - savedAt.current < SAVE_SETTLING_MS) return;
     const newer = Object.entries(initialValues).some(
       ([key, value]) => now.values[key] !== value && (now.draft[key] ?? "") === (now.values[key] ?? ""),
     );
@@ -116,6 +124,7 @@ export function useSettings(
     lastValues.current = state.values;
     // A save kept from an earlier visit is not new, and must not cover a later edit.
     if (!state.ok || state.values === arrivedSave.current) return;
+    savedAt.current = Date.now();
     applyBrandToDocument(document, state.values);
     const patch = changedBusinessPatch(before, state.values);
     if (live) updateRef.current?.(patch, { expires: true });
