@@ -17,7 +17,7 @@ async function CalendarData({ searchParams }: { searchParams?: Query }) {
   const result = await loadCalendar(user?.tenantId, typeof week === "string" ? week : null, reader);
   if (!user?.tenantId || (result.state !== "ready" && result.state !== "empty")) return <CalendarLivePage result={result} />;
   const business = await (user.viewing ? loadBusiness(user.tenantId, "", true) : loadBusiness(user.tenantId, user.name));
-  return <CalendarLivePage result={result} free={liveFreeTimes(result, business.hours, new Date())} />;
+  return <CalendarLivePage result={result} free={liveFreeTimes(result, business, new Date())} />;
 }
 
 // Thin page. Suspense covers the data.

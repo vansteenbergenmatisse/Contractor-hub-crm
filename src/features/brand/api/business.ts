@@ -20,6 +20,7 @@ export function businessFromBrand(brand: Brand, fallbackOwner: string): Business
     email: p.email,
     address: p.address,
     hours: p.hours,
+    hoursUnreadable: p.hoursUnreadable,
     websiteUrl: p.websiteUrl,
     universalCta: p.universalCta,
     logoUrl: brand.logoUrl,

@@ -23,14 +23,16 @@ function firstFit(stops: readonly LiveStop[], day: number, hours: WeekHours, len
 // week that may be missing a booking offers nothing, because a gap could be a real appointment.
 export function liveFreeTimes(
   result: Extract<CalendarResult, { state: "ready" | "empty" }>,
-  hoursText: string | null | undefined,
+  source: string | null | undefined | { hours: string; hoursUnreadable?: boolean },
   now: Date,
 ): LiveFreeTimes {
   const { week } = result;
   const clock = zonedParts(now.getTime(), week.timeZone);
   const thisSunday = new Date(Date.UTC(clock.year, clock.month - 1, clock.day - clock.weekday)).toISOString().slice(0, 10);
   if (week.weekStart < thisSunday) return { state: "past" };
-  const hours = parseBusinessHours(hoursText);
+  // A structured value that could not be used leaves a shorter line that still parses, so it is refused here.
+  if (typeof source === "object" && source?.hoursUnreadable) return { state: "no-hours" };
+  const hours = parseBusinessHours(typeof source === "object" ? source?.hours : source);
   if (!hours) return { state: "no-hours" };
   if (result.state === "empty" ? result.reason === "no-calendars" : !result.complete || result.dropped > 0) return { state: "unsure" };
   const stops = result.state === "ready" ? result.stops : [];
