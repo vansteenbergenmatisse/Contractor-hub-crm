@@ -62,3 +62,21 @@ Use in the app (plan, not built): service names (residential, commercial, servic
 ## Settings write-back (built 2026-11-22, off by default)
 
 An owner's Save can update the sub-account's custom values. It runs only for tenants named in `SETTINGS_WRITE_BACK_TENANTS` while `SETTINGS_WRITE_BACK_ENABLED=true`. No sub-account has it on yet. Rules and rollback: `openspec/changes/settings-write-back/proposal.md`.
+
+### Default-on for every connected client (decided 2026-11-24)
+
+The user decided that a save in Settings must reach that client's own HighLevel sub-account, or say clearly that it did not. Two variables per flag family make write-back the default without loosening the per-tenant rules:
+
+| Variable | Meaning |
+|---|---|
+| `SETTINGS_WRITE_BACK_ENABLED` | Kill switch. Must be exactly `true`, or nothing writes. |
+| `SETTINGS_WRITE_BACK_TENANTS` | Exact tenant ids that are on (unchanged, no wildcard). |
+| `SETTINGS_WRITE_BACK_ALL` | Exactly `true`: on for every tenant. |
+| `SETTINGS_WRITE_BACK_EXCLUDE` | Exact tenant ids that stay off. Always wins over `ALL` and `TENANTS`. |
+
+Change image has the same four: `SETTINGS_MEDIA_REPLACE_ENABLED`, `_TENANTS`, `_ALL`, `_EXCLUDE`, and still needs write-back on as well. The page and the save and media routes all use the same flag functions (`isWriteBackEnabled`, `isMediaReplaceEnabled`), so they always agree.
+
+- **JCR on develop:** put JCR's tenant id in `SETTINGS_WRITE_BACK_EXCLUDE` (and `SETTINGS_MEDIA_REPLACE_EXCLUDE`) on the develop environment, so local and agent work never writes to JCR's live sub-account.
+- **When saving is off** (an excluded tenant, the kill switch off, or an office user), Settings no longer pretends: Save marks nothing saved, changes nothing in the frame and does not repaint the colors. An owner reads "Saving to HighLevel is turned off for this business. Ask Forge Forward to turn it on."; an office user reads "Only the owner can change these details." The server passes this reason to the page (`saveDisabledReason`).
+- **After a save:** when the confirming read shows a value that is neither the sent one nor the old one, the result stays `unknown` and carries what HighLevel now holds (`current`). The step names the field and that value instead of only asking to reload, and the next save starts from it. When the read failed, the message still names the field and asks to reload.
+- Brand colors are the `02_Branding` keys (`COLOR_KEYS`); each color is written under its own key.

@@ -161,20 +161,24 @@ async function safeRead(tenantId: string, deps: SaveDeps): Promise<CustomValueRe
   }
 }
 
-type Settled = { status: SaveStatus; audit: AuditOutcome; restoreAudit: AuditOutcome };
+// `current`: only on "unknown" when the read shows a third value, neither the one sent nor the old one.
+type Settled = { status: SaveStatus; audit: AuditOutcome; restoreAudit: AuditOutcome; current?: string };
 
 // What HighLevel holds now decides the result, not the answer to the PUT. No answer with the old value
-// is unknown, because the write can still land.
+// is unknown, because the write can still land. A third value is unknown too, and carries that value
+// so the owner sees what the account holds instead of only "reload".
 function confirmed(written: Written, now: CustomValues | null): Settled {
   const unknown: Settled = { status: "unknown", audit: "unknown", restoreAudit: "unknown" };
   if (!now) return unknown;
   const { candidate, http, unresolved, restoreAuditId, restoreHttp } = written;
   const current = now[candidate.key];
   const previous = candidate.previous.trim();
-  if (restoreAuditId) return current === previous && restoreHttp !== "no_answer" ? { status: "retry", audit: "reverted", restoreAudit: "saved" } : unknown;
-  if (unresolved) return unknown;
+  const third: Settled = current !== undefined && current !== previous && current !== candidate.value ? { ...unknown, current } : unknown;
+  if (restoreAuditId) return current === previous && restoreHttp !== "no_answer" ? { status: "retry", audit: "reverted", restoreAudit: "saved" } : third;
+  if (unresolved) return third;
   if (current === candidate.value) return { status: "saved", audit: "saved", restoreAudit: "saved" };
-  if (current !== previous || http === "saved" || http === "no_answer") return unknown;
+  if (current !== previous) return third;
+  if (http === "saved" || http === "no_answer") return unknown;
   return { status: http, audit: http === "retry" ? "failed" : http, restoreAudit: "failed" };
 }
 
@@ -312,8 +316,8 @@ async function runSave(input: Input, deps: SaveDeps, startedAt?: number): Promis
   if (written.length > 0) {
     const now = await confirmingRead(tenantId, written, started, deps);
     for (const item of written) {
-      const { status, audit, restoreAudit } = confirmed(item, now);
-      out.set(item.candidate.key, { key: item.candidate.key, status });
+      const { status, audit, restoreAudit, current } = confirmed(item, now);
+      out.set(item.candidate.key, current === undefined ? { key: item.candidate.key, status } : { key: item.candidate.key, status, current });
       await closeAudit(item.auditId, audit, deps);
       if (item.restoreAuditId) await closeAudit(item.restoreAuditId, restoreAudit, deps);
       // A call with no answer can still land: the lease stays until it expires, so no later save races it.

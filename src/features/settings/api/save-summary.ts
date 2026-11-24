@@ -24,8 +24,14 @@ export function saveProblem(results: readonly SaveResult[]): string | null {
   for (const result of results) {
     if (result.status === "conflict") parts.push(`${labelOfKey(result.key)} changed in your account to ${result.current ?? "a new value"}. Check it and save again.`);
   }
+  // Unconfirmed, and the read shows a third value: say what the account holds now.
+  const mismatched = (result: SaveResult) => result.status === "unknown" && result.current !== undefined;
+  for (const result of results.filter(mismatched)) {
+    const now = result.current?.trim() ? result.current : "an empty value";
+    parts.push(`${labelOfKey(result.key)} did not save as you typed it. Your account now holds ${now}. Check it and save again.`);
+  }
   for (const [status, sentence] of Object.entries(SENTENCE) as [SaveStatus, (labels: string) => string][]) {
-    const labels = results.filter((result) => result.status === status).map((result) => labelOfKey(result.key));
+    const labels = results.filter((result) => result.status === status && !mismatched(result)).map((result) => labelOfKey(result.key));
     if (labels.length > 0) parts.push(sentence(labels.join(", ")));
   }
   return parts.length > 0 ? parts.join(" ") : null;
