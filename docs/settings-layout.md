@@ -40,6 +40,15 @@ Do this when the `unplaced keys` log line names keys, or when a snapshot adds or
 - **Social links**: networks other than the four known (TikTok, LinkedIn, ...) are guessed patterns.
 - **Branding**: a `More branding` fallback for other `*_color` or font keys; the catalogue says there are none today.
 
+## Image picker (Wave C, 2026-11-24)
+
+- **Which keys.** `isImageKey` (`src/features/settings/api/image-keys.ts`) is the one rule used by the preview, the picker and the server image route (`media-route.ts`): the logo, favicon, background and our-work keys, plus any key whose last part is logo, favicon, background, bg, image, img, photo, picture, pic, banner, hero, thumbnail, avatar or headshot (optionally followed by `_url`, `_link` or `_src`), or that ends in `_before_`/`_after_` + image or photo. An empty value gets the picker too ("Add image").
+- **Compression.** Every photo is re-encoded in the browser (`prepare-image.ts`): WebP, or JPEG where the browser cannot write WebP; longest side at most 2400; quality lowered until it is at most 2 MB. The preview line shows the size before and after. The server re-checks the bytes (PNG, JPEG, WebP, SVG checks).
+- **Logo and favicon.** Today SVG only. The user decided (2026-11-24) they may also take a photo; the code for it is in place behind `LOGO_ACCEPTS_PHOTO` (`image-keys.ts`, read by the page and the server), which stays `false` until two tests that pin SVG-only are changed with the user's approval.
+- **Where the file goes.** A value that holds a library file: the existing replace (same name, same folder, see `media-replace.ts`). An empty value: a plain upload named `<key>.<ext>` into the library folder named after the layout folder's HighLevel name (`mediaFolderOf`), found by exact name (the top-level one if the name is used more than once) or created at the top of the library; a layout folder with no HighLevel name puts the file at the top. Then the link is written to the value. A non-empty value that is not a library file still stops with "not found", as before.
+- **Remove.** Empties the field; the step's normal save, with its confirm-clear step, clears the value. The media file is never removed.
+- **Gating.** The picker shows when media replace is on for the tenant (`isMediaReplaceEnabled`) and the owner can save. Otherwise the field says why (uploads off, or saving off). View as client shows neither. In a protected folder the picker shows only after the unlock and the upload carries the folder's unlock, which the route checks with `writeGuardOf`.
+
 ## Kept rules
 
 - Keys the brand reader ignores (the second spelling of city or state, `shadowedKeys`) still get no field.

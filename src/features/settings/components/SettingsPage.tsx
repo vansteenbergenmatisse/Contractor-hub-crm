@@ -56,6 +56,8 @@ const TABS: { id: Tab; label: string; section: SectionKey }[] = [
 ];
 const tabOf = (section: SectionKey): Tab => (section === "conn" ? "conn" : section === "choice" || section === "soon" ? "ch" : "det");
 const titleOf = (id: string) => LAYOUT_STEPS.find((step) => step.id === id)?.title ?? "";
+const IMAGE_UPLOAD_OFF = "Uploading images is not turned on for your account yet. You can paste an image link instead.";
+const IMAGE_SAVE_OFF = "Uploading images needs saving to be on for your account.";
 const scrollToCard = (id: string) => document.getElementById(`s-card-${id}`)?.scrollIntoView?.({ behavior: scrollBehavior(), block: "start" });
 
 // Page content for /settings, inside the app shell: three tabs, one step per HighLevel folder that
@@ -201,9 +203,12 @@ export function SettingsPage({ initial, initialValues, initialSection, account, 
     message?.scrollIntoView?.({ behavior: scrollBehavior(), block: "center" });
   }, [reveal]);
 
-  const imageControl = useCallback((f: Field, saved: string, dirty: boolean) => {
+  const imageControl = useCallback((f: Field, saved: string, dirty: boolean, unlock?: string) => {
     const kind = imageKindOf(f.key);
-    if (!uploadImage || readOnly || !kind) return null;
+    if (readOnly || !kind) return null;
+    // No picker: say why, like the honest-save note. The preview still shows. The uploader is given
+    // only with saving on (SettingsWriteBackPage), so `live` tells the two reasons apart.
+    if (!uploadImage) return <p className="fd-hint fd-cvh">{live ? IMAGE_UPLOAD_OFF : IMAGE_SAVE_OFF}</p>;
     return (
       <ImageChange
         fieldKey={f.key}
@@ -214,9 +219,11 @@ export function SettingsPage({ initial, initialValues, initialSection, account, 
         upload={uploadImage}
         prepare={prepareImage}
         onValue={(key, value, saved) => dispatch({ type: "imageValue", key, value, saved })}
+        onClear={(key) => dispatch({ type: "edit", key, value: "" })}
+        unlock={unlock}
       />
     );
-  }, [uploadImage, readOnly, prepareImage, dispatch]);
+  }, [uploadImage, readOnly, live, prepareImage, dispatch]);
 
   const context = useMemo<StepContext>(() => ({
     live, readOnly, blocked: live && loadFailed, imageHosts: account?.imageHosts, longKeys,
@@ -312,6 +319,8 @@ export function SettingsPage({ initial, initialValues, initialSection, account, 
                   onEdit={onEdit}
                   onLock={onFolderLock}
                   onSave={onFolderSave}
+                  imageHosts={account?.imageHosts}
+                  imageControl={imageControl}
                 />
               ))}
             </section>
