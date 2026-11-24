@@ -46,6 +46,15 @@ export function valueToken(secret: string, tenantId: string, key: string, value:
   return createHmac("sha256", subkey).update(JSON.stringify([tenantId, key, value.trim()])).digest("base64url").slice(0, 32);
 }
 
+// A keyed digest of every template key and trimmed value, in key order. The preview hands it to the
+// admin's page and apply refuses when the template no longer matches, so a value changed in the
+// template between preview and apply (shown or hidden) is never written unseen.
+export function templateDigest(secret: string, rows: readonly ValueRow[]): string {
+  const subkey = createHmac("sha256", secret).update("template-copy-digest-v1").digest();
+  const pairs = rows.map((row) => [row.key, row.value.trim()]).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0));
+  return createHmac("sha256", subkey).update(JSON.stringify(pairs)).digest("base64url").slice(0, 43);
+}
+
 // Every template key against the target, matched by key. Values compare trimmed.
 export function planCopy(
   template: readonly ValueRow[],

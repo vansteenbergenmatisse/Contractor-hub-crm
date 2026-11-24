@@ -24,6 +24,10 @@ export type CopyPreview = {
   missing: string[];
   duplicates: string[];
   images: string[];
+  // Keyed digest of every template value the preview read. Apply refuses when the template changed.
+  templateDigest?: string;
+  // The template's business_name, so the admin sees which sub-account values come from.
+  templateName?: string;
 };
 
 export type CopyKeyStatus =
@@ -31,6 +35,8 @@ export type CopyKeyStatus =
   | "overwritten"
   | "unchanged"
   | "conflict"
+  // A filled secret-looking key is never replaced: neither value can be shown or kept for an undo.
+  | "secret_not_replaced"
   | "missing"
   | "rejected"
   | "permission"
@@ -42,9 +48,10 @@ export type CopyKeyStatus =
   | "not_an_image";
 export type CopyKeyResult = { key: string; status: CopyKeyStatus; image?: "reused" | "uploaded" };
 
-export type CopyFailure = "busy" | "template_unreadable" | "target_unreadable";
+// template_changed: the template's values are not the ones the preview showed; preview again.
+export type CopyFailure = "busy" | "template_unreadable" | "target_unreadable" | "template_changed";
 export type CopyBatch = { status: "ok"; results: CopyKeyResult[]; remaining: number; done: boolean } | { status: CopyFailure };
-export type PreviewAnswer = { status: "ok"; preview: CopyPreview } | { status: Exclude<CopyFailure, "busy"> };
+export type PreviewAnswer = { status: "ok"; preview: CopyPreview } | { status: Exclude<CopyFailure, "busy" | "template_changed"> };
 
 export type ImageCopyOutcome =
   | { kind: "reused" | "uploaded"; url: string }

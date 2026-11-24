@@ -10,7 +10,7 @@ export { createImageCopier, folderPath } from "./api/image-copy";
 export type { ImageCopyDeps } from "./api/image-copy";
 export { compressToWebp, MAX_IMAGE_BYTES, MAX_SIDE } from "./api/compress";
 export { createPacer, BACKOFF_MS, PACE_MS } from "./api/pace";
-export { isAllowedMediaUrl, isImageLink, planCopy, templateCopyConfig, toPreview, valueToken } from "./api/plan";
+export { isAllowedMediaUrl, isImageLink, planCopy, templateCopyConfig, templateDigest, toPreview, valueToken } from "./api/plan";
 export { identityKeys, templateWarnings, MAX_WARNING_READS, WARNING_BUDGET_MS } from "./api/warning";
 export type {
   CopyBatch,

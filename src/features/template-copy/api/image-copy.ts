@@ -22,6 +22,9 @@ export type ImageCopyDeps = {
 };
 
 const MAX_DEPTH = 20;
+// Non-image media copied as they are, by file extension. Still capped by fetchMediaBytes (20 MB).
+// UNVERIFIED CONTRACT: that POST /medias/upload-file accepts these types from this app.
+const PASS_THROUGH: Record<string, string> = { mp4: "video/mp4", webm: "video/webm", mov: "video/quicktime", pdf: "application/pdf" };
 
 function lastSegment(url: string): string {
   try {
@@ -84,10 +87,14 @@ export function createImageCopier(deps: ImageCopyDeps) {
   return async function copyImage(url: string): Promise<ImageCopyOutcome> {
     if (!deps.isAllowedHost(url)) return { kind: "image_host_not_allowed" };
     const tpl = await template();
-    const source = tpl.ok ? tpl.files.find((f) => f.url === url) : undefined;
+    // Without the template's whole library the file's folder path and name are unknown: copying it
+    // anyway would put it at the top under a made-up name, so nothing is uploaded and it is reported.
+    if (!tpl.ok) return { kind: tpl.reason === "permission" ? "needs_media_permission" : "image_failed" };
+    const source = tpl.files.find((f) => f.url === url);
+    // A file that is not in the template's library (another allowed host) goes to the top.
     const name = source?.name ?? lastSegment(url);
     // A template file whose folder chain cannot be read goes to the top of the target library.
-    const path = (source && tpl.ok ? folderPath(tpl.folders, source.parentId) : null) ?? [];
+    const path = (source ? folderPath(tpl.folders, source.parentId) : null) ?? [];
     const lib = await target();
     if (!lib.ok) return { kind: lib.reason === "permission" ? "needs_media_permission" : "image_failed" };
 
@@ -119,9 +126,17 @@ export function createImageCopier(deps: ImageCopyDeps) {
       upload = { bytes: checked.bytes, name: fileName, fileName, contentType: "image/svg+xml" };
     } else {
       const small = await deps.compress(bytes);
-      if (!small) return { kind: "not_an_image" };
-      const fileName = webpName(name);
-      upload = { bytes: small.bytes, name: fileName, fileName, contentType: "image/webp" };
+      const passType = PASS_THROUGH[(/\.([a-z0-9]{2,5})$/i.exec(name)?.[1] ?? "").toLowerCase()];
+      if (small) {
+        const fileName = webpName(name);
+        upload = { bytes: small.bytes, name: fileName, fileName, contentType: "image/webp" };
+      } else if (passType) {
+        // A video or PDF on a media host (for example the background "video or image" key): copied
+        // byte for byte into the client's library, never linked to the template's file.
+        upload = { bytes, name, fileName: name, contentType: passType };
+      } else {
+        return { kind: "not_an_image" };
+      }
     }
     const folderId = await ensureFolders(lib, path);
     if (folderId === "permission") return { kind: "needs_media_permission" };

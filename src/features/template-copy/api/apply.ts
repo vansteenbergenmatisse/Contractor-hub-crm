@@ -6,9 +6,17 @@ import { planCopy, toPreview } from "./plan";
 // Keys whose writes are checked by one fresh read: the read right before each group is also the
 // confirming read of the group before it.
 const GROUP = 4;
-// One call stops starting new groups after this long or this many writes; the admin's page calls
-// again until `done`. Leaves room for a slow image inside the route's 60 seconds.
+// One call starts no new key after this long or this many writes; the admin's page calls again
+// until `done`. The route's maxDuration is 60 seconds, so every later step has its own cut-off:
+// an image starts only before IMAGE_START_MS and is given up at IMAGE_DEADLINE_MS (the first image
+// also walks both media libraries); its write starts only before WRITE_CUTOFF_MS; the confirming read
+// at the end runs only before SETTLE_CUTOFF_MS (else the writes are reported "unknown"). Each HighLevel
+// request has its own 10 s timeout, so the worst case stays near 60 s.
 export const BATCH_BUDGET_MS = 30_000;
+export const IMAGE_START_MS = 20_000;
+export const IMAGE_DEADLINE_MS = 35_000;
+export const WRITE_CUTOFF_MS = 42_000;
+export const SETTLE_CUTOFF_MS = 48_000;
 export const MAX_WRITES_PER_BATCH = 60;
 export const MAX_IMAGES_PER_BATCH = 6;
 const HIDDEN = "[hidden: secret-looking key]";
@@ -25,11 +33,15 @@ export type CopyDeps = {
   invalidate: () => void;
   copyImage: (url: string) => Promise<ImageCopyOutcome>;
   tokenOf: (key: string, value: string) => string;
+  // Keyed digest of the template's values (templateDigest). Left out, drift is not checked.
+  digestOf?: (rows: readonly { key: string; value: string }[]) => string;
   isImage: (value: string) => boolean;
   isSecret: (key: string) => boolean;
   // True when the target location answered 429 since the last call; a refused write is sent once more.
   wasLimited?: () => boolean;
   now: () => number;
+  // Real timer for the image deadline; a test passes one that resolves at once.
+  wait?: (ms: number) => Promise<void>;
 };
 
 export type ApplyInput = {
@@ -39,6 +51,8 @@ export type ApplyInput = {
   overwrite: Readonly<Record<string, string>>;
   // Keys this run already reported (conflict, failure), so a later batch does not try them again.
   skip: ReadonlySet<string>;
+  // The preview's templateDigest. When given, a template that changed since then writes nothing.
+  templateDigest?: string;
 };
 
 type Written = { key: string; value: string; kind: "filled" | "overwritten"; http: CustomValueWriteOutcome; auditId: string; image?: "reused" | "uploaded" };
@@ -59,13 +73,17 @@ async function safeRead(read: () => Promise<CustomValueRead>): Promise<CustomVal
 // secret-looking value is not copied into another table.
 const auditValue = (deps: CopyDeps, key: string, value: string) => (value === "" ? "" : deps.isSecret(key) ? HIDDEN : value);
 
-export async function previewTemplateCopy(deps: Pick<CopyDeps, "readTemplate" | "readTarget" | "tokenOf" | "isImage" | "isSecret">): Promise<PreviewAnswer> {
+export async function previewTemplateCopy(deps: Pick<CopyDeps, "readTemplate" | "readTarget" | "tokenOf" | "digestOf" | "isImage" | "isSecret">): Promise<PreviewAnswer> {
   const template = await safeRead(deps.readTemplate);
   if (!template.ok) return { status: "template_unreadable" };
   const target = await safeRead(deps.readTarget);
   if (!target.ok) return { status: "target_unreadable" };
   const plan = planCopy(template.values, target.values, { targetDuplicates: target.duplicates?.map((d) => d.key), isImage: deps.isImage, isSecret: deps.isSecret });
   const preview: CopyPreview = toPreview(plan, deps.tokenOf, template.duplicates?.map((d) => d.key));
+  if (deps.digestOf) preview.templateDigest = deps.digestOf(template.values);
+  // business_name is on the Settings allowlist, so it is not a secret-looking value.
+  const name = template.values.find((r) => r.key === "business_name")?.value.trim();
+  if (name && !deps.isSecret("business_name")) preview.templateName = name.slice(0, 120);
   log("preview", { templateKeys: preview.counts.templateKeys, fill: preview.counts.fill, same: preview.counts.same, different: preview.counts.different, missing: preview.counts.missing, images: preview.counts.images });
   return { status: "ok", preview };
 }
@@ -107,10 +125,25 @@ export async function applyTemplateCopy(input: ApplyInput, deps: CopyDeps): Prom
   }
 }
 
+const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, Math.max(0, ms)));
+
+// The image copy, given up after `ms`. A copy still running in the background may finish its upload;
+// the next run then finds that file by name and reuses it.
+async function imageWithin(deps: CopyDeps, url: string, ms: number): Promise<ImageCopyOutcome> {
+  if (ms <= 0) return { kind: "image_failed" };
+  const late = (deps.wait ?? wait)(ms).then((): ImageCopyOutcome => ({ kind: "image_failed" }));
+  return Promise.race([deps.copyImage(url).catch((): ImageCopyOutcome => ({ kind: "image_failed" })), late]);
+}
+
 async function runBatch(input: ApplyInput, deps: CopyDeps): Promise<CopyBatch> {
   const started = deps.now();
+  const elapsed = () => deps.now() - started;
   const template = await safeRead(deps.readTemplate);
   if (!template.ok) return { status: "template_unreadable" };
+  if (input.templateDigest !== undefined && deps.digestOf && deps.digestOf(template.values) !== input.templateDigest) {
+    log("template_changed", { tenant: input.targetTenantId });
+    return { status: "template_changed" };
+  }
   const first = await safeRead(deps.readTarget);
   if (!first.ok) return { status: "target_unreadable" };
   const plan = planCopy(template.values, first.values, { targetDuplicates: first.duplicates?.map((d) => d.key), isImage: deps.isImage, isSecret: deps.isSecret });
@@ -133,8 +166,9 @@ async function runBatch(input: ApplyInput, deps: CopyDeps): Promise<CopyBatch> {
     return Promise.all(closing);
   };
 
-  for (let at = 0; at < work.length; at += GROUP) {
-    if (deps.now() - started > BATCH_BUDGET_MS || writes >= MAX_WRITES_PER_BATCH) break;
+  const outOfTime = () => elapsed() > BATCH_BUDGET_MS || writes >= MAX_WRITES_PER_BATCH;
+  groups: for (let at = 0; at < work.length; at += GROUP) {
+    if (outOfTime()) break;
     if (at > 0) {
       const fresh = await safeRead(deps.readTarget);
       if (!fresh.ok) break;
@@ -142,7 +176,15 @@ async function runBatch(input: ApplyInput, deps: CopyDeps): Promise<CopyBatch> {
       await settle(rows);
     }
     for (const entry of work.slice(at, at + GROUP)) {
-      if (entry.image && images >= MAX_IMAGES_PER_BATCH) continue;
+      if (outOfTime()) break groups;
+      if (entry.image && (images >= MAX_IMAGES_PER_BATCH || elapsed() > IMAGE_START_MS)) continue;
+      // A filled secret-looking key is never replaced: the admin cannot see either value and the
+      // audit cannot keep the old one, so the client's own credential would be lost for good.
+      if (entry.state === "different" && entry.secret) {
+        done.add(entry.key);
+        results.push({ key: entry.key, status: "secret_not_replaced" });
+        continue;
+      }
       let byKey = new Map(rows.map((r) => [r.key, r]));
       const stop = expectation(entry, byKey.get(entry.key), input, deps);
       if (stop) {
@@ -154,7 +196,7 @@ async function runBatch(input: ApplyInput, deps: CopyDeps): Promise<CopyBatch> {
       let image: "reused" | "uploaded" | undefined;
       if (entry.image) {
         images += 1;
-        const copied = await deps.copyImage(entry.template);
+        const copied = await imageWithin(deps, entry.template, IMAGE_DEADLINE_MS - elapsed());
         if (copied.kind !== "reused" && copied.kind !== "uploaded") {
           done.add(entry.key);
           results.push({ key: entry.key, status: copied.kind });
@@ -162,6 +204,8 @@ async function runBatch(input: ApplyInput, deps: CopyDeps): Promise<CopyBatch> {
         }
         value = copied.url;
         image = copied.kind;
+        // Too late to write safely in this call: the next call finds the copied file and reuses it.
+        if (elapsed() > WRITE_CUTOFF_MS) break groups;
         // The image took time: check the key again right before writing.
         const fresh = await safeRead(deps.readTarget);
         if (!fresh.ok) {
@@ -197,6 +241,8 @@ async function runBatch(input: ApplyInput, deps: CopyDeps): Promise<CopyBatch> {
       writes += 1;
       let http: CustomValueWriteOutcome = "no_answer";
       try {
+        // Reset the 429 counter, so only a 429 on this very update counts below.
+        deps.wasLimited?.();
         http = await deps.update(row, value);
         // HighLevel refused it under its burst limit: the pacer has waited, so send it once more.
         if (http === "retry" && deps.wasLimited?.()) http = await deps.update(row, value);
@@ -207,8 +253,8 @@ async function runBatch(input: ApplyInput, deps: CopyDeps): Promise<CopyBatch> {
     }
   }
   if (pending.length > 0) {
-    const fresh = await safeRead(deps.readTarget);
-    await settle(fresh.ok ? fresh.values : null);
+    const fresh = elapsed() > SETTLE_CUTOFF_MS ? null : await safeRead(deps.readTarget);
+    await settle(fresh?.ok ? fresh.values : null);
   }
   if (writes > 0) deps.invalidate();
   const remaining = work.filter((e) => !done.has(e.key)).length;

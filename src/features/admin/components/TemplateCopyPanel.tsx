@@ -15,11 +15,15 @@ const ERRORS: Record<string, string> = {
   rate_limited: "Too many copy requests. Wait a while and try again.",
   viewing: "Leave View as client first.",
   not_found: "Copy from template is turned off.",
+  template_changed: "The template's values changed since this preview. Close this and open the copy again to see the new preview.",
 };
+// Stops a "Continue" cannot fix: the run must start from a new preview.
+const FINAL_ERRORS = new Set(["template_changed", "same_tenant", "not_found", "viewing"]);
 const failText = (code: string | undefined) => (code && ERRORS[code]) || "Could not copy from the template. Try again.";
 
 const PROBLEMS: [CopyKeyStatus, string][] = [
   ["conflict", "Changed in HighLevel meanwhile, left alone"],
+  ["secret_not_replaced", "Secret-looking key already filled, never replaced"],
   ["needs_media_permission", "Needs media permission (left blank)"],
   ["image_host_not_allowed", "Image on a host we do not copy from (left blank)"],
   ["not_an_image", "Linked file is not an image (left blank)"],
@@ -49,7 +53,11 @@ export function TemplateCopyPanel({ tenantId, clientName, onClose }: { tenantId:
   const [running, setRunning] = useState(false);
   const [results, setResults] = useState<CopyKeyResult[] | null>(null);
   const [finished, setFinished] = useState(false);
+  const [resumable, setResumable] = useState(false);
   const started = useRef(false);
+  // Kept across a stop, so "Continue" picks up where the run left off.
+  const all = useRef<CopyKeyResult[]>([]);
+  const skip = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     let live = true;
@@ -69,24 +77,30 @@ export function TemplateCopyPanel({ tenantId, clientName, onClose }: { tenantId:
     if (!preview || started.current) return;
     started.current = true;
     setRunning(true);
+    setResumable(false);
     setError(null);
     const overwrite = Object.fromEntries(preview.different.filter((d) => ticked.has(d.key)).map((d) => [d.key, d.token]));
-    const all: CopyKeyResult[] = [];
-    const skip = new Set<string>();
+    let done = false;
+    let final = false;
     try {
       for (let round = 0; round < MAX_CALLS; round += 1) {
-        const { ok, json } = await call(tenantId, { action: "apply", overwrite, skip: [...skip] });
+        const { ok, json } = await call(tenantId, { action: "apply", overwrite, skip: [...skip.current], templateDigest: preview.templateDigest });
         if (!ok) {
-          setError(failText(errorOf(json)));
+          const code = errorOf(json);
+          final = code !== undefined && FINAL_ERRORS.has(code);
+          setError(failText(code));
           break;
         }
         const batch = json as Extract<CopyBatch, { status: "ok" }>;
         for (const result of batch.results) {
-          all.push(result);
-          if (result.status !== "filled" && result.status !== "overwritten") skip.add(result.key);
+          all.current.push(result);
+          // A filled key never comes back (it is now "same", or an image the client now has its own
+          // copy of). Every other reported key, a replaced one included, is not tried again.
+          if (result.status !== "filled") skip.current.add(result.key);
         }
-        setResults([...all]);
+        setResults([...all.current]);
         if (batch.done) {
+          done = true;
           setFinished(true);
           break;
         }
@@ -97,15 +111,21 @@ export function TemplateCopyPanel({ tenantId, clientName, onClose }: { tenantId:
         }
       }
     } catch {
-      setError("Could not reach the server. The copy stopped; run it again to finish the rest.");
+      setError("Could not reach the server. The copy stopped; try again to finish the rest.");
     } finally {
       setRunning(false);
+      if (!done) {
+        started.current = false;
+        setResumable(!final);
+      }
     }
   }
 
   const count = (status: CopyKeyStatus) => results?.filter((r) => r.status === status).length ?? 0;
   const images = results?.filter((r) => r.image && (r.status === "filled" || r.status === "overwritten")).length ?? 0;
   const toWrite = (preview?.counts.fill ?? 0) + ticked.size;
+  // Fill keys whose value stays on the server (secret-looking): named, so the admin sees what goes over.
+  const hiddenFills = preview?.fill.filter((f) => f.value === undefined && !f.image).map((f) => f.key) ?? [];
 
   return (
     <section aria-label={`Copy values from template for ${clientName}`}>
@@ -117,7 +137,14 @@ export function TemplateCopyPanel({ tenantId, clientName, onClose }: { tenantId:
             Preview for {clientName}. Nothing has been written yet. {preview.counts.fill} to fill (blank in this client), {preview.counts.same} already the same,{" "}
             {preview.counts.different} filled with a different value, {preview.counts.missing} this client does not have, {preview.counts.images} images.
           </p>
-          {preview.counts.hidden > 0 ? <p>Values of {preview.counts.hidden} secret-looking keys are copied but not shown here.</p> : null}
+          {preview.templateName ? <p>Template: {preview.templateName}.</p> : null}
+          {preview.counts.hidden > 0 ? <p>Values of {preview.counts.hidden} secret-looking keys are not shown here. A filled one is never replaced.</p> : null}
+          {hiddenFills.length > 0 ? (
+            <p role="note">
+              These secret-looking keys are blank in this client and get the template&apos;s value unseen (webhook links, tokens, keys: check them in HighLevel after the copy):{" "}
+              {hiddenFills.map((k) => <code key={k}>{k} </code>)}
+            </p>
+          ) : null}
           {preview.fill.length > 0 ? (
             <details>
               <summary>Keys to fill ({preview.fill.length})</summary>
@@ -135,7 +162,12 @@ export function TemplateCopyPanel({ tenantId, clientName, onClose }: { tenantId:
           {preview.different.length > 0 ? (
             <fieldset>
               <legend>Already filled with a different value. Tick a key only to replace it with the template&apos;s value.</legend>
-              {preview.different.map((d) => (
+              {preview.different.map((d) =>
+                d.targetValue === undefined ? (
+                  <div key={d.key}>
+                    <code>{d.key}</code> (value hidden, secret-looking: never replaced)
+                  </div>
+                ) : (
                 <div key={d.key}>
                   <label>
                     <input
@@ -152,10 +184,11 @@ export function TemplateCopyPanel({ tenantId, clientName, onClose }: { tenantId:
                       }
                     />{" "}
                     Replace <code>{d.key}</code>
-                    {d.targetValue !== undefined ? ` (now "${d.targetValue}", template "${d.templateValue}")` : " (value hidden)"}
+                    {` (now "${d.targetValue}", template "${d.templateValue}")`}
                   </label>
                 </div>
-              ))}
+                ),
+              )}
             </fieldset>
           ) : null}
           {preview.missing.length > 0 ? (
@@ -189,9 +222,18 @@ export function TemplateCopyPanel({ tenantId, clientName, onClose }: { tenantId:
             ) : null;
           })}
           {!running ? (
-            <button type="button" onClick={onClose}>
-              Close
-            </button>
+            <p>
+              {resumable && !finished ? (
+                <>
+                  <button type="button" onClick={copy}>
+                    Continue
+                  </button>{" "}
+                </>
+              ) : null}
+              <button type="button" onClick={onClose}>
+                Close
+              </button>
+            </p>
           ) : null}
         </div>
       ) : null}

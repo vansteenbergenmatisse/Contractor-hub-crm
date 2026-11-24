@@ -12,7 +12,7 @@ export type TemplateCopyRouteDeps = {
   appOrigin: string;
   config: TemplateCopyConfig;
   preview: (input: { targetTenantId: string; templateTenantId: string }) => Promise<PreviewAnswer>;
-  apply: (input: { targetTenantId: string; templateTenantId: string; actorId: string; overwrite: Record<string, string>; skip: Set<string> }) => Promise<CopyBatch>;
+  apply: (input: { targetTenantId: string; templateTenantId: string; actorId: string; overwrite: Record<string, string>; skip: Set<string>; templateDigest?: string }) => Promise<CopyBatch>;
 };
 
 const HEADERS = { "cache-control": "no-store", "content-type": "application/json" };
@@ -25,14 +25,15 @@ function audit(event: string, fields: Record<string, string>) {
   console.info(JSON.stringify({ audit: event, ...fields }));
 }
 
-type Body = { action: "preview" } | { action: "apply"; overwrite: Record<string, string>; skip: Set<string> };
+type Body = { action: "preview" } | { action: "apply"; overwrite: Record<string, string>; skip: Set<string>; templateDigest?: string };
 
 function parseBody(raw: unknown): Body | null {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
   const body = raw as Record<string, unknown>;
   if (body.action === "preview") return Object.keys(body).length === 1 ? { action: "preview" } : null;
   if (body.action !== "apply") return null;
-  if (Object.keys(body).some((k) => k !== "action" && k !== "overwrite" && k !== "skip")) return null;
+  if (Object.keys(body).some((k) => k !== "action" && k !== "overwrite" && k !== "skip" && k !== "templateDigest")) return null;
+  if (body.templateDigest !== undefined && (typeof body.templateDigest !== "string" || !TOKEN.test(body.templateDigest))) return null;
   const overwrite: Record<string, string> = {};
   if (body.overwrite !== undefined) {
     if (typeof body.overwrite !== "object" || body.overwrite === null || Array.isArray(body.overwrite)) return null;
@@ -51,7 +52,7 @@ function parseBody(raw: unknown): Body | null {
       skip.add(key);
     }
   }
-  return { action: "apply", overwrite, skip };
+  return typeof body.templateDigest === "string" ? { action: "apply", overwrite, skip, templateDigest: body.templateDigest } : { action: "apply", overwrite, skip };
 }
 
 export async function handleTemplateCopy(request: Request, tenantId: string, deps: TemplateCopyRouteDeps): Promise<Response> {
@@ -85,7 +86,14 @@ export async function handleTemplateCopy(request: Request, tenantId: string, dep
     return answer.status === "ok" ? reply(200, answer.preview) : reply(409, { error: answer.status });
   }
   audit("template_copy_apply", { by: admin, tenantId, overwrite: String(Object.keys(body.overwrite).length), skip: String(body.skip.size) });
-  const batch = await deps.apply({ targetTenantId: tenantId, templateTenantId, actorId: admin, overwrite: body.overwrite, skip: body.skip });
+  const batch = await deps.apply({
+    targetTenantId: tenantId,
+    templateTenantId,
+    actorId: admin,
+    overwrite: body.overwrite,
+    skip: body.skip,
+    ...(body.templateDigest ? { templateDigest: body.templateDigest } : {}),
+  });
   if (batch.status !== "ok") return reply(409, { error: batch.status });
   audit("template_copy_batch", { by: admin, tenantId, results: String(batch.results.length), remaining: String(batch.remaining) });
   return reply(200, batch);

@@ -16,15 +16,17 @@ export async function compressToWebp(input: Uint8Array): Promise<Compressed | nu
     const { default: sharp } = await import("sharp");
     const meta = await sharp(input, { limitInputPixels: MAX_INPUT_PIXELS }).metadata();
     if (!meta.format || !RASTER_FORMATS.has(meta.format) || !meta.width || !meta.height) return null;
+    // An animated GIF or WebP keeps every frame (sizes then apply per frame).
+    const animated = (meta.pages ?? 1) > 1;
     for (const step of SHRINK_STEPS) {
       const side = Math.max(1, Math.round(MAX_SIDE * step));
       for (const quality of QUALITIES) {
-        const { data, info } = await sharp(input, { limitInputPixels: MAX_INPUT_PIXELS })
+        const { data, info } = await sharp(input, { limitInputPixels: MAX_INPUT_PIXELS, animated })
           .rotate()
           .resize({ width: side, height: side, fit: "inside", withoutEnlargement: true })
           .webp({ quality })
           .toBuffer({ resolveWithObject: true });
-        if (data.byteLength <= MAX_IMAGE_BYTES) return { bytes: new Uint8Array(data), width: info.width, height: info.height };
+        if (data.byteLength <= MAX_IMAGE_BYTES) return { bytes: new Uint8Array(data), width: info.width, height: animated && info.pageHeight ? info.pageHeight : info.height };
       }
     }
     return null;

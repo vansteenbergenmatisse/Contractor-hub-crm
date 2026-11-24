@@ -1,4 +1,4 @@
-import { currentUserFromHeaders, getGuards, hitRateLimit } from "@/features/auth";
+import { clientViewCookieName, currentUserFromHeaders, getGuards, hitRateLimit } from "@/features/auth";
 import { allowedLogoHosts, getBrandService, getTenantCustomValuesReadOnly } from "@/features/brand";
 import { createTenantCustomValueAdapter, createTenantMediaAdapter, createTenantMediaLibraryAdapter, fetchMediaBytes } from "@/features/highlevel";
 import { ESSENTIAL_KEYS, isSettingsKeyAllowed, labelOfKey } from "@/features/settings";
@@ -9,7 +9,7 @@ import { applyTemplateCopy, previewTemplateCopy, type CopyDeps } from "./apply";
 import { compressToWebp } from "./compress";
 import { createImageCopier } from "./image-copy";
 import { createPacer } from "./pace";
-import { isAllowedMediaUrl, isImageLink, templateCopyConfig, valueToken } from "./plan";
+import { isAllowedMediaUrl, isImageLink, templateCopyConfig, templateDigest, valueToken } from "./plan";
 import { handleTemplateCopy } from "./route";
 import { identityKeys, templateWarnings } from "./warning";
 
@@ -25,18 +25,40 @@ const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, 
 // shown to the browser and never kept in the audit table.
 const isSecret = (key: string) => !isSettingsKeyAllowed(key);
 
+// One pacer per location for the life of this server instance, so a 429 backoff and a halved pace
+// carry over to the page's next batch and are shared by two copies reading the same template. Other
+// instances keep their own (HighLevel's limit is per location; this narrows, not closes, that gap).
+const pacers = new Map<string, ReturnType<typeof createPacer>>();
+const MAX_PACERS = 500;
+function pacerOf(tenantId: string) {
+  let pacer = pacers.get(tenantId);
+  if (!pacer) {
+    if (pacers.size >= MAX_PACERS) pacers.clear();
+    pacer = createPacer({ now: Date.now, wait });
+    pacers.set(tenantId, pacer);
+  }
+  return pacer;
+}
+
+// Any View as client cookie, valid or not, counts as viewing: a broken cookie must not let an admin
+// action through (currentUserFromHeaders treats an unreadable one as "not viewing").
+function hasViewCookie(request: Request, appOrigin: string): boolean {
+  const name = clientViewCookieName(appOrigin);
+  return (request.headers.get("cookie") ?? "").split(";").some((part) => part.trim().startsWith(`${name}=`));
+}
+
 // The real reads and writes, built per call so `next build` needs no environment. The template is
 // read with its own location token, the target written with its own. One pacer per location.
 function copyDeps(targetTenantId: string, templateTenantId: string, secret: string): CopyDeps {
-  const templatePace = createPacer({ now: Date.now, wait });
-  const targetPace = createPacer({ now: Date.now, wait });
+  const templatePace = pacerOf(templateTenantId);
+  const targetPace = pacerOf(targetTenantId);
   const templateValues = createTenantCustomValueAdapter(templatePace);
   const targetValues = createTenantCustomValueAdapter(targetPace);
   const templateMedia = createTenantMediaLibraryAdapter(templatePace);
   const targetLibrary = createTenantMediaLibraryAdapter(targetPace);
   const targetMedia = createTenantMediaAdapter(targetPace);
   const hosts = allowedLogoHosts();
-  let limitedSeen = 0;
+  let limitedSeen = targetPace.limitedCount();
   return {
     readTemplate: () => templateValues.read(templateTenantId),
     readTarget: () => targetValues.read(targetTenantId),
@@ -57,6 +79,7 @@ function copyDeps(targetTenantId: string, templateTenantId: string, secret: stri
       isAllowedHost: (url) => isAllowedMediaUrl(url, hosts),
     }),
     tokenOf: (key, value) => valueToken(secret, targetTenantId, key, value),
+    digestOf: (rows) => templateDigest(secret, rows),
     isImage: (value) => isImageLink(value, hosts),
     isSecret,
     wasLimited: () => {
@@ -73,15 +96,16 @@ function copyDeps(targetTenantId: string, templateTenantId: string, secret: stri
 export async function templateCopyRoute(request: Request, tenantId: string): Promise<Response> {
   const env = parseEnv("auth");
   const secret = env.BETTER_AUTH_SECRET;
+  const appOrigin = new URL(env.APP_URL).origin;
   return handleTemplateCopy(request, tenantId, {
     adminId: (req) => getGuards().adminId(req),
-    isViewing: async (req) => (await currentUserFromHeaders(req.headers))?.viewing === true,
+    isViewing: async (req) => hasViewCookie(req, appOrigin) || (await currentUserFromHeaders(req.headers))?.viewing === true,
     limiter: (key) => hitRateLimit(key, COPY_LIMIT, COPY_WINDOW_MS, new Date()),
-    appOrigin: new URL(env.APP_URL).origin,
+    appOrigin,
     config: templateCopyConfig(),
     preview: ({ targetTenantId, templateTenantId }) => previewTemplateCopy(copyDeps(targetTenantId, templateTenantId, secret)),
-    apply: ({ targetTenantId, templateTenantId, actorId, overwrite, skip }) =>
-      applyTemplateCopy({ targetTenantId, actorId, overwrite, skip }, copyDeps(targetTenantId, templateTenantId, secret)),
+    apply: ({ targetTenantId, templateTenantId, actorId, overwrite, skip, templateDigest: digest }) =>
+      applyTemplateCopy({ targetTenantId, actorId, overwrite, skip, templateDigest: digest }, copyDeps(targetTenantId, templateTenantId, secret)),
   });
 }
 
