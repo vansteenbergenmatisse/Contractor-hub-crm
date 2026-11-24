@@ -1,92 +1,122 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
-import { COLOR_GROUPS, CONNECTIONS, ESSENTIAL_KEYS, SECTIONS, SOON_ITEMS, SWITCHES, sectionOfKey } from "../api/fields";
-import { groupFields } from "../api/field-groups";
-import { folderIdOfKey, foldersFor, type Folder } from "../api/folders";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { COLOR_GROUPS, ESSENTIAL_KEYS } from "../api/fields";
+import { imageKindOf } from "../api/image-keys";
 import type { AccountLayout } from "../api/load-values";
+import { prepareImageFile } from "../api/prepare-image";
 import { dirtyKeysOf, type SettingsState } from "../api/state";
-import { UNKNOWN_CONNECTIONS, connectionsIntro } from "../api/connections";
+import { PROTECTED_STEPS, STEPS, clearedKeys, keysByStep, type ProtectedId } from "../api/steps";
+import { UNKNOWN_CONNECTIONS } from "../api/connections";
+import { isClearableKey } from "../api/validate";
+import { useCurrentStep } from "../hooks/use-current-step";
 import { useSaveValues } from "../hooks/use-save-values";
 import { useSettings } from "../hooks/use-settings";
 import { useSignOut } from "../hooks/use-sign-out";
-import { imageKindOf } from "../api/image-keys";
-import { prepareImageFile } from "../api/prepare-image";
-import type { ConnectionStatus, Field, ImageUploader, PrepareImage, SaveValues, SectionKey } from "../types";
-import { BusinessGroups } from "./BusinessGroups";
-import { ConnectionRow } from "./ConnectionRow";
-import { FolderFields } from "./FolderFields";
-import { FolderSection, folderNameId } from "./FolderSection";
+import type { Field, ImageUploader, PhoneNumbersView, PrepareImage, SaveValues, SectionKey } from "../types";
+import { ChoicesPanel } from "./ChoicesPanel";
+import { ConnectionsPanel } from "./ConnectionsPanel";
 import { ImageChange } from "./ImageChange";
-import { svgProps } from "./svg-props";
-import { ValueField } from "./ValueField";
+import { MobileBar } from "./MobileBar";
+import { ProtectedFolder, type FolderMode } from "./ProtectedFolder";
+import { StepCard, type StepContext } from "./StepCard";
+import { StepRail } from "./StepRail";
+import "./settings-guided.css";
 
-// Page CONTENT for /settings. It renders inside the shell's `.fd-view[data-pg]` wrapper. The design's
-// CSS keys off data-sec, data-open and data-q on a `.fd-view`, so this component renders a nested
-// `.fd-view` that carries them (the shell's wrapper stays untouched).
-
-const NAV_ICONS: Record<SectionKey, ReactNode> = {
-  biz: (<><path d="M4 20V6l8-3 8 3v14" /><path d="M9 20v-5h6v5" /></>),
-  colors: (<><circle cx="12" cy="12" r="9" /><circle cx="8.5" cy="10" r="1.2" /><circle cx="12" cy="7.5" r="1.2" /><circle cx="15.5" cy="10" r="1.2" /><path d="M12 21a3 3 0 0 1 0-6h2" /></>),
-  conn: (<><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" /><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" /></>),
-  choice: (<><path d="M4 7h10M18 7h2M4 17h2M10 17h10" /><circle cx="16" cy="7" r="2" /><circle cx="8" cy="17" r="2" /></>),
-  soon: (<><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>),
-};
-
-// `initialValues` is the signed-in sub-account's custom values (key to value), already filtered by the
-// server allowlist. When given, it replaces the sample values: keys it lacks show empty fields, and
-// allowed keys the design does not list show too. `initialSection` comes from `?section=` in the URL.
-// `connections` is each row's real status in CONNECTIONS order; without it every row says
-// "Not available yet".
 type Props = {
   initial?: SettingsState;
   initialValues?: Record<string, string>;
   initialSection?: SectionKey;
-  connections?: readonly ConnectionStatus[];
-  // From a good server read: names of keys without a field, and the image hosts. Never a value.
+  // From a good server read: the image hosts. Never a value.
   account?: AccountLayout;
+  // The account's phone numbers, read on the server. Left out: the row says "Not available yet".
+  phoneNumbers?: PhoneNumbersView;
+  readOnly?: boolean;
+  // Given only when this owner may save to the sub-account. Without it Save lasts for this visit.
+  saveValues?: SaveValues;
+  // Given only when the server flags allow Change image for this owner.
+  uploadImage?: ImageUploader;
+  prepareImage?: PrepareImage;
 };
 
-// `saveValues`: given only when this owner may save to the sub-account. Without it Save lasts for this visit.
-// `uploadImage`: given only when the server flags allow Change image for this owner. Without it, or in
-// a read-only view, an image field is just its link.
-export function SettingsPage({ initial, initialValues, initialSection, connections = UNKNOWN_CONNECTIONS, account, readOnly = false, saveValues, uploadImage, prepareImage = prepareImageFile }: Props & { readOnly?: boolean; saveValues?: SaveValues; uploadImage?: ImageUploader; prepareImage?: PrepareImage }) {
+type Tab = "det" | "conn" | "ch";
+const TABS: { id: Tab; label: string; section: SectionKey }[] = [
+  { id: "det", label: "Your details", section: "biz" },
+  { id: "conn", label: "Connections", section: "conn" },
+  { id: "ch", label: "Your choices", section: "choice" },
+];
+const tabOf = (section: SectionKey): Tab => (section === "conn" ? "conn" : section === "choice" || section === "soon" ? "ch" : "det");
+const ALL_STEPS = [...STEPS, ...PROTECTED_STEPS];
+const RAIL_IDS = ALL_STEPS.map((step) => step.id);
+const titleOf = (id: string) => ALL_STEPS.find((step) => step.id === id)?.title ?? "";
+const scrollToCard = (id: string) => document.getElementById(`s-card-${id}`)?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+
+// Page content for /settings, inside the app shell: three tabs, seven steps that save on their own,
+// and the protected Services and areas.
+export function SettingsPage({ initial, initialValues, initialSection, account, phoneNumbers, readOnly = false, saveValues, uploadImage, prepareImage = prepareImageFile }: Props) {
   const live = !!saveValues && !readOnly;
-  const { state, dispatch, filter, extras, phone, choicesAvailable, notLoaded } = useSettings(initial, initialValues, initialSection, connections, live, account);
+  const { state, dispatch, filter, extras, notLoaded } = useSettings(initial, initialValues, initialSection, UNKNOWN_CONNECTIONS, live, account);
   const remote = useSaveValues(state, dispatch, saveValues);
   const signOut = useSignOut();
   const [signOutFailed, setSignOutFailed] = useState(false);
+  const [onlyEmpty, setOnlyEmpty] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [reviewStep, setReviewStep] = useState<string | null>(null);
+  const [folder, setFolder] = useState<{ id: ProtectedId; mode: FolderMode } | null>(null);
   const { values, draft, err } = state;
-  const show = (id: string) => filter.items[id];
+  const tab = tabOf(state.sec);
   const dirtyKeys = dirtyKeysOf(values, draft);
-  const dirty = dirtyKeys.length > 0;
-  const dirtySections = new Set<SectionKey>(dirtyKeys.map((k) => sectionOfKey(k) ?? "biz"));
-  // The folders on screen, in HighLevel's order. A folder with no shown key is left out.
   const colorKeys = COLOR_GROUPS.flatMap((g) => g.fields.map((f) => f.key));
-  const shownFolders = foldersFor([...ESSENTIAL_KEYS, ...extras, ...colorKeys].filter((key) => show(`cv-${key}`)));
-  const firstFolder = shownFolders[0]?.folder.id;
-  const dirtyFolders = new Set(dirtyKeys.map(folderIdOfKey));
-  // On the Brand colors view and in a search, Branding follows `cols`, as its toggle always has.
-  const brandFollowsCols = filter.active || state.sec === "colors";
-  const folderOpen = (id: string) => {
-    if (id === "branding" && brandFollowsCols) return state.cols;
-    if (filter.active) return !state.searchClosed[id];
-    return state.folders[id] ?? id === firstFolder;
-  };
-  const toggleFolder = (id: string) => {
-    if (id === "branding" && brandFollowsCols) dispatch({ type: "toggleCols" });
-    else dispatch({ type: "setFolder", id, open: !folderOpen(id) });
-  };
-  // An error shows next to its field when that field can be seen. Otherwise the top alert carries it.
-  const errFieldSeen = !!err && !!show(`cv-${err.key}`) && folderOpen(folderIdOfKey(err.key)) &&
-    (filter.active || state.sec === err.section);
-  // Only where the page would otherwise speak for the account: a live save or a client view.
+  const shownJoined = [...ESSENTIAL_KEYS, ...extras, ...colorKeys].filter((key) => filter.items[`cv-${key}`]).join("|");
+  const keys = useMemo(() => keysByStep(shownJoined ? shownJoined.split("|") : []), [shownJoined]);
+  const current = useCurrentStep(RAIL_IDS, tab === "det");
   const loadFailed = notLoaded && (live || readOnly);
-  const loadMessage = readOnly ? "Your details did not load. Reload this page to try again." : "Your details did not load, so nothing can be saved. Reload this page to try again.";
-  const topMessage = (errFieldSeen ? null : err?.message) ?? (loadFailed ? loadMessage : null);
-  const edit = (key: string, value: string) => dispatch({ type: "edit", key, value });
-  const fieldProps = (f: Field) => ({ field: f, value: draft[f.key] ?? "", saved: values[f.key] ?? "", invalid: err?.key === f.key, error: errFieldSeen && err?.key === f.key ? err.message : undefined, readOnly, onChange: edit });
-  const imageControl = (f: Field) => {
+  const errShown = !!err && tab === "det" && !!filter.items[`cv-${err.key}`];
+  const topMessage = (errShown ? null : err?.message) ?? (loadFailed ? (readOnly ? "Your details did not load. Reload this page to try again." : "Your details did not load, so nothing can be saved. Reload this page to try again.") : null);
+
+  // Handlers read the newest state through a ref, so they stay stable and memoized cards do not redraw.
+  const latest = useRef({ state, keys, live, remote });
+  useEffect(() => { latest.current = { state, keys, live, remote }; });
+
+  const runSave = useCallback(async (id: string, allowClear: boolean) => {
+    const { keys: all, live: isLive, remote: saver } = latest.current;
+    const stepKeys = all[id as keyof typeof all] ?? [];
+    setReviewStep(null);
+    if (isLive) return saver.save({ step: id, keys: stepKeys, allowClear });
+    dispatch({ type: "save", keys: stepKeys, step: id });
+    return true;
+  }, [dispatch]);
+
+  const requestSave = useCallback((id: string) => {
+    const { state: now, keys: all, live: isLive } = latest.current;
+    const stepKeys = all[id as keyof typeof all] ?? [];
+    const cleared = clearedKeys(stepKeys, now.values, now.draft);
+    // A required value left empty goes to the normal check, which names it.
+    if (isLive && cleared.length > 0 && cleared.every(isClearableKey)) {
+      setReviewStep(id);
+      scrollToCard(id);
+      return;
+    }
+    void runSave(id, false);
+  }, [runSave]);
+
+  const revert = useCallback((id: string) => {
+    const { keys: all } = latest.current;
+    dispatch({ type: "revert", keys: all[id as keyof typeof all] ?? [] });
+    setReviewStep((step) => (step === id ? null : step));
+  }, [dispatch]);
+
+  const onEdit = useCallback((key: string, value: string) => dispatch({ type: "edit", key, value }), [dispatch]);
+  const onConfirmClear = useCallback((id: string) => { void runSave(id, true); }, [runSave]);
+  const onKeep = useCallback(() => setReviewStep(null), []);
+  const onFolderMode = useCallback((id: ProtectedId, mode: FolderMode) => setFolder(mode === "locked" ? null : { id, mode }), []);
+  const onFolderLock = useCallback((id: ProtectedId) => { revert(id); setFolder(null); }, [revert]);
+  const onFolderSave = useCallback((id: ProtectedId) => {
+    void runSave(id, true).then((ok) => { if (ok) setFolder(null); else setFolder({ id, mode: "edit" }); });
+  }, [runSave]);
+  const jump = useCallback((id: string) => { setSheetOpen(false); scrollToCard(id); }, []);
+
+  const imageControl = useCallback((f: Field, saved: string, dirty: boolean) => {
     const kind = imageKindOf(f.key);
     if (!uploadImage || readOnly || !kind) return null;
     return (
@@ -94,227 +124,140 @@ export function SettingsPage({ initial, initialValues, initialSection, connectio
         fieldKey={f.key}
         label={f.label}
         kind={kind}
-        current={values[f.key] ?? ""}
-        dirty={dirtyKeys.includes(f.key)}
+        current={saved}
+        dirty={dirty}
         upload={uploadImage}
         prepare={prepareImage}
         onValue={(key, value, saved) => dispatch({ type: "imageValue", key, value, saved })}
       />
     );
-  };
+  }, [uploadImage, readOnly, prepareImage, dispatch]);
 
-  const hasBizFields = shownFolders.some(({ folder }) => folder.id !== "branding");
-  // Only the Branding folder is on screen: the panel takes its name.
-  const brandOnly = filter.active ? !filter.sections.biz : state.sec === "colors";
-  const folderShell = (folder: Folder, keys: readonly string[]) => ({
-    folder,
-    total: keys.length,
-    filled: keys.filter((key) => (draft[key] ?? "").trim() !== "").length,
-    open: folderOpen(folder.id),
-    dirty: dirtyFolders.has(folder.id),
-    onToggle: () => toggleFolder(folder.id),
-  });
+  const context = useMemo<StepContext>(() => ({
+    live, readOnly, blocked: live && loadFailed, imageHosts: account?.imageHosts,
+    onEdit, onSave: requestSave, onConfirmClear, onKeep, onCancel: revert, imageControl,
+  }), [live, readOnly, loadFailed, account?.imageHosts, onEdit, requestSave, onConfirmClear, onKeep, revert, imageControl]);
+
+  // A link such as ?section=colors lands on its step.
+  useEffect(() => {
+    if (initialSection === "colors") scrollToCard("col");
+  }, [initialSection]);
+
+  const visible = (id: keyof typeof keys) => {
+    if (!onlyEmpty) return keys[id];
+    return keys[id].filter((key) => (values[key] ?? "").trim() === "" || err?.key === key);
+  };
+  const errorFor = (stepKeys: readonly string[]) => (err && errShown && stepKeys.includes(err.key) ? err : null);
+  const dirtyStep = ALL_STEPS.find((step) => keys[step.id].some((key) => dirtyKeys.includes(key)));
+  const dirtyIsOpenFolder = dirtyStep && PROTECTED_STEPS.some((step) => step.id === dirtyStep.id);
+  const mobileTitle = dirtyStep && !dirtyIsOpenFolder ? dirtyStep.title : null;
+  const shownProtected = PROTECTED_STEPS.filter((step) => keys[step.id].length > 0);
 
   return (
-    <div
-      className="fd-view"
-      data-sec={state.sec}
-      data-open={state.open ? "1" : "0"}
-      data-q={filter.active ? "1" : "0"}
-    >
-      <section className="fd-phd fd-in" style={{ "--i": 0 } as React.CSSProperties}>
-        <h1 className="fd-pt">Settings</h1>
-        <p className="fd-pw">
-          <span className="fd-wd">Your business details, brand colors and connections in one place. The details and colors come from your account.</span>
-          <span className="fd-wm">Your business details, brand colors and connections.</span>
-        </p>
-      </section>
+    <div className="sv-app" data-sec={state.sec} data-open={state.open ? "1" : "0"} data-q={filter.active ? "1" : "0"}>
+      <div className="sv-head">
+        <h1 className="sv-h1">Settings</h1>
+        <p className="sv-lead">Your business details in {STEPS.length} steps, all on one page. Fill them top to bottom and save each step.</p>
+      </div>
 
-      <nav className="fx-stnav" aria-label="Settings sections">
-        <div className="fx-stq">
-          <svg width="17" height="17" {...svgProps}><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
-          <label className="fx-vh" htmlFor="fx-st-q">Search settings</label>
-          <input
-            className="fx-stin"
-            id="fx-st-q"
-            type="search"
-            placeholder="Search settings"
-            autoComplete="off"
-            spellCheck={false}
-            value={state.q}
-            onChange={(e) => dispatch({ type: "search", q: e.target.value })}
-          />
-        </div>
-        <ul className="fx-stl">
-          {SECTIONS.map((s) => (
-            <li key={s.key}>
-              <button
-                type="button"
-                className={`fx-stni${state.sec === s.key ? " is-on" : ""}`}
-                aria-current={state.sec === s.key ? "page" : "false"}
-                onClick={() => {
-                  setSignOutFailed(false);
-                  dispatch({ type: "go", section: s.key });
-                }}
-              >
-                <span className="fx-sti"><svg width="17" height="17" {...svgProps}>{NAV_ICONS[s.key]}</svg></span>
-                <span className="fx-stt">
-                  {s.title}
-                  {dirtySections.has(s.key) ? <span className="fd-hint" style={{ display: "block" }}>Not applied yet</span> : null}
-                </span>
-                <svg className="fx-stch" width="16" height="16" {...svgProps}><path d="m9 6 6 6-6 6" /></svg>
-              </button>
-            </li>
+      <div className="sv-segw">
+        <div className="sv-seg" role="tablist" aria-label="Settings parts">
+          {TABS.map((t) => (
+            <button key={t.id} type="button" role="tab" className={`sv-sg${tab === t.id ? " is-on" : ""}`} aria-selected={tab === t.id} onClick={() => dispatch({ type: "go", section: t.section })}>{t.label}</button>
           ))}
-        </ul>
-      </nav>
+        </div>
+      </div>
 
-      <button type="button" className="fd-link fx-stback" onClick={() => dispatch({ type: "back" })}>
-        <svg width="18" height="18" {...svgProps}><path d="m15 6-6 6 6 6" /></svg>
-        <span>Settings</span>
-      </button>
+      <p className={`fd-lerr fd-ste${topMessage ? "" : " is-off"}`} id="fd-st-err" role="alert">{topMessage ?? ""}</p>
+      {readOnly ? <p className="ga-note">You are viewing this account. Nothing can be changed here.</p> : null}
+      {!live && !readOnly ? <p className="ga-note">Changes last until you close or reload this page.</p> : null}
 
-      <p className="fx-stnone" role="status" style={filter.active && !filter.any ? { display: "block" } : undefined}>
-        No settings match your search.
-      </p>
-
-      <div className="fx-stbody">
-        <p className={`fd-lerr fd-ste${topMessage ? "" : " is-off"}`} id="fd-st-err" role="alert">
-          <svg width="16" height="16" {...svgProps}><circle cx="12" cy="12" r="9" /><path d="M12 7.5v5M12 16.2v.3" /></svg>
-          <span><span className="fd-h">{topMessage ?? ""}</span></span>
-        </p>
-
-        {filter.sections.biz || filter.sections.colors ? (
-          <section className="fd-pnl fd-in" style={{ "--i": 1 } as React.CSSProperties} aria-labelledby="fd-st-1">
-            <h2 className="fd-pnh" id="fd-st-1">{brandOnly ? "Brand colors" : "Business details"}</h2>
-            {brandOnly ? null : <p className="fd-pns">{readOnly ? "Your business name, contact details and links." : live ? "Your business name, contact details and links. Saved changes update your account, and can change your website and texts." : "Your business name, contact details and links. Changes here do not reach your website or texts yet."}</p>}
-            {shownFolders.map(({ folder, keys }) => {
-              if (folder.id === "branding") {
-                return (
-                  <FolderSection key={folder.id} {...folderShell(folder, keys)} bodyId="fd-st-col" bodyClass="fd-cvg">
-                    <p className="fd-pns fd-pnx">{readOnly ? "The brand colors this account uses." : live ? "Type a color like #2E7D32, then press Save to your account." : "Type a color like #2E7D32, then press Apply for this visit."}</p>
-                    {/* The group headings stay while searching, as in the design; only fields hide. */}
-                    {COLOR_GROUPS.map((g) => {
-                      const fields = g.fields.filter((f) => show(`cv-${f.key}`));
-                      if (fields.length === 0 && !filter.active) return null;
-                      return [
-                        <h4 className="fd-cgh" key={`h-${g.heading}`}>{g.heading}</h4>,
-                        ...fields.map((f) => <ValueField key={f.key} {...fieldProps(f)} swatch />),
-                      ];
-                    })}
-                  </FolderSection>
-                );
-              }
-              const nameId = folder.name ? folderNameId(folder.id) : undefined;
-              return (
-                <FolderSection key={folder.id} {...folderShell(folder, keys)}>
-                  {folder.id === "essentials"
-                    ? <BusinessGroups groups={groupFields(keys)} imageHosts={account?.imageHosts} fieldProps={fieldProps} folderNameId={nameId} imageControl={imageControl} />
-                    : <FolderFields keys={keys} imageHosts={account?.imageHosts} fieldProps={fieldProps} folderNameId={nameId} imageControl={imageControl} />}
-                </FolderSection>
-              );
-            })}
-          </section>
-        ) : null}
-
-        {/* CSS hides it on the sections without fields. While searching it shows only with a field. */}
-        {(filter.sections.biz && hasBizFields) || filter.sections.colors ? (
-          <div className="fd-cvsv fd-in" style={{ "--i": 3 } as React.CSSProperties}>
-            <p className={`fd-okl${state.ok && !dirty ? "" : " is-off"}`} role="status" style={{ flexBasis: "100%", marginBottom: 0 }}>
-              <svg width="16" height="16" {...svgProps} strokeWidth={2.2}><path d="m5 12.5 4.5 4.5L19 7.5" /></svg>
-              <span>{live ? "Saved to your account." : "Changed for this visit only. Not saved to your account yet."}</span>
-            </p>
-            {live && remote.problem ? <p className="fd-pns" role="alert" style={{ flexBasis: "100%", marginBottom: 0 }}>{remote.problem}</p> : null}
-            <button type="button" className="fd-btn is-fill fd-lgo fd-cvs" disabled={readOnly || (live && (remote.saving || loadFailed))} onClick={() => (live ? void remote.save() : dispatch({ type: "save" }))}>
-              {readOnly ? "Read-only view" : live ? (remote.saving ? "Saving…" : "Save to your account") : "Apply for this visit"}
-            </button>
-            <p className="fd-pns fd-hint" role="status">{readOnly ? "You are viewing this account. Nothing can be changed here." : loadFailed ? "Nothing can be saved until your details load." : live
-              ? (dirty ? "You have changes that are not saved yet." : "Your account has these values.")
-              : (dirty ? "You have changes that are not applied yet." : "Changes last until you close or reload this page.")}</p>
-          </div>
-        ) : null}
-
-        {filter.sections.conn ? (
-          <section className="fd-stsec fd-in" style={{ "--i": 4 } as React.CSSProperties} aria-labelledby="fd-st-4">
-            <h2 className="fd-pnh" id="fd-st-4">Connections</h2>
-            <p className="fd-pns fd-sts">{connectionsIntro(connections)}</p>
-            <div className="fd-lst">
-              {CONNECTIONS.map((c, i) =>
-                show(`conn-${i}`) ? (
-                  <ConnectionRow
-                    key={c.name}
-                    connection={c}
-                    status={connections[i] ?? { state: "unknown" }}
-                    phone={i === 0 ? phone : ""}
-                    a2p={i === 0}
-                    how={!!state.how[i]}
-                    asked={!!state.asked[i]}
-                    onHow={() => dispatch({ type: "how", index: i })}
-                    onAsk={() => dispatch({ type: "ask", index: i })}
-                  />
-                ) : null,
-              )}
-            </div>
-          </section>
-        ) : null}
-
-        <div className="fd-cols fd-st2 fd-in" style={{ "--i": 5 } as React.CSSProperties}>
-          {filter.sections.choice ? (
-            <section aria-labelledby="fd-st-3">
-              <h2 className="fd-pnh" id="fd-st-3">Your choices</h2>
-              <p className="fd-pns fd-sts">{choicesAvailable ? "Each switch works at once." : "We do not have these choices yet."}</p>
-              <div className="fd-lst">
-                {SWITCHES.map((label, i) =>
-                  show(`sw-${i}`) ? (
-                    <div className="fd-rw" key={label}>
-                      <div className="fd-rm"><div className="fd-rbx"><p className="fd-rn">{label}</p></div></div>
-                      <div className="fd-rac">
-                        {!choicesAvailable ? <span className="fd-chip is-plain">Not available yet</span> : <button
-                          type="button"
-                          className={`fd-swb${state.sw[i] ? " is-on" : ""}`}
-                          role="switch"
-                          aria-checked={state.sw[i]}
-                          aria-label={label}
-                          onClick={() => dispatch({ type: "switch", index: i as 0 | 1 })}
-                        >
-                          <i aria-hidden="true" />
-                          <span><span className="fd-h">{state.sw[i] ? "On" : "Off"}</span></span>
-                        </button>}
-                      </div>
-                    </div>
-                  ) : null,
-                )}
-              </div>
-            </section>
-          ) : null}
-          {filter.sections.soon ? (
-            <section aria-labelledby="fd-st-5">
-              <h2 className="fd-pnh" id="fd-st-5">Not available yet</h2>
-              <p className="fd-pns fd-sts">We do not have these features yet.</p>
-              <div className="fd-lst">
-                {SOON_ITEMS.map((label, i) =>
-                  show(`soon-${i}`) ? (
-                    <div className="fd-rw" key={label}>
-                      <div className="fd-rm"><div className="fd-rbx"><p className="fd-rn">{label}</p></div></div>
-                      <div className="fd-rac"><span className="fd-chip is-plain">Not available yet</span></div>
-                    </div>
-                  ) : null,
-                )}
-              </div>
+      <div className="ga-grid" hidden={tab !== "det"}>
+        <StepRail keys={keys} values={values} dirtyKeys={dirtyKeys} current={current} sheetOpen={sheetOpen} onlyEmpty={onlyEmpty} onOnlyEmpty={() => setOnlyEmpty((on) => !on)} onJump={jump} onCloseSheet={() => setSheetOpen(false)} />
+        <div className="ga-stack">
+          {STEPS.map((step, i) => (keys[step.id].length === 0 ? null : (
+            <StepCard
+              key={step.id}
+              step={step}
+              number={i + 1}
+              total={STEPS.length}
+              keys={keys[step.id]}
+              shownKeys={visible(step.id)}
+              values={values}
+              draft={draft}
+              error={errorFor(keys[step.id])}
+              current={current === step.id}
+              saving={state.saving && state.saveStep === step.id}
+              anySaving={state.saving}
+              savedHere={state.ok && state.saveStep === step.id}
+              problem={!state.saving && state.saveStep === step.id ? state.saveProblem : null}
+              reviewing={reviewStep === step.id}
+              context={context}
+            />
+          )))}
+          {shownProtected.length > 0 ? (
+            <section className="ga-prot" aria-labelledby="s-t-prot">
+              <header className="ga-ph">
+                <div className="ga-hdt">
+                  <div className="ga-phr"><h2 className="ga-t" id="s-t-prot">Services and areas</h2><span className="ga-pchip">Protected</span></div>
+                  <p className="ga-line">These names build the service and area pages of your website. Each folder unlocks one at a time and you check every change before it saves.</p>
+                </div>
+              </header>
+              <ol className="ga-how"><li><span>1</span>Unlock one folder</li><li><span>2</span>Make your change</li><li><span>3</span>Check it and save. It locks again.</li></ol>
+              {shownProtected.map((step) => (
+                <ProtectedFolder
+                  key={step.id}
+                  step={step}
+                  keys={keys[step.id]}
+                  values={values}
+                  draft={draft}
+                  mode={folder?.id === step.id ? folder.mode : "locked"}
+                  error={errorFor(keys[step.id])}
+                  problem={!state.saving && state.saveStep === step.id ? state.saveProblem : null}
+                  readOnly={readOnly}
+                  blocked={live && loadFailed}
+                  saving={state.saving && state.saveStep === step.id}
+                  anySaving={state.saving}
+                  otherOpen={!!folder && folder.id !== step.id}
+                  onMode={onFolderMode}
+                  onEdit={onEdit}
+                  onLock={onFolderLock}
+                  onSave={onFolderSave}
+                />
+              ))}
             </section>
           ) : null}
         </div>
       </div>
 
+      <ConnectionsPanel phone={phoneNumbers} hidden={tab !== "conn"} />
+      <ChoicesPanel hidden={tab !== "ch"} />
+
+      {tab === "det" ? (
+        <>
+          <button type="button" className={`ga-shs${sheetOpen ? " is-on" : ""}`} aria-label="Close steps" tabIndex={sheetOpen ? 0 : -1} onClick={() => setSheetOpen(false)} />
+          <MobileBar
+            dirtyTitle={mobileTitle}
+            currentTitle={titleOf(current)}
+            saving={state.saving}
+            blocked={live && loadFailed}
+            readOnly={readOnly}
+            onOpenSheet={() => setSheetOpen(true)}
+            onSave={() => { if (dirtyStep) requestSave(dirtyStep.id); }}
+            onCancel={() => { if (dirtyStep) revert(dirtyStep.id); }}
+          />
+        </>
+      ) : null}
+
       <button
         type="button"
-        className="fd-btn is-plain fd-lgo fd-stout"
+        className="sv-btn is-plain sv-out"
         onClick={() => {
           setSignOutFailed(false);
           void signOut().then((ok) => setSignOutFailed(!ok));
         }}
       >Sign out</button>
-      {signOutFailed ? <p className="fd-lerr" role="alert" style={{ gridColumn: "1 / -1" }}>Could not sign out. Try again.</p> : null}
+      {signOutFailed ? <p className="fd-lerr" role="alert">Could not sign out. Try again.</p> : null}
     </div>
   );
 }

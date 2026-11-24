@@ -149,7 +149,7 @@ describe("the color pad", () => {
     await user.keyboard("{Escape}");
     expect(field(/^Text$/).value).toBe("nope");
     expect(screen.queryByText("You have changes that are not saved yet.")).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Save to your account" }));
+    await user.click(screen.getByRole("button", { name: "Save Brand colors" }));
     expect(send).not.toHaveBeenCalled();
   });
 
@@ -159,7 +159,7 @@ describe("the color pad", () => {
     await user.click(trigger(/^Pick Main color/));
     fireEvent.change(field(/^Hex color/), { target: { value: "#EEEEEE" } });
     await user.click(screen.getByRole("button", { name: "Done" }));
-    await user.click(screen.getByRole("button", { name: "Apply for this visit" }));
+    await user.click(screen.getByRole("button", { name: "Apply Brand colors" }));
     expect(screen.getByText("The text on your main color is hard to read. Make Main color darker.")).toBeInTheDocument();
   });
 

@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { cleanup, render, screen } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 vi.mock("next/navigation", () => ({
@@ -45,8 +44,6 @@ const VALUES: Record<string, string> = {
 };
 const page = (values = VALUES, extra: Partial<React.ComponentProps<typeof SettingsPage>> = {}) =>
   render(<PageStateProvider><SettingsPage initialValues={values} initialSection="biz" account={{ imageHosts: [HOST] }} {...extra} /></PageStateProvider>);
-const headers = () => [...document.querySelectorAll(".fd-fold:not(.is-gone) .fd-foldh button")] as HTMLButtonElement[];
-const header = (name: RegExp) => headers().find((b) => name.test(b.textContent ?? "")) as HTMLButtonElement;
 
 describe("the folder map", () => {
   it("lists the folders in HighLevel's order, under their real names", () => {
@@ -140,85 +137,6 @@ describe("what may reach the browser", () => {
 });
 
 describe("collapsible folders", () => {
-  it("shows one section per folder in order, with its real name and count", () => {
-    page();
-    const text = headers().map((b) => b.textContent);
-    expect(text).toHaveLength(9);
-    expect(text[0]).toContain("Business essentials");
-    expect(text[0]).toContain("01_Business_essentials");
-    expect(text[3]).toContain("Branding");
-    expect(text[3]).toContain("02_Branding");
-    expect(text[4]).toContain("Residential services");
-    expect(text[4]).toContain("1 of 2 filled");
-    expect(text[8]).toContain("Our work");
-  });
-
-  it("removes a folder without keys", () => {
-    page({ business_name: "Test Co", main_color: "#112233" });
-    expect(headers().map((b) => b.textContent).join(" ")).not.toContain("Residential");
-    expect(header(/Branding/)).toBeTruthy();
-    expect(header(/Google/)).toBeUndefined();
-  });
-
-  it("removes Branding from Business details when there is no color", () => {
-    page({ business_name: "Test Co" });
-    expect(header(/Branding/)).toBeUndefined();
-  });
-
-  it("opens the first folder only, and toggles", async () => {
-    page();
-    const list = headers();
-    expect(list.map((b) => b.getAttribute("aria-expanded"))).toEqual(["true", ...Array(8).fill("false")]);
-    await userEvent.setup().click(header(/Residential/));
-    expect(header(/Residential/)).toHaveAttribute("aria-expanded", "true");
-    const body = document.getElementById(header(/Residential/).getAttribute("aria-controls") as string) as HTMLElement;
-    expect(body).not.toHaveClass("is-off");
-    expect(within(body).getByLabelText("Residential service 1")).toHaveValue("Test service one");
-    await userEvent.setup().click(header(/Residential/));
-    expect(body).toHaveClass("is-off");
-  });
-
-  it("the Brand colors menu item shows the Branding folder open", () => {
-    page(VALUES, { initialSection: "colors" });
-    expect(header(/Branding/)).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByRole("heading", { level: 2, name: "Brand colors" })).toBeInTheDocument();
-  });
-
-  it("a search match opens its folder and hides the others", () => {
-    page();
-    fireEvent.change(screen.getByLabelText("Search settings"), { target: { value: "residential service 1" } });
-    expect(headers()).toHaveLength(1);
-    expect(headers()[0]).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByLabelText("Residential service 1")).toBeInTheDocument();
-    expect(document.getElementById("cv-business_name")).toBeNull();
-  });
-
-  it("finds a folder by its name and keeps all its fields", () => {
-    page();
-    fireEvent.change(screen.getByLabelText("Search settings"), { target: { value: "03.1_residential" } });
-    expect(headers()).toHaveLength(1);
-    expect(document.getElementById("cv-residentialservice1")).not.toBeNull();
-    expect(document.getElementById("cv-residentialservice2")).not.toBeNull();
-  });
-
-  it("a search match on a color opens the colors even after they were closed", () => {
-    page(VALUES, { initialSection: "colors" });
-    fireEvent.click(header(/Branding/));
-    expect(header(/Branding/)).toHaveAttribute("aria-expanded", "false");
-    fireEvent.change(screen.getByLabelText("Search settings"), { target: { value: "main color" } });
-    expect(header(/Branding/)).toHaveAttribute("aria-expanded", "true");
-  });
-
-  it("a folder can be closed during a search, and the next search opens it again", async () => {
-    page();
-    const search = screen.getByLabelText("Search settings");
-    fireEvent.change(search, { target: { value: "residential" } });
-    fireEvent.click(headers()[0]);
-    expect(headers()[0]).toHaveAttribute("aria-expanded", "false");
-    fireEvent.change(search, { target: { value: "residential s" } });
-    expect(headers()[0]).toHaveAttribute("aria-expanded", "true");
-  });
-
   it("a failed save opens the closed folder that holds the bad value", () => {
     let s = initialState(VALUES);
     s = settingsReducer(s, { type: "edit", key: "1_our_work_before", value: "http://x.example/a.png" });
@@ -227,28 +145,6 @@ describe("collapsible folders", () => {
     expect(s.folders["our-work"]).toBe(true);
   });
 
-  it("shows the error next to the field in the folder it opened", async () => {
-    page();
-    const user = userEvent.setup();
-    await user.click(header(/Our work/));
-    const input = screen.getByLabelText("Project 1, before");
-    await user.clear(input);
-    await user.type(input, "http://x.example/a.png");
-    await user.click(header(/Our work/));
-    await user.click(screen.getByRole("button", { name: "Apply for this visit" }));
-    expect(header(/Our work/)).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByText("Project 1, before needs a link that starts with https://.")).toHaveAttribute("id", "cv-1_our_work_before-err");
-  });
-
-  it("marks a closed folder that holds an unsaved edit", async () => {
-    page();
-    const user = userEvent.setup();
-    await user.click(header(/Residential/));
-    await user.type(screen.getByLabelText("Residential service 2"), "New");
-    await user.click(header(/Residential/));
-    expect(header(/Residential/)).toHaveTextContent("Not applied yet");
-    expect(header(/Commercial/)).not.toHaveTextContent("Not applied yet");
-  });
 });
 
 describe("our work images", () => {

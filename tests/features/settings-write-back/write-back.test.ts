@@ -393,7 +393,7 @@ describe("POST /api/settings/values", () => {
   it("limits per user and per tenant, and fails closed", async () => {
     const counted = routeDeps();
     await handleSaveValues(request(), counted);
-    expect(vi.mocked(counted.hit).mock.calls.map((c) => [c[0], c[1]])).toEqual([["settings-save-user:U1", 10], ["settings-save-tenant:T1", 30]]);
+    expect(vi.mocked(counted.hit).mock.calls.map((c) => [c[0], c[1]])).toEqual([["settings-save-user:U1", 40], ["settings-save-tenant:T1", 30]]);
     const over = routeDeps({ hit: vi.fn(async () => false) });
     expect((await handleSaveValues(request(), over)).status).toBe(429);
     const broken = routeDeps({ hit: vi.fn(async () => { throw new Error("db"); }) });

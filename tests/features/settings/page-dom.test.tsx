@@ -49,7 +49,7 @@ describe("Settings in the browser", () => {
     render(<SettingsPage initialValues={{}} initialSection="colors" />);
     const field = screen.getByLabelText(/^Main color/);
     await user.type(field, "#1565C0");
-    await user.click(screen.getByRole("button", { name: "Apply for this visit" }));
+    await user.click(screen.getByRole("button", { name: "Apply Brand colors" }));
     expect(screen.getByRole("alert")).toHaveClass("is-off");
     expect(field).not.toHaveAttribute("aria-invalid");
     expect(screen.getByText("Changed for this visit only. Not saved to your account yet.").closest("p")).not.toHaveClass("is-off");
@@ -74,7 +74,7 @@ describe("Settings in the browser", () => {
       </div>,
     );
     await user.type(screen.getByLabelText(/^Main color/), "#1565C0");
-    await user.click(screen.getByRole("button", { name: "Apply for this visit" }));
+    await user.click(screen.getByRole("button", { name: "Apply Brand colors" }));
     const frame = screen.getByTestId("frame");
     expect(getComputedStyle(frame).getPropertyValue("--main-color").trim()).toBe("#1565C0");
     css.remove();
@@ -85,7 +85,7 @@ describe("Settings in the browser", () => {
     render(<SettingsPage initialValues={{}} initialSection="colors" />);
     const field = screen.getByLabelText(/^Main, pressed/);
     await user.type(field, "blue");
-    await user.click(screen.getByRole("button", { name: "Apply for this visit" }));
+    await user.click(screen.getByRole("button", { name: "Apply Brand colors" }));
     const msg = "Main, pressed needs a color like #2E7D32.";
     expect(screen.getAllByText(msg)).toHaveLength(1);
     expect(screen.getByText(msg)).toHaveAttribute("role", "alert");
@@ -108,24 +108,23 @@ describe("Settings in the browser", () => {
     const user = userEvent.setup();
     render(<SettingsPage initialValues={{ business_name: "Test Co" }} initialSection="biz" />);
     await user.type(screen.getByLabelText(/^Business name/), " Two");
-    await user.click(screen.getByRole("button", { name: "Apply for this visit" }));
+    await user.click(screen.getByRole("button", { name: "Apply Business" }));
     const ok = screen.getByText("Changed for this visit only. Not saved to your account yet.").closest("p");
     expect(ok).not.toHaveClass("is-off");
-    expect(ok?.closest(".fd-cvsv")).not.toBeNull();
     expect(screen.getByText("Changes last until you close or reload this page.")).toBeInTheDocument();
     await user.type(screen.getByLabelText(/^Email/), "a@b.example");
-    expect(ok).toHaveClass("is-off");
+    expect(screen.queryByText("Changed for this visit only. Not saved to your account yet.")).toBeNull();
     expect(screen.getByText("You have changes that are not applied yet.")).toHaveAttribute("role", "status");
-    await user.click(screen.getByRole("button", { name: "Apply for this visit" }));
-    expect(ok).not.toHaveClass("is-off");
+    await user.click(screen.getByRole("button", { name: "Apply Business" }));
+    expect(screen.getByText("Changed for this visit only. Not saved to your account yet.")).toBeInTheDocument();
     expect(screen.queryByText("You have changes that are not applied yet.")).toBeNull();
   });
 
   it("does not say anything changed when applying with no edits", async () => {
     const user = userEvent.setup();
     render(<SettingsPage initialValues={{ business_name: "Test Co" }} initialSection="biz" />);
-    await user.click(screen.getByRole("button", { name: "Apply for this visit" }));
-    expect(screen.getByText("Changed for this visit only. Not saved to your account yet.").closest("p")).toHaveClass("is-off");
+    await user.click(screen.getByRole("button", { name: "Apply Business" }));
+    expect(screen.queryByText("Changed for this visit only. Not saved to your account yet.")).toBeNull();
     expect(updateBusiness).not.toHaveBeenCalled();
   });
 
@@ -134,25 +133,11 @@ describe("Settings in the browser", () => {
     render(<SettingsPage initialValues={{}} initialSection="colors" />);
     const field = screen.getByLabelText(/^Main, pressed/);
     await user.type(field, "blue");
-    await user.click(screen.getByRole("button", { name: "Apply for this visit" }));
+    await user.click(screen.getByRole("button", { name: "Apply Brand colors" }));
     expect(field).toHaveAttribute("aria-invalid", "true");
     await user.clear(field);
     expect(field).not.toHaveAttribute("aria-invalid");
     expect(screen.queryByText("Main, pressed needs a color like #2E7D32.")).toBeNull();
-  });
-
-  it("marks only the sections that hold unsaved changes", async () => {
-    const user = userEvent.setup();
-    render(<SettingsPage initialValues={{ business_name: "Test Co", business_latitude: "1" }} initialSection="colors" />);
-    expect(screen.queryByText("Not applied yet")).toBeNull();
-    await user.type(screen.getByLabelText(/^Main color/), "#123456");
-    expect(screen.getByRole("button", { name: /Brand colors/ })).toHaveTextContent("Not applied yet");
-    expect(screen.getByRole("button", { name: /Business details/ })).not.toHaveTextContent("Not applied yet");
-    // A key outside the design's list belongs to Business details.
-    await user.type(screen.getByLabelText(/^Business latitude/), "2");
-    expect(screen.getByRole("button", { name: /Business details/ })).toHaveTextContent("Not applied yet");
-    await user.clear(screen.getByLabelText(/^Main color/));
-    expect(screen.getByRole("button", { name: /Brand colors/ })).not.toHaveTextContent("Not applied yet");
   });
 
   it("never adds a second live style, also after two saves", () => {
@@ -200,21 +185,21 @@ describe("Settings in the browser", () => {
       );
     }
     const { container } = render(<Host />);
-    const view = () => container.querySelector(".fd-view[data-sec]")!;
+    const view = () => container.querySelector(".sv-app[data-sec]")!;
     // Open Connections, then Back (the kept state now has Connections, closed).
-    await user.click(screen.getByRole("button", { name: /Connections/ }));
-    await user.click(screen.getByRole("button", { name: "Settings" }));
-    expect(view()).toHaveAttribute("data-open", "0");
+    await user.click(screen.getByRole("tab", { name: "Connections" }));
+    await user.click(screen.getByRole("tab", { name: "Your details" }));
+    expect(view()).toHaveAttribute("data-sec", "biz");
     await user.click(screen.getByRole("button", { name: "toggle" }));
     await user.click(screen.getByRole("button", { name: "go connections" }));
     await user.click(screen.getByRole("button", { name: "toggle" }));
     expect(view()).toHaveAttribute("data-sec", "conn");
     expect(view()).toHaveAttribute("data-open", "1");
-    // Back, leave and come back with the same link: it opens again.
-    await user.click(screen.getByRole("button", { name: "Settings" }));
+    // Another tab, leave and come back with the same link: it opens again.
+    await user.click(screen.getByRole("tab", { name: "Your details" }));
     await user.click(screen.getByRole("button", { name: "toggle" }));
     await user.click(screen.getByRole("button", { name: "toggle" }));
-    expect(view()).toHaveAttribute("data-open", "1");
+    expect(view()).toHaveAttribute("data-sec", "conn");
   });
 
   it("a focus request left from an earlier visit does not move the cursor on arrival", async () => {
@@ -231,7 +216,7 @@ describe("Settings in the browser", () => {
     }
     render(<Host />);
     await user.type(screen.getByLabelText(/^Main, pressed/), "blue");
-    await user.click(screen.getByRole("button", { name: "Apply for this visit" }));
+    await user.click(screen.getByRole("button", { name: "Apply Brand colors" }));
     expect(screen.getByLabelText(/^Main, pressed/)).toHaveFocus();
     await user.click(screen.getByRole("button", { name: "toggle" }));
     screen.getByLabelText("other").focus();
@@ -251,12 +236,13 @@ describe("Settings in the browser", () => {
       );
     }
     render(<Pages />);
-    await user.click(screen.getByRole("button", { name: /Brand colors/ }));
+    await user.click(screen.getByRole("tab", { name: "Connections" }));
+    await user.click(screen.getByRole("tab", { name: "Your details" }));
     await user.type(screen.getByLabelText(/^Main color/), "#123456");
     await user.click(screen.getByRole("button", { name: "switch page" }));
     expect(screen.getByText("other page")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "switch page" }));
     expect(screen.getByLabelText(/^Main color/)).toHaveValue("#123456");
-    expect(screen.getByRole("button", { name: /Brand colors/ })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("tab", { name: "Your details" })).toHaveAttribute("aria-selected", "true");
   });
 });
