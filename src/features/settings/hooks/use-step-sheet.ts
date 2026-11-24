@@ -39,7 +39,9 @@ export function useStepSheet(root: RefObject<HTMLElement | null>, open: boolean,
       window.removeEventListener("keydown", onKey, true);
       wide?.removeEventListener?.("change", onWide);
       const now = document.activeElement;
-      if (!now || now === document.body || box?.contains(now)) opener?.focus();
+      // No scroll: after a jump the opener can be the last step's heading (a tap does not focus the
+      // bar's button on iOS), and scrolling to it would undo the jump that is under way.
+      if (!now || now === document.body || box?.contains(now)) opener?.focus({ preventScroll: true });
     };
   }, [open, root]);
 }
