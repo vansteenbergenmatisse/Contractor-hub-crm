@@ -17,16 +17,28 @@ export type MoneyData = {
 const TITLES = ["Booked this week", "Quotes out", "Money owed"] as const;
 const rise = (i: number) => ({ "--i": i }) as CSSProperties;
 
-// No `data` (no real source yet): one compact list keeps the three titles and shows no value.
-export function MoneyCards({ data, now }: { data?: MoneyData; now?: Date } = {}) {
+// Proven counts from the real reads. Null: not proven. Amounts stay out until their unit is known.
+export type MoneyCounts = { booked: number | null; quotes: number | null; owed: number | null };
+const COUNT_TEXT: readonly ((count: number) => string)[] = [
+  (n) => `${n} ${n === 1 ? "appointment" : "appointments"}`,
+  (n) => `${n} sent`,
+  (n) => `${n} ${n === 1 ? "invoice" : "invoices"}`,
+];
+
+// No `data` (no real source yet): one compact list keeps the three titles and shows no value, or the
+// proven `counts`. `busy`: still loading, so no chip claims anything yet.
+export function MoneyCards({ data, now, counts, busy }: { data?: MoneyData; now?: Date; counts?: MoneyCounts; busy?: boolean } = {}) {
   if (!data) {
+    const values = counts ? [counts.booked, counts.quotes, counts.owed] : [null, null, null];
     return (
       <div className="fd-money" style={{ gridTemplateColumns: "minmax(0, 1fr)" }}>
-        <section className="fd-lst fd-in" style={rise(8)} aria-label="Money">
-          {TITLES.map((title) => (
+        <section className="fd-lst fd-in" style={rise(8)} aria-label="Money" aria-busy={busy || undefined}>
+          {TITLES.map((title, index) => (
             <div key={title} className="fd-rw">
               <div className="fd-rm"><div className="fd-rbx"><h2 className="fd-rn">{title}</h2></div></div>
-              <div className="fd-rac"><NotAvailableChip /></div>
+              <div className="fd-rac">
+                {busy ? null : values[index] === null ? <NotAvailableChip /> : <span className="fd-chip is-plain">{COUNT_TEXT[index](values[index])}</span>}
+              </div>
             </div>
           ))}
         </section>

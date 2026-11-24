@@ -110,9 +110,20 @@ function structuredHours(byKey: Map<string, string>): string | null {
     .join(", ");
 }
 
+// True when a day has a value that could not be used. The line above leaves that day out, so the line
+// alone reads as if the day were closed. A day with no values at all is simply not stated.
+function hasUnusableDay(byKey: Map<string, string>): boolean {
+  return HOURS_DAYS.some(({ key }) => {
+    const open = first(byKey, `business_hours_${key}_open`);
+    const close = first(byKey, `business_hours_${key}_close`);
+    return Boolean(open || close) && dayHours(open, close) === null;
+  });
+}
+
 function buildProfile(byKey: Map<string, string>): BusinessProfile {
   const link = (...keys: string[]) => httpsUrl(first(byKey, ...keys) ?? undefined);
   return {
+    ...(!first(byKey, "business_hours") && hasUnusableDay(byKey) ? { hoursUnreadable: true } : {}),
     name: first(byKey, "business_name"),
     owner: first(byKey, "business_owner_name"),
     phone: first(byKey, "business_phone_number"),

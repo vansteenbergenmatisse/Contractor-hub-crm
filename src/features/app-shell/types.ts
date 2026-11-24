@@ -21,6 +21,8 @@ export type Business = {
   county: string;
   state: string;
   hours: string;
+  // Set when a structured hours value could not be used, so `hours` may be missing a day.
+  hoursUnreadable?: boolean;
   websiteUrl: string | null;
   // The website without https and www, for links in texts ("example.com"), or "".
   site: string;

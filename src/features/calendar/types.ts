@@ -107,6 +107,8 @@ export type LiveStop = {
   start: number;
   // The true start on this day, in minutes after midnight. Grid rows are too coarse to order by.
   startMinute: number;
+  // The true end on this day, in minutes after midnight (1440 when it runs past midnight).
+  endMinute?: number;
   // The appointment began on an earlier day and continues on this one.
   startedEarlier: boolean;
   len: number;
@@ -135,3 +137,11 @@ export type CalendarResult =
   | { state: "empty"; week: CalendarWeekInfo; reason: "no-calendars" | "no-appointments" }
   | { state: "reconnect" }
   | { state: "unavailable" };
+
+// One offered time: a day of the shown week and the location's wall-clock start.
+export type FreeSlot = { day: number; startMinute: number; label: string };
+// open: real times. none: nothing fits. no-hours: the hours could not be read. unsure: a booking may
+// be missing. past: the shown week is over.
+export type LiveFreeTimes =
+  | { state: "open"; visit: FreeSlot[]; job: FreeSlot[] }
+  | { state: "none" | "no-hours" | "unsure" | "past" };

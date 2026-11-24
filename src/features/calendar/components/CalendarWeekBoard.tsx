@@ -7,8 +7,9 @@ import { clockLabel, nowPosition } from "../api/dates";
 import { zonedParts } from "../api/live-week";
 import { useDesktopGrid } from "../hooks/use-desktop-grid";
 import { useNow } from "../hooks/use-now";
-import type { CalendarResult, LiveStop } from "../types";
+import type { CalendarResult, LiveFreeTimes, LiveStop } from "../types";
 import { CalendarHeader } from "./CalendarHeader";
+import { FreeTimesLine } from "./FreeTimesLine";
 import { Glyph } from "./Glyph";
 import { LiveStopDetail } from "./LiveStopDetail";
 import { LiveStopEvent } from "./LiveStopEvent";
@@ -21,8 +22,8 @@ const summary = (count: number) => (count ? `${count} ${count === 1 ? "stop" : "
 const weekHref = (week: string) => `/calendar?week=${week}`;
 
 // One real week, read-only, in the design's layout. Week moves are links, so the server reads that
-// week. No free times are offered: real working hours are not read, and nothing can be booked here.
-export function CalendarWeekBoard({ result, fixedNow }: { result: Extract<CalendarResult, { state: "ready" | "empty" }>; fixedNow?: Date }) {
+// week. Free times are information only, because nothing can be booked here.
+export function CalendarWeekBoard({ result, fixedNow, free }: { result: Extract<CalendarResult, { state: "ready" | "empty" }>; fixedNow?: Date; free?: LiveFreeTimes }) {
   const { week } = result;
   const stops = result.state === "ready" ? result.stops : NO_STOPS;
   const [view, setView] = useState<"week" | "day">("week");
@@ -104,6 +105,7 @@ export function CalendarWeekBoard({ result, fixedNow }: { result: Extract<Calend
       {result.state === "ready" && (!result.complete || result.dropped > 0) ? (
         <p className="fd-cdl" role="status"><span>Some appointments may be missing from this week.</span></p>
       ) : null}
+      {free ? <FreeTimesLine free={free} week={week} /> : null}
       {result.state === "empty" ? <div className="fd-none fx-none fd-in" role="status"><p>{emptyLine}</p></div> : null}
 
       <section className="fd-cbody fd-in" style={{ "--i": 2 } as CSSProperties} aria-label="The calendar">
