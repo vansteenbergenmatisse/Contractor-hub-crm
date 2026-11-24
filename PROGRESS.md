@@ -167,6 +167,11 @@ H. Promote `develop` to `staging` to `main` only on the user's word.
 
 ## Log
 
+### 2026-11-24 - develop pushed; user decisions for the live onboarding test
+- The user set `EMAIL_DELIVERY_MODE=allowlist` and `EMAIL_ALLOWED_RECIPIENTS` (the user's own address) on Vercel Preview `develop` only. Production and staging are untouched.
+- `develop` pushed at 641ce0f on the user's "push" (6f3a5ce..641ce0f).
+- USER DECISION (chat): on dev, install the app with "Select all", including future sub-accounts. This creates CRM accounts for the agency's other sub-accounts and sends them no email while `ONBOARDING_SEND_SET_PASSWORD` is off. `docs/sop-highlevel-install.md` is updated to match. Next: the one-time setup on dev (webhooks, install, CRM menu link), then the user creates a new test sub-account.
+
 ### 2026-11-24 - `integrate/onboarding` and `integrate/signin` fast-forwarded into local `develop`; SOP Step 4 written
 - Local `develop` is at 816f966, 64 commits ahead of origin. Not pushed. `pnpm check` on develop: exit 0; 353 test files passed and 1 skipped; 5105 tests passed and 9 skipped; lint has 0 errors and the 3 warnings that were already there.
 - The user's SOP "STEP 4: Give them access to the CRM" was written outside the repo, to `~/Downloads/SOP-Step-4-Add-Client-To-CRM.md`. It has a one-time agency setup part and a per-client part, and its main path is Sign in with HighLevel. The repo copy of the procedure stays in `docs/sop-highlevel-install.md`.

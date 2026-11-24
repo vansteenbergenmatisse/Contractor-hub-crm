@@ -92,7 +92,9 @@ Updated 2026-11-24 (branch `integrate/onboarding`, not yet merged into `develop`
 - the button, the Users panel and the background check in a browser (component tests only).
 - An account made before the `UnusedAccountMarker` migration can't be proven unused, so it gets no admin link; that person uses Forgot password. (Since `integrate/signin`, **Invite owner** on an existing account counts against the 50-per-day client cap.)
 
-On dev and staging, a new test sub-account is picked up only if the app is installed on it (the Test app install selects only the test account). Repeat the Install steps and select it, or install with "Select all" after the user approves creating CRM accounts for the agency's other sub-accounts.
+On dev and staging, a new test sub-account is picked up only if the app is installed on it. **User decision (2026-11-24): on dev, install with "Select all" (including future sub-accounts)** to prove auto-connect. This creates CRM accounts for the agency's other sub-accounts and sends them no email while `ONBOARDING_SEND_SET_PASSWORD` is off. It writes nothing to HighLevel, so JCR stays read-only. Staging: still select only the test sub-account unless the user says otherwise.
+
+**Order for the one-time setup on an environment:** (1) switch on the webhooks ("Webhook events" above), (2) run the Install with "Select all", (3) add the CRM custom menu link and set `HIGHLEVEL_CRM_MENU_URL` ("Owner access: Sign in with HighLevel" below). The owner's HighLevel password is typed by the user, never by an agent.
 
 ## Owner access: Sign in with HighLevel
 
