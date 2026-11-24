@@ -359,7 +359,8 @@ export function ShellFrame({ business: serverBusiness, searchRows, initialInboxC
             <button type="button" className="fd-ibtn fd-menub" aria-label="Open menu" aria-expanded={drawer} onClick={openDrawer}><Icon name="menu" size={21} strokeWidth={2} /><span>Menu</span></button>
             <span className="fd-bname">{business.name}</span>
             <span className="fx-mttl" aria-hidden="true">{PAGE_TITLE[page]}</span>
-            <span className="fd-tools"><button type="button" className="fd-ibtn fd-callb" aria-label="Call a customer, not available yet" title="Not available yet" disabled data-fx-noact="1"><Icon name="call" size={20} /><span>Call</span></button><button type="button" className="fd-ibtn" aria-label="New lead" onClick={openNewLead}><Icon name="plus" size={20} strokeWidth={2.2} /><span>New lead</span></button></span>
+            {/* Not in .fd-tools: the stylesheet hides that group under 1024px. Icons only, so the centered page title still fits at 320px. */}
+            <span style={{ display: "flex", flex: "none", alignItems: "center", gap: 4, marginLeft: "auto" }}><button type="button" className="fd-ibtn fd-callb" aria-label="Call a customer, not available yet" title="Not available yet" disabled data-fx-noact="1"><Icon name="call" size={20} /></button><button type="button" className="fd-ibtn" aria-label="New lead" title="New lead" onClick={openNewLead}><Icon name="plus" size={20} strokeWidth={2.2} /></button></span>
           </header>
           <header className="fd-top">
             <button type="button" className="fd-search" aria-label="Search customers" aria-keyshortcuts="Meta+F" onClick={api.openSearch}><Icon name="search" size={18} /><span className="fx-sph">Search</span><kbd className="fx-kbd" aria-hidden="true">{mac ? "⌘F" : "Ctrl F"}</kbd></button>

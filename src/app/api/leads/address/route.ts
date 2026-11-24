@@ -1,6 +1,7 @@
 import { getGuards, hitRateLimit } from "@/features/auth";
-import { createPlacesSearch, handleAddressSearch } from "@/features/leads";
+import { handleAddressSearch } from "@/features/leads";
 import { parseEnv } from "@/shared/config";
+import { createPlacesSearch } from "@/shared/lib/places-search";
 
 export const dynamic = "force-dynamic";
 

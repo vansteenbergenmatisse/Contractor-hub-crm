@@ -156,7 +156,7 @@ export function LeadsReady({ leads: loaded, loadedAt, complete, dropped, locatio
           {dropped > 0 && <p className="fd-pns">{dropped === 1 ? "1 lead" : `${dropped} leads`} could not be shown.</p>}
         </div>
         <div className="fd-side2">
-          {weekKnown(leads, loadedAt, complete, dropped, timeZone) && <SourcesPanel nAdded={state.nAdd} leads={leads} loadedAt={loadedAt} timeZone={timeZone} complete={complete} dropped={dropped} />}
+          {weekKnown(leads, loadedAt, complete, dropped, timeZone) && <SourcesPanel nAdded={state.nAdd} addedBy={state.addedBy} leads={leads} loadedAt={loadedAt} timeZone={timeZone} complete={complete} dropped={dropped} />}
           <AddLeadPanel
             sheet={state.sheet}
             phone={phone}
@@ -165,7 +165,7 @@ export function LeadsReady({ leads: loaded, loadedAt, complete, dropped, locatio
             errors={state.errors}
             focus={state.focus}
             onField={(field, value) => dispatch({ type: "field", field, value })}
-            onSubmit={() => dispatch({ type: "submit", origin: origin === "you" ? undefined : ORIGIN_LABEL[origin] })}
+            onSubmit={() => dispatch({ type: "submit", origin: origin === "you" ? undefined : ORIGIN_LABEL[origin], channel: origin })}
             onClose={() => dispatch({ type: "closeAdd" })}
             origin={origin}
             onOrigin={setOrigin}

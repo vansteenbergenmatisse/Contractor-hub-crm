@@ -6,7 +6,8 @@ export { NewLeadDialog } from "./components/NewLeadDialog";
 export { isLeadsCreateEnabled } from "./api/create-flag";
 export { DEFAULT_ORIGIN, ORIGIN_CHOICES, ORIGIN_LABEL, ORIGIN_ORDER, extraOrigin, inPeriod, originFromRaw, originOf, sourceBreakdown } from "./api/lead-sources";
 export { buildLeadsCsv, csvCell, formatPhone, neutralize } from "./api/leads-csv";
-export { createPlacesSearch, handleAddressSearch, handleLeadCreate, handleLeadsExport } from "./api/lead-routes";
+export { handleAddressSearch, handleLeadCreate, handleLeadsExport } from "./api/lead-routes";
+export { createPlacesSearch } from "@/shared/lib/places-search";
 export { leadSearchRows, liveSearchRows } from "./api/search-rows";
 export {
   MAX_ADDED, createInitialState, filterCounts, firstNeedId, hasWaitData, isThisWeek, isWaiting, leadsReducer, mergeLeads, receivedLabel,

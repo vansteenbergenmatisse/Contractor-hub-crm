@@ -1,5 +1,6 @@
 import { validateLead } from "./leads-logic";
 import { isOrigin, ORIGIN_LABEL, originFromRaw } from "./lead-sources";
+import type { AddressSuggestion } from "@/shared/lib/places-search";
 import { buildLeadsCsv, type ExportRow } from "./leads-csv";
 
 // HTTP handlers for Leads. Tenant and user come from the session only. Logs and audit lines hold ids
@@ -133,7 +134,6 @@ export async function handleLeadCreate(request: Request, deps: LeadCreateDeps): 
   return reply(200, { status: outcome.status });
 }
 
-export type AddressSuggestion = { id: string; text: string };
 export type AddressSearchDeps = Base & {
   apiKey: string | undefined;
   search: (apiKey: string, input: string, sessionToken: string) => Promise<AddressSuggestion[]>;
@@ -159,31 +159,4 @@ export async function handleAddressSearch(request: Request, deps: AddressSearchD
     console.error("Address search failed.");
     return reply(502, { error: "unavailable" });
   }
-}
-
-const PLACES_URL = "https://places.googleapis.com/v1/places:autocomplete";
-const PLACES_FIELDS = "suggestions.placePrediction.placeId,suggestions.placePrediction.text.text";
-
-// Places API (New) Autocomplete. The key stays on the server.
-export function createPlacesSearch(doFetch: typeof fetch = fetch) {
-  return async (apiKey: string, input: string, sessionToken: string): Promise<AddressSuggestion[]> => {
-    const response = await doFetch(PLACES_URL, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-goog-api-key": apiKey, "x-goog-fieldmask": PLACES_FIELDS },
-      body: JSON.stringify({ input, sessionToken }),
-      signal: AbortSignal.timeout(4000),
-    });
-    if (!response.ok) {
-      await response.body?.cancel().catch(() => {});
-      throw new Error("places");
-    }
-    const json = (await response.json()) as { suggestions?: Array<{ placePrediction?: { placeId?: unknown; text?: { text?: unknown } } }> };
-    const out: AddressSuggestion[] = [];
-    for (const row of Array.isArray(json.suggestions) ? json.suggestions : []) {
-      const id = row?.placePrediction?.placeId;
-      const text = row?.placePrediction?.text?.text;
-      if (typeof id === "string" && typeof text === "string" && text) out.push({ id, text });
-    }
-    return out.slice(0, 5);
-  };
 }

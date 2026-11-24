@@ -85,6 +85,7 @@ export function AddLeadPanel({ sheet, phone, focusTick, form, errors, focus, onF
           emailRef={emailRef}
           origin={origin}
           onOrigin={onOrigin}
+          originFirst={!dialog}
           fill={sheet}
           onField={onField}
           onSubmit={onSubmit}

@@ -4,7 +4,7 @@ import { useMemo, useState, type CSSProperties } from "react";
 import { useBusiness } from "@/features/app-shell";
 import { joinParts } from "@/shared/lib/join-parts";
 import { sourceBreakdown } from "../api/lead-sources";
-import type { Lead, SourcePeriod } from "../types";
+import type { Lead, LeadOrigin, SourcePeriod } from "../types";
 import { ChannelIcon } from "./ChannelIcon";
 
 const PERIODS: ReadonlyArray<{ key: SourcePeriod; label: string }> = [
@@ -17,19 +17,19 @@ const PHRASE: Record<Exclude<SourcePeriod, "all">, string> = { today: "of today"
 
 const ON: CSSProperties = { background: "var(--main-background-color)", color: "var(--main-hover-color)" };
 
-type Props = { nAdded: number; leads: readonly Lead[]; loadedAt: string; timeZone: string; complete: boolean; dropped: number };
+type Props = { nAdded: number; addedBy?: Partial<Record<LeadOrigin, number>>; leads: readonly Lead[]; loadedAt: string; timeZone: string; complete: boolean; dropped: number };
 
 // Where leads came from, counted from real rows in the location's time zone. A value that is not an
 // exact channel stays Unknown. When contacts beyond the loaded page could count, it says so.
-export function SourcesPanel({ nAdded, leads, loadedAt, timeZone, complete, dropped }: Props) {
+export function SourcesPanel({ nAdded, addedBy, leads, loadedAt, timeZone, complete, dropped }: Props) {
   const business = useBusiness();
   const [period, setPeriod] = useState<SourcePeriod>("week");
   const county = "county" in business && typeof business.county === "string" ? business.county : "";
   const area = joinParts([business.city, county, business.state], ", ");
   // Date formatting is slow; typing in the form beside this panel must not redo it on every key.
   const data = useMemo(
-    () => sourceBreakdown(leads, nAdded, period, { loadedAt, timeZone, complete, dropped }),
-    [leads, nAdded, period, loadedAt, timeZone, complete, dropped],
+    () => sourceBreakdown(leads, addedBy ?? nAdded, period, { loadedAt, timeZone, complete, dropped }),
+    [leads, nAdded, addedBy, period, loadedAt, timeZone, complete, dropped],
   );
   const unknown = data.rows.find((r) => r.key === "unknown")?.count ?? 0;
   const unlabelled = unknown ? ` ${unknown} ${unknown === 1 ? "has" : "have"} no clear source.` : "";

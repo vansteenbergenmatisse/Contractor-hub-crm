@@ -50,6 +50,8 @@ export type LeadsState = {
   added: AddedLead[];
   // Every lead added by hand on this screen (the sources panel's "Added by you" counts them all).
   nAdd: number;
+  // The same leads per channel the owner picked. Absent until the first one is added.
+  addedBy?: Partial<Record<LeadOrigin, number>>;
   auto: boolean;
   old: OldState;
   sheet: boolean;
@@ -66,7 +68,7 @@ export type LeadsAction =
   | { type: "openAdd" }
   | { type: "closeAdd" }
   | { type: "field"; field: FormField; value: string }
-  | { type: "submit"; origin?: string }
+  | { type: "submit"; origin?: string; channel?: LeadOrigin }
   | { type: "toggleAuto" }
   | { type: "old"; to: OldState }
   | { type: "sync"; leads: readonly Lead[] };

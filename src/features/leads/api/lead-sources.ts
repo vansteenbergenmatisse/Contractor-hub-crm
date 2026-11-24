@@ -60,14 +60,16 @@ export type SourceBreakdown = {
 
 type Context = { loadedAt: string; timeZone: string; complete: boolean; dropped: number };
 
-export function sourceBreakdown(leads: readonly Lead[], nAdded: number, period: SourcePeriod, context: Context): SourceBreakdown {
+// `added`: hand-added leads per channel. A plain number counts them all as Added by you.
+export function sourceBreakdown(leads: readonly Lead[], added: number | Partial<Record<LeadOrigin, number>>, period: SourcePeriod, context: Context): SourceBreakdown {
   const { loadedAt, timeZone, complete, dropped } = context;
   const counts = Object.fromEntries(ORIGIN_ORDER.map((key) => [key, 0])) as Record<LeadOrigin, number>;
   const times = leads.map((l) => (l.receivedAt ? Date.parse(l.receivedAt) : Number.NaN));
   leads.forEach((lead, i) => {
     if (inPeriod(times[i], period, loadedAt, timeZone)) counts[originOf(lead)] += 1;
   });
-  counts.you += nAdded;
+  if (typeof added === "number") counts.you += added;
+  else for (const key of ORIGIN_ORDER) counts[key] += added[key] ?? 0;
   const dated = times.every((t) => !Number.isNaN(t));
   const oldest = dated && times.length ? Math.min(...times) : null;
   const reachesPast = period !== "all" && oldest !== null && !inPeriod(oldest, period, loadedAt, timeZone);
