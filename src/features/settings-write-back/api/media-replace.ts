@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { isAllowedLogoUrl } from "@/features/brand";
 import type { CustomValueRawRead, MediaFile, MediaFind, MediaFolderOutcome, MediaLibrary, MediaTrashOutcome, MediaUpload, MediaUploadOutcome } from "@/features/highlevel";
 import type { ImageAnswer, ImageFormat, ImageOldFile, ImageStatus } from "@/features/settings";
+import { isMigrationPendingError } from "@/shared/lib/migration-pending";
 import { saveCustomValues, type AuditOutcome, type SaveDeps } from "./write-back";
 import { MAX_IMAGE_BYTES } from "./webp-check";
 
@@ -280,7 +281,11 @@ async function lockStop(input: Input, deps: MediaDeps): Promise<Run | null> {
   if (!deps.locks) return null;
   try {
     return (await deps.locks(input.tenantId)).has(input.key) ? stopped("locked") : null;
-  } catch {
+  } catch (error) {
+    if (isMigrationPendingError(error)) {
+      console.error(`Settings save failed: step=locks reason=migration_pending migration=${error.migration}`);
+      return stopped("pending_update");
+    }
     console.error("Settings image failed: step=locks");
     return stopped("retry");
   }

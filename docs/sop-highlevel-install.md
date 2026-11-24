@@ -2,7 +2,7 @@
 
 Written 2026-11-22 from the code, `docs/greenlane/build-prompt.md` and that day's install attempts.
 
-**Status: the install from our link worked on dev for JCR on 2026-11-22. On 2026-11-24 "Select all" on dev connected the agency's 3 other sub-accounts through the `INSTALL` webhook (see "Proven on dev, 2026-11-24").** Staging and production have not been installed. Steps marked **(not proven)** have not been run for real. After the first success in each environment, remove the mark or correct the step. A snapshot may not carry the app, so assume each new sub-account needs the Install steps.
+**Status: the install from our link worked on dev for JCR on 2026-11-22. On 2026-11-24 "Select all" on dev connected the agency's 3 other sub-accounts through the `INSTALL` webhook (see "Proven on dev, 2026-11-24").** On 2026-11-24 a sub-account Admin of a brand-new sub-account signed in to the CRM through **Sign in with HighLevel** on a laptop (owner sign-in proven on dev). A snapshot copies custom value names, keys and folders but **not their values**: a new sub-account starts with every value blank (throwaway: 16 folders, 320 blank values). Staging and production have not been installed. Steps marked **(not proven)** have not been run for real. After the first success in each environment, remove the mark or correct the step. A snapshot may not carry the app, so assume each new sub-account needs the Install steps.
 
 ## The short version
 
@@ -56,7 +56,14 @@ The portal's event list has **no INSTALL or UNINSTALL switch** (seen 2026-11-24)
 
 - **Dev and test accounts:** select only the test sub-account. JCR Landscaping is a real client and stays read-only.
 - **Staging:** first set `GHL_APP_ID` to the Test app id. It was found pointing at the live app on 2026-11-21. Then point the Test app's webhook URL at staging.
-- **Production:** test any pending migration on a Neon branch first. CI applies it on merge to `main`. Selecting all sub-accounts creates CRM accounts for all their users, so confirm the mail setting first.
+- **Production:** test any pending migration on a Neon branch first. Since 2026-11-24 the Vercel build applies migrations for `staging` and `main` (CI no longer does); follow `docs/release-migrations.md` and check `<site>/admin/migrations` shows none pending. Selecting all sub-accounts creates CRM accounts for all their users, so confirm the mail setting first.
+
+### New app permissions (scopes) and re-approve
+
+Checked 2026-11-24. The CRM does **not** store which permissions a token was granted, so the database cannot tell whether a sub-account already has a new scope such as `medias.readonly`/`medias.write`. Test it instead: one image action (Settings, Add image) on that sub-account. "Needs media permission" means the token lacks it.
+- Adding scopes in the developer portal does not show a re-approve button on an installed app: the start link lands on the installed app page with **Uninstall** only.
+- Lowest-risk way to refresh one sub-account: Uninstall the app on **that sub-account only**, then reinstall from `/admin/clients` > **Connect sub-accounts** selecting only it. Its CRM client row, users, locks and audit rows are kept and come back connected.
+- **What Uninstall does:** on a **sub-account**: its stored tokens are deleted, the client becomes `uninstalled` (row kept), users and their links are kept, their sessions stop working until reinstall, locks and audit rows are kept. Reinstall reconnects the same client row and re-syncs users. On the **agency**: only the agency token is deleted; clients stay connected on their own tokens, but new sub-accounts cannot connect until the agency installs again from our link. **Never uninstall at agency level on production without a plan.**
 
 ## Add a new client (after the install)
 
@@ -70,8 +77,8 @@ Updated 2026-11-24 (merged into `develop`, deployed to dev).
 - The daily sync at 05:00 UTC still runs, on production only.
 
 **Steps, from new sub-account to owner signed in:**
-1. Create the sub-account in HighLevel and load the JCR snapshot.
-2. Set the sub-account's email and fill in its custom values (`docs/tenant-branding.md`).
+1. Create the sub-account in HighLevel and load the JCR snapshot. The snapshot also adds a "JCRlandscaping Account Files" item to the left menu; that comes from the snapshot, not from the CRM.
+2. Set the sub-account's email. The snapshot leaves every custom value blank. Fill them from the template first: on `/admin/clients`, **Copy from template** on the new client's row (needs `TEMPLATE_COPY_ENABLED=true` and `TEMPLATE_TENANT_ID`; preview first, then apply; fills blank values only, images re-uploaded into the new sub-account; `docs/onboarding.md` "Copy values from template"). Then replace the template values with the client's own (`docs/tenant-branding.md`), in HighLevel or through **Edit values** on the client row. The row warns "still template values" until the identity values differ. Then **lock** the values the owner must not change ("Set, then lock" in `docs/onboarding.md`).
 3. Add the client's users in HighLevel (the owner as a sub-account admin becomes our `owner`).
 4. Open `/admin/clients`. The background check runs on that visit. If the client is not there, click **Check for new sub-accounts**, then reload.
 5. If it is still missing, the app is not installed on that sub-account. Check in HighLevel, then repeat the Install steps from our link and include it. The daily sync (production) also emails `ADMIN_ALERT_EMAIL` about sub-accounts without the app.
@@ -143,6 +150,26 @@ The old "Install your app" guide (a page on `sites.leadconnectorhq.com`) was the
 
 **Only owners and office users** of a connected client get a handoff or pairing link. Forge Forward admins sign in with email and password.
 
+### Who gets in, and what they see (2026-11-24)
+
+No Forge Forward approval per user or per sub-account. HighLevel's own user list for the sub-account decides:
+- A sub-account **Admin** becomes the CRM `owner`, a sub-account **User** becomes `office`, on their first open of **CRM**. Nothing to approve.
+- An **agency** login (for example opening the sub-account from the agency view) does **not** get in. Each client's CRM belongs to that business's own team. To test as a client, use a user of that sub-account, or **View client** on `/admin/clients`.
+- Signed in once, the device stays signed in for 1 year, renewed while used. After that, `/sign-in` says "Sign in again with HighLevel. Use j•••@gmail.com." (the email used last time, masked), the button goes straight to that client's CRM page, and "Forgot that password? Reset it on the HighLevel login screen." An explicit sign-out clears that hint.
+- Inside HighLevel, if the browser drops the CRM's sign-in (Safari often does), the page says "Your sign-in ended." with **Sign in again** and **Open the CRM full screen**. Never a blank page.
+
+Messages on the CRM page when someone cannot get in (each has **Try again**):
+
+| Message starts with | Cause | Fix |
+|---|---|---|
+| "You are signed in with an agency login." | The HighLevel login is an agency user | Use a user of that sub-account |
+| "Your HighLevel user is not part of this business yet." | Not on the sub-account's user list | The owner adds them as a team member in HighLevel |
+| "This CRM is turned off for this business." | Login turned off on `/admin/clients` | Turn on login |
+| "This business is not connected to the CRM yet." | Client not connected or uninstalled | Run the Install steps |
+| "Your access to this CRM is turned off." | That CRM user was turned off | Turn the user back on under **Users** |
+| "Ask Forge Forward to fix this: your email is already linked to another CRM." | One email is one CRM account across all clients | Use another email for this business, or move the account |
+| "We could not sign you in." | Anything else | Check Vercel logs for `embed_login denied reason=` (it also logs the HighLevel `type` and `role`) |
+
 ## Troubleshooting
 
 To see a client's real data as a Forge Forward admin, use **View client** on `/admin/clients` (`docs/view-as-client-and-token-renewal.md`). Production also needs `CRON_SECRET` so tokens renew when nobody opens the app.
@@ -159,3 +186,6 @@ To see a client's real data as a Forge Forward admin, use **View client** on `/a
 | Installed in HighLevel, but no client in the CRM, and **Continue** is greyed out | Install did not start from our link, so no agency token is stored | Uninstall the app from that sub-account, then run the Install steps from our link |
 | Client shows `needs_reconnect` | HighLevel rejected the stored token | Run the Install steps again |
 | Leads says it can't load | Missing env, HighLevel error or read limit | Check the Vercel logs for `HighLevel contacts read failed: step=` |
+| CRM page says "Ask Forge Forward for access." | Code from before 2026-11-24 evening; the real reason is in the log line `embed_login denied reason=` (on 2026-11-24 it was `not_in_location`: an agency login) | Deploy current code; see "Who gets in" above |
+| Settings save says "Database update pending" | A migration is not applied on this environment | Open `<site>/admin/migrations`; follow `docs/release-migrations.md` |
+| Image change says "needs media permission" | The sub-account's token lacks `medias.*` | See "New app permissions (scopes) and re-approve" |

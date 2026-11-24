@@ -2,7 +2,10 @@ import { createHash } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CustomValueDetail, MediaFile, MediaFind, MediaLibrary, MediaUploadOutcome } from "@/features/highlevel";
 import { handleMediaReplace, replaceImage, type MediaDeps, type MediaRouteDeps } from "@/features/settings-write-back";
+import { MigrationPendingError } from "@/shared/lib/migration-pending";
 import { lossy } from "./webp-fixtures";
+
+const MIGRATION = "20261124120000_custom_value_lock";
 
 // Any allowed image type replaces any other. A new format is a new file in the old file's folder,
 // named after it with the new extension. Mocked HighLevel and database only. All values are fake.
@@ -485,6 +488,25 @@ describe("replaceImage: format change stops and failures", () => {
     expect(d.upload).toHaveBeenCalledTimes(1);
     expect(d.update).not.toHaveBeenCalled();
     expect(d.trash).toHaveBeenCalledExactlyOnceWith("T1", "f1");
+  });
+
+  it("the lock table goes missing after the route's own check: pending_update, one log line, nothing uploaded", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const d = { ...deps(), locks: vi.fn(async () => { throw new MigrationPendingError(MIGRATION); }) };
+    expect(await run(d)).toEqual({ status: "pending_update" });
+    expect(d.upload).not.toHaveBeenCalled();
+    expect(d.update).not.toHaveBeenCalled();
+    expect(d.trash).not.toHaveBeenCalled();
+    expect(errors.mock.calls).toEqual([[`Settings save failed: step=locks reason=migration_pending migration=${MIGRATION}`]]);
+    errors.mockRestore();
+  });
+
+  it("any other lock read failure before the upload still answers retry", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const d = { ...deps(), locks: vi.fn(async () => { throw new Error("db"); }) };
+    expect(await run(d)).toEqual({ status: "retry" });
+    expect(d.upload).not.toHaveBeenCalled();
+    errors.mockRestore();
   });
 
   it("the new file's stored bytes differ from the ones sent: unproven, the old file kept", async () => {
