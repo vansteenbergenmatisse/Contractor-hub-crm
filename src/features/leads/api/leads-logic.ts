@@ -128,14 +128,16 @@ export function leadsReducer(state: LeadsState, action: LeadsAction): LeadsState
       const { errors, focus } = validateLead(state.form);
       if (focus) return { ...state, errors, focus: { field: focus, tick: (state.focus?.tick ?? 0) + 1 } };
       const f = state.form;
+      const channel = action.channel ?? "you";
       const added: AddedLead = {
         id: `added-${state.nAdd + 1}`,
         name: f.name.trim(),
-        sub: [f.need.trim() || "New lead", f.phone.trim(), f.email.trim(), f.addr.trim()].filter(Boolean).join(" · "),
+        sub: [f.need.trim() || "New lead", action.origin ?? "", f.phone.trim(), f.email.trim(), f.addr.trim()].filter(Boolean).join(" · "),
       };
       return {
         // The list keeps the newest 3 hand-added leads (design logic 804 `.slice(0, 3)`).
-        ...state, sheet: false, filter: "all", added: [added, ...state.added].slice(0, MAX_ADDED), nAdd: state.nAdd + 1, form: { ...EMPTY_FORM },
+        ...state, sheet: false, filter: "all", added: [added, ...state.added].slice(0, MAX_ADDED), nAdd: state.nAdd + 1,
+        addedBy: { ...state.addedBy, [channel]: (state.addedBy?.[channel] ?? 0) + 1 }, form: { ...EMPTY_FORM },
         errors: { ...NO_ERRORS }, focus: null,
       };
     }

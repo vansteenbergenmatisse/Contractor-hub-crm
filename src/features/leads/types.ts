@@ -20,7 +20,14 @@ export type Lead = {
   receivedAt?: string;
   address: string;
   status: LeadStatus;
+  // Set only for a channel `source` cannot name (Email, Bing Places, Google Ads, Added by you).
+  origin?: LeadOrigin;
 };
+
+// Where a lead came from, as the source breakdown lists it. Unmatched values are "unknown".
+export type LeadOrigin = "call" | "text" | "email" | "website" | "fb" | "ig" | "gmb" | "bing" | "gads" | "you" | "unknown";
+export type SourcePeriod = "all" | "today" | "week" | "month";
+
 
 // A lead added by hand on this screen.
 export type AddedLead = { id: string; name: string; sub: string };
@@ -43,6 +50,8 @@ export type LeadsState = {
   added: AddedLead[];
   // Every lead added by hand on this screen (the sources panel's "Added by you" counts them all).
   nAdd: number;
+  // The same leads per channel the owner picked. Absent until the first one is added.
+  addedBy?: Partial<Record<LeadOrigin, number>>;
   auto: boolean;
   old: OldState;
   sheet: boolean;
@@ -59,7 +68,7 @@ export type LeadsAction =
   | { type: "openAdd" }
   | { type: "closeAdd" }
   | { type: "field"; field: FormField; value: string }
-  | { type: "submit" }
+  | { type: "submit"; origin?: string; channel?: LeadOrigin }
   | { type: "toggleAuto" }
   | { type: "old"; to: OldState }
   | { type: "sync"; leads: readonly Lead[] };

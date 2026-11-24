@@ -4,16 +4,18 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { useRouter } from "next/navigation";
 import { PAGE_PATH, PageAction, useRowFocus, useSearchRows } from "@/features/app-shell";
 import {
-  addLeadMode, filterCounts, firstNeedId, hasWaitData, sourceCounts, summarize, tiles, visibleAdded, visibleLeads, weekKnown, withReceived,
+  addLeadMode, filterCounts, firstNeedId, hasWaitData, summarize, tiles, validateLead, visibleAdded, visibleLeads, weekKnown, withReceived,
 } from "../api/leads-logic";
 import { liveSearchRows } from "../api/search-rows";
 import { isPhoneNow, useIsPhone } from "../hooks/use-is-phone";
 import { useLeads, useOpenAddFromUrl, useRevealLead } from "../hooks/use-leads";
+import { DEFAULT_ORIGIN, ORIGIN_LABEL } from "../api/lead-sources";
 import { useTimeZone } from "../hooks/use-time-zone";
-import type { Lead } from "../types";
+import type { Lead, LeadOrigin } from "../types";
 import { AddLeadPanel } from "./AddLeadPanel";
 import { AddedLeadRow } from "./AddedLeadRow";
 import { ChannelIcon } from "./ChannelIcon";
+import { ExportPanel } from "./ExportPanel";
 import { FilterControl } from "./FilterControl";
 import { LeadRow } from "./LeadRow";
 import { LeadsHeader } from "./LeadsHeader";
@@ -22,11 +24,11 @@ import { WaitSummary } from "./WaitSummary";
 
 const rise = (i: number) => ({ "--i": i }) as CSSProperties;
 
-type Props = { leads: readonly Lead[]; loadedAt: string; complete: boolean; dropped: number; locationZone?: string | null };
+type Props = { leads: readonly Lead[]; loadedAt: string; complete: boolean; dropped: number; locationZone?: string | null; canExport?: boolean };
 
 // The list of real leads. Read-only toward the CRM: nothing here sends or saves. A hand-added lead
 // stays on this screen; call, reply and booking buttons are off on real contacts.
-export function LeadsReady({ leads: loaded, loadedAt, complete, dropped, locationZone }: Props) {
+export function LeadsReady({ leads: loaded, loadedAt, complete, dropped, locationZone, canExport }: Props) {
   const viewerZone = useTimeZone();
   const timeZone = locationZone ?? viewerZone;
   const leads = useMemo(() => withReceived(loaded, loadedAt, timeZone), [loaded, loadedAt, timeZone]);
@@ -40,6 +42,7 @@ export function LeadsReady({ leads: loaded, loadedAt, complete, dropped, locatio
     else setFocusTick((n) => n + 1);
   }, [dispatch]);
   useOpenAddFromUrl(openAdd);
+  const [origin, setOrigin] = useState<LeadOrigin>(DEFAULT_ORIGIN);
 
   // Phone: when the sheet closes, the cursor goes back to the "Add a lead" button in the action bar.
   // That button is mounted again by the shell after the sheet closes, so its ref takes the focus.
@@ -87,6 +90,13 @@ export function LeadsReady({ leads: loaded, loadedAt, complete, dropped, locatio
   // Search finds the loaded leads and the hand-added ones.
   const found = useMemo(() => liveSearchRows(kept.added, leads), [kept.added, leads]);
   useSearchRows("leads", found);
+
+  // After a good submit the source goes back, so the next lead is not counted under the last one.
+  const submitLead = () => {
+    const valid = !validateLead(state.form).focus;
+    dispatch({ type: "submit", origin: origin === "you" ? undefined : ORIGIN_LABEL[origin], channel: origin });
+    if (valid) setOrigin(DEFAULT_ORIGIN);
+  };
 
   const go = () => {
     if (!summary.target) return;
@@ -154,6 +164,7 @@ export function LeadsReady({ leads: loaded, loadedAt, complete, dropped, locatio
           {dropped > 0 && <p className="fd-pns">{dropped === 1 ? "1 lead" : `${dropped} leads`} could not be shown.</p>}
         </div>
         <div className="fd-side2">
+          {weekKnown(leads, loadedAt, complete, dropped, timeZone) && <SourcesPanel nAdded={state.nAdd} addedBy={state.addedBy} leads={leads} loadedAt={loadedAt} timeZone={timeZone} complete={complete} dropped={dropped} />}
           <AddLeadPanel
             sheet={state.sheet}
             phone={phone}
@@ -162,10 +173,12 @@ export function LeadsReady({ leads: loaded, loadedAt, complete, dropped, locatio
             errors={state.errors}
             focus={state.focus}
             onField={(field, value) => dispatch({ type: "field", field, value })}
-            onSubmit={() => dispatch({ type: "submit" })}
+            onSubmit={submitLead}
             onClose={() => dispatch({ type: "closeAdd" })}
+            origin={origin}
+            onOrigin={setOrigin}
           />
-          {weekKnown(leads, loadedAt, complete, dropped, timeZone) && <SourcesPanel nAdded={state.nAdd} counts={sourceCounts(leads, loadedAt, timeZone)} />}
+          {canExport && <ExportPanel />}
         </div>
       </div>
     </>
