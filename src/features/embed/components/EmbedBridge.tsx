@@ -3,8 +3,14 @@
 import { useEffect, useState } from "react";
 import { startHandshake, type HandshakeResult } from "../api/handshake";
 import { claimAutoJump, fullScreenUrl, tryTopNavigation, type TabStorage, type TopWindow } from "../api/full-screen";
+import { EMBED_DENIAL_MESSAGES, type EmbedDenialCode } from "../api/denial";
 
-const MESSAGES: Record<Exclude<HandshakeResult, "signed_in">, string> = {
+// "no_access" says why when the handshake knows (it always does in the browser: the server's code,
+// or "other"). The plain text below is only left for a refusal that came with no reason.
+// The page HighLevel opens; loading it again runs the in-frame sign-in again.
+const EMBED_PATH = "/embed";
+
+const MESSAGES:Record<Exclude<HandshakeResult, "signed_in">, string> = {
   no_access: "Ask Forge Forward for access.",
   no_data: "HighLevel did not answer. Reload this page, or open it from the HighLevel menu.",
   not_embedded: "Open this page from inside HighLevel.",
@@ -40,6 +46,7 @@ export function EmbedBridge({
 } = {}) {
   const [result, setResult] = useState<HandshakeResult | null>(null);
   const [handoffUrl, setHandoffUrl] = useState<string | null>(null);
+  const [denial, setDenial] = useState<EmbedDenialCode | null>(null);
 
   useEffect(() => {
     let url: string | null = null;
@@ -55,7 +62,8 @@ export function EmbedBridge({
       onHandoff: (token) => {
         url = fullScreenUrl(window.location.origin, token);
       },
-      onResult: (value) => {
+      onResult: (value, why) => {
+        if (why) setDenial(why);
         setResult(value);
         if (value !== "signed_in") return;
         if (url) {
@@ -89,9 +97,23 @@ export function EmbedBridge({
     );
   }
 
+  // A refusal or no answer from HighLevel: one obvious action, run the sign-in again (a fresh /embed
+  // load repeats the handshake). Not when the page is not inside HighLevel: a reload cannot fix that.
+  const canRetry = result === "no_access" || result === "no_data";
   return (
-    <main style={{ padding: 24, fontFamily: "system-ui, sans-serif" }}>
-      <p role="status">{result === null || result === "signed_in" ? "Signing you in…" : MESSAGES[result]}</p>
+    <main style={{ padding: 24, fontFamily: "system-ui, sans-serif", display: "grid", gap: 12, maxWidth: 420 }}>
+      <p role="status">
+        {result === null || result === "signed_in"
+          ? "Signing you in…"
+          : result === "no_access" && denial
+            ? EMBED_DENIAL_MESSAGES[denial]
+            : MESSAGES[result]}
+      </p>
+      {canRetry ? (
+        <button type="button" onClick={() => goTo(EMBED_PATH)} style={{ padding: "12px 16px", minHeight: 44, borderRadius: 8, border: "none", background: "CanvasText", color: "Canvas" }}>
+          Try again
+        </button>
+      ) : null}
     </main>
   );
 }

@@ -3,6 +3,7 @@ import { setSessionCookie } from "better-auth/cookies";
 import type { BetterAuthPlugin } from "better-auth";
 import { audit } from "./invite-routes";
 import { clientTenant, issueDeviceToken } from "./device-sign-in";
+import { EMBED_DENIAL_HEADER, type EmbedDenialCode } from "@/features/embed";
 
 // Sign-in from inside HighLevel (build prompt 4.5). The browser sends the encrypted user data it got
 // from HighLevel; an injected resolver decrypts it and names the CRM user (or nobody). The session
@@ -30,7 +31,40 @@ export type EmbedLoginOptions = {
   handoff?: boolean;
 };
 
-export type EmbedResolution = string | null | { reason: string } | { userId: string; tenantId: string };
+// `who`: HighLevel's user type and role from the decrypted user data (never the email or an id), used
+// to tell an agency login apart and written to the refusal log line.
+export type EmbedWho = { type?: string; role?: string };
+export type EmbedResolution = string | null | { reason: string; who?: EmbedWho } | { userId: string; tenantId: string };
+
+// The internal reason (log only) as the small public code the /embed page turns into a message.
+// An agency login is never on a sub-account's user list; it is told by HighLevel's `type`, as in
+// provisioning ("agency"). Anything not listed is "other".
+export function embedDenialCode(reason: string, who?: EmbedWho): EmbedDenialCode {
+  switch (reason) {
+    case "not_in_location":
+      return who?.type?.toLowerCase() === "agency" ? "agency_user" : "not_in_location";
+    case "skipped_agency":
+      return "agency_user";
+    case "skipped_removed":
+      return "not_in_location";
+    case "tenant_login_off":
+    case "skipped_login_off":
+      return "login_off";
+    case "location_not_installed":
+    case "tenant_uninstalled":
+    case "tenant_needs_reconnect":
+      return "not_connected";
+    case "user_disabled":
+      return "user_off";
+    case "skipped_conflict":
+      return "account_conflict";
+    default:
+      return "other";
+  }
+}
+
+// A type or role for the log: a short plain word, else "other" (never free text from the payload).
+const logWord = (value: string | undefined) => (value === undefined ? "none" : /^[a-z_-]{1,20}$/i.test(value) ? value.toLowerCase() : "other");
 
 export function embedLoginPlugin(options: EmbedLoginOptions & { appOrigin: string }): BetterAuthPlugin {
   return {
@@ -45,10 +79,13 @@ export function embedLoginPlugin(options: EmbedLoginOptions & { appOrigin: strin
     endpoints: {
       embedLogin: createAuthEndpoint("/embed-login", { method: "POST" }, async (ctx) => {
         ctx.setHeader("cache-control", "no-store");
-        // Fixed messages only: never the user, the payload or the reason.
-        const refuse = (reason: string) => {
+        // Fixed body only: never the user, the payload or the internal reason. The public code (no
+        // email, no id) goes in a header so the /embed page can say what fixes it.
+        const refuse = (reason: string, who?: EmbedWho) => {
           audit("embed_login", { outcome: "denied", reason });
-          return new APIError("FORBIDDEN", { message: "Forbidden" });
+          const code = embedDenialCode(reason, who);
+          console.warn(`embed_login denied reason=${code} type=${logWord(who?.type)} role=${logWord(who?.role)}`);
+          return new APIError("FORBIDDEN", { message: "Forbidden" }, { [EMBED_DENIAL_HEADER]: code, "cache-control": "no-store" });
         };
         if (ctx.request?.headers.get("origin") !== options.appOrigin) throw refuse("origin");
         const body = ctx.body as { payload?: unknown } | null;
@@ -63,7 +100,7 @@ export function embedLoginPlugin(options: EmbedLoginOptions & { appOrigin: strin
         } catch {
           resolved = null;
         }
-        if (resolved !== null && typeof resolved === "object" && "reason" in resolved) throw refuse(resolved.reason);
+        if (resolved !== null && typeof resolved === "object" && "reason" in resolved) throw refuse(resolved.reason, resolved.who);
         const bound = resolved !== null && typeof resolved === "object" ? resolved : null;
         const userId = bound ? bound.userId : (resolved as string | null);
         if (!userId) throw refuse("no_match");

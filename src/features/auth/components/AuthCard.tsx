@@ -9,7 +9,7 @@ const initials = (name: string) =>
 // The framed card of the design's sign-in screen (fd-login / fd-lcard). Before sign-in no tenant is
 // known, so the brand block names the product. A personal link (`brand`) shows that client's public
 // branding instead; it changes only how this page looks.
-export function AuthCard({ title, subtitle, brand, children }: { title: string; subtitle?: string; brand?: SignInBrand | null; children: ReactNode }) {
+export function AuthCard({ title, subtitle, brand, children }: { title: string; subtitle?: ReactNode; brand?: SignInBrand | null; children: ReactNode }) {
   const name = brand?.name ?? "Contractor Hub";
   return (
     <div className={`fd-app fd-login brand-scope${brand?.backgroundUrl ? " has-bg" : ""}`}>

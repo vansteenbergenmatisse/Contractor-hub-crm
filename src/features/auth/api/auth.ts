@@ -1,4 +1,6 @@
 import { betterAuth } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
+import { encodeSignInHint, maskEmailHint, SIGN_IN_HINT_COOKIE, SIGN_IN_HINT_MAX_AGE_SECONDS } from "./sign-in-hint";
 import type { EmailSender } from "./email-sender";
 import { embedLoginPlugin, type EmbedLoginOptions } from "./embed-login";
 import { deviceSignInPlugin } from "./device-sign-in";
@@ -34,7 +36,52 @@ export type CreateAuthOptions = {
   // "Open on this device": handoff from the /embed sign-in and pairing by QR code or link
   // (api/device-sign-in.ts). Left out, those endpoints do not exist and /embed gives no handoff.
   deviceSignIn?: boolean;
+  // The way back after a long session ends (api/sign-in-hint.ts): the personal-link slug of a tenant,
+  // or null. Left out, no hint cookie is written.
+  signInHint?: { slugForTenant: (tenantId: string) => Promise<string | null> };
 };
+
+// Where a session is created for a person: password sign-in, the device sign-in (full-screen handoff
+// from HighLevel, or pairing) and /embed-login inside HighLevel's frame, so someone who only ever uses
+// the CRM inside HighLevel also gets the hint.
+const HINT_PATHS = new Set(["/sign-in/email", "/device-sign-in", "/embed-login"]);
+// /embed-login answers inside HighLevel's cross-site frame, where a SameSite=Lax cookie is dropped by
+// the browser: that one is SameSite=None; Secure (it still grants nothing).
+const FRAMED_HINT_PATHS = new Set(["/embed-login"]);
+
+function signInHintHook(options: CreateAuthOptions) {
+  const hint = options.signInHint;
+  const secure = new URL(options.baseURL).protocol === "https:";
+  return createAuthMiddleware(async (ctx) => {
+    if (!hint) return;
+    if (ctx.path === "/sign-out") {
+      // Shared devices: an explicit sign-out forgets which email was used here. SameSite=None where
+      // possible, so the clear also works when sign-out runs inside HighLevel's frame.
+      ctx.setCookie(SIGN_IN_HINT_COOKIE, "", { httpOnly: true, secure, sameSite: secure ? "none" : "lax", path: "/", maxAge: 0 });
+      return;
+    }
+    if (!HINT_PATHS.has(ctx.path)) return;
+    const created = ctx.context.newSession;
+    const user = created?.user as { email?: string; role?: string; tenantId?: string | null } | undefined;
+    // Only a client's person (owner or office) with a tenant; never Forge Forward staff.
+    if (!user?.email || !user.tenantId || (user.role !== "owner" && user.role !== "office")) return;
+    // The hint is a convenience: a failure never touches the sign-in.
+    try {
+      const slug = await hint.slugForTenant(user.tenantId).catch(() => null);
+      if (!maskEmailHint(user.email)) return;
+      const framed = FRAMED_HINT_PATHS.has(ctx.path);
+      ctx.setCookie(SIGN_IN_HINT_COOKIE, encodeSignInHint({ slug, email: user.email }), {
+        httpOnly: true,
+        secure: framed ? true : secure,
+        sameSite: framed ? "none" : "lax",
+        path: "/",
+        maxAge: SIGN_IN_HINT_MAX_AGE_SECONDS,
+      });
+    } catch {
+      // nothing: no hint this time
+    }
+  });
+}
 
 export function createAuth(options: CreateAuthOptions) {
   return betterAuth({
@@ -102,6 +149,7 @@ export function createAuth(options: CreateAuthOptions) {
       },
     },
     rateLimit: { enabled: true, storage: "database" },
+    hooks: { after: signInHintHook(options) },
     // On Vercel the platform sets these headers; the first is not forgeable by the client.
     advanced: { ipAddress: { ipAddressHeaders: ["x-vercel-forwarded-for", "x-forwarded-for"] } },
     databaseHooks: {

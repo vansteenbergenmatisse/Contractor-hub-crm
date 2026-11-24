@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { FramedSignedOut, isFramedRequest } from "@/features/embed";
 import { ClientViewBanner } from "@/features/admin";
 import { AppShell, type SearchRow } from "@/features/app-shell";
 import { loadBusiness } from "@/features/brand";
@@ -17,7 +19,11 @@ const SEARCH_ROWS: readonly SearchRow[] = [];
 // the admin page. The tenant comes from the session only.
 export default async function AppLayout({ children, newLead }: { children: ReactNode; newLead?: ReactNode }) {
   const user = await getRequestUser();
-  if (!user) redirect("/sign-in");
+  if (!user) {
+    // Inside HighLevel's frame /sign-in cannot be shown (it may not be framed): say so and offer full screen.
+    if (isFramedRequest(await headers())) return <FramedSignedOut />;
+    redirect("/sign-in");
+  }
   // An admin only gets here with a tenant through the read-only client view.
   const viewing = user.role === "admin" && user.viewing === true;
   if ((user.role === "admin" && !viewing) || !user.tenantId) redirect("/admin/clients");

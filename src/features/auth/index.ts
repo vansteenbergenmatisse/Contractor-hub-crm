@@ -35,7 +35,8 @@ export { setPasswordEmail, SET_PASSWORD_LINK_HOURS } from "./api/set-password-em
 export type { CreatedInvite } from "./api/invites";
 export { SignInForm } from "./components/SignInForm";
 export { DeviceSignIn } from "./components/DeviceSignIn";
-export { loadHighLevelSignIn } from "./api/instance";
+export { loadHighLevelSignIn, loadSignInPage } from "./api/instance";
+export { SIGN_IN_HINT_COOKIE } from "./api/sign-in-hint";
 export { highLevelSignInUrl, parseMenuUrlTemplate, resolveHighLevelSignIn, HIGHLEVEL_APP_HOME } from "./api/highlevel-sign-in";
 export type { HighLevelSignIn } from "./api/highlevel-sign-in";
 export { consumeDeviceToken, deviceSignInLink, DEVICE_SIGN_IN_PATH, DEVICE_TOKEN_SECONDS, hashDeviceToken, issueDeviceToken } from "./api/device-sign-in";
