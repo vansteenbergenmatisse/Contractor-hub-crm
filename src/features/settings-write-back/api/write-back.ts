@@ -161,7 +161,8 @@ async function safeRead(tenantId: string, deps: SaveDeps): Promise<CustomValueRe
   }
 }
 
-// `current`: only on "unknown" when the read shows a third value, neither the one sent nor the old one.
+// `current`: only on "unknown" when the read shows a third value, neither the one sent nor the old one,
+// and HighLevel answered every write for this key.
 type Settled = { status: SaveStatus; audit: AuditOutcome; restoreAudit: AuditOutcome; current?: string };
 
 // What HighLevel holds now decides the result, not the answer to the PUT. No answer with the old value
@@ -173,7 +174,10 @@ function confirmed(written: Written, now: CustomValues | null): Settled {
   const { candidate, http, unresolved, restoreAuditId, restoreHttp } = written;
   const current = now[candidate.key];
   const previous = candidate.previous.trim();
-  const third: Settled = current !== undefined && current !== previous && current !== candidate.value ? { ...unknown, current } : unknown;
+  // A write or restore with no answer can still land, so a third value read now may not last: the
+  // owner gets "could not confirm" instead, and the page keeps its baseline.
+  const mayLand = http === "no_answer" || restoreHttp === "no_answer";
+  const third: Settled = !mayLand && current !== undefined && current !== previous && current !== candidate.value ? { ...unknown, current } : unknown;
   if (restoreAuditId) return current === previous && restoreHttp !== "no_answer" ? { status: "retry", audit: "reverted", restoreAudit: "saved" } : third;
   if (unresolved) return third;
   if (current === candidate.value) return { status: "saved", audit: "saved", restoreAudit: "saved" };

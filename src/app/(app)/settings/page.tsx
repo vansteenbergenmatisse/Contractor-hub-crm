@@ -38,6 +38,6 @@ export default async function Page({ searchParams }: Props = {}) {
   ) : canSave ? (
     <SettingsWriteBackPage initialValues={values} initialSection={section} account={loaded.layout} phoneNumbers={phoneNumbers} mediaReplace={isMediaReplaceEnabled(user?.tenantId ?? "")} />
   ) : (
-    <SettingsPage initialValues={values} initialSection={section} account={loaded.layout} phoneNumbers={phoneNumbers} saveDisabledReason={saveOffReason(user?.role)} />
+    <SettingsPage initialValues={values} initialSection={section} account={loaded.layout} phoneNumbers={phoneNumbers} saveDisabledReason={saveOffReason(user?.role, !!user?.tenantId)} />
   );
 }
