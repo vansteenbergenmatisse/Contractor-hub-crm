@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { afterPause } from "@/shared/lib/after-pause";
+import { canDownloadInPage, downloadExport } from "../api/export-download";
 import { exportAnswer } from "../api/export-answer";
 import { RESULT_COOKIE, RESULT_COOKIE_ATTRIBUTES, resultFromCookie, STAY_ACTION } from "../api/export-stay";
 
@@ -43,6 +44,8 @@ export function ExportPanel() {
   const [failure, setFailure] = useState<string | null>(null);
   const pending = useRef(false);
   const cancelGiveUp = useRef<(() => void) | null>(null);
+  const inFlight = useRef<AbortController | null>(null);
+  const mounted = useRef(true);
   const message = failure ?? (retried ? null : exportAnswer(code));
 
   useEffect(() => {
@@ -59,7 +62,43 @@ export function ExportPanel() {
     store.addEventListener("change", onChange);
     return () => store.removeEventListener("change", onChange);
   }, []);
-  useEffect(() => () => cancelGiveUp.current?.(), []);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      cancelGiveUp.current?.();
+      inFlight.current?.abort();
+    };
+  }, []);
+
+  // The normal path with JavaScript. A click also covers Enter, which browsers turn into a click on
+  // the submit button. The form post below stays for no JavaScript and browsers without blob saving.
+  async function onExportClick(event: MouseEvent<HTMLButtonElement>) {
+    if (pending.current) {
+      event.preventDefault();
+      return;
+    }
+    if (!canDownloadInPage()) return;
+    event.preventDefault();
+    const form = event.currentTarget.form;
+    const includeContact = !!form && new FormData(form).get("includeContact") === "1";
+    const controller = new AbortController();
+    inFlight.current = controller;
+    pending.current = true;
+    setRetried(true);
+    setFailure(null);
+    setBusy(true);
+    clearExportFromAddress();
+    const cancelTimeout = afterPause(() => controller.abort(), GIVE_UP_MS);
+    const outcome = await downloadExport(includeContact, controller.signal);
+    cancelTimeout();
+    if (inFlight.current !== controller) return;
+    inFlight.current = null;
+    pending.current = false;
+    if (controller.signal.aborted && !mounted.current) return;
+    setBusy(false);
+    setFailure(exportAnswer(outcome));
+  }
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     if (pending.current) {
@@ -96,7 +135,7 @@ export function ExportPanel() {
           <input type="checkbox" name="includeContact" value="1" />
           <span>Include phone, email and address</span>
         </label>
-        <button type="submit" className="fd-btn is-plain" aria-busy={busy || undefined}>{busy ? "Exporting..." : "Export CSV"}</button>
+        <button type="submit" className="fd-btn is-plain" aria-busy={busy || undefined} onClick={onExportClick}>{busy ? "Exporting..." : "Export CSV"}</button>
       </form>
       {message ? <p className="fd-pns" role="alert">{message}</p> : null}
     </section>

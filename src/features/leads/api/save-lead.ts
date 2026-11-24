@@ -41,6 +41,18 @@ export async function postLead(input: LeadSaveInput): Promise<LeadSaveResult> {
   }
 }
 
+// The owner's CSV export. Redirects are refused so a sign-in page can never be saved as the file.
+export function postExport(includeContact: boolean, signal: AbortSignal): Promise<Response> {
+  return fetch("/api/leads/export", {
+    method: "POST",
+    credentials: "same-origin",
+    redirect: "error",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ includeContact }),
+    signal,
+  });
+}
+
 // Null: search is off or broken, so the field stays a plain address field.
 export async function searchAddresses(input: string, sessionToken: string, signal: AbortSignal): Promise<AddressSuggestion[] | null> {
   const controller = new AbortController();

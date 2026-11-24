@@ -45,8 +45,9 @@ Built 2026-11-22. Source of the facts: HighLevel's OpenAPI files and webhook doc
 ## Leads export
 - **Foreign rows:** if any row in a HighLevel answer names another location, the export stops and no file is made. Phone and email come only from the row that passed the location check.
 - **Delimiters:** the file is comma-separated (RFC 4180). A cell holding `;` or a tab is quoted, and a formula character after a comma, `;`, a tab or a line break, even with spaces or quotes between, gets a `'` in front, so opening the file with another delimiter does not create a formula cell. Not checked in real Excel or Sheets.
-- **Failures:** with JavaScript, the button posts to `/api/leads/export?respond=stay`. A failure answers `204`, which leaves the page, hand-added leads and drafts in place. Every answer sets the short-lived `leads-export-result` cookie (result only, no lead data), and the panel listens for it through `cookieStore` to end the busy state and show the reason. A hidden iframe cannot do this because `/api/*` must never be framed.
-- **Fallback:** without `cookieStore`, or when the cookie is blocked, the panel uses the plain post: a failure redirects to `/leads?export=<reason>`, which reloads the page, and there is no busy state or double-submit guard. A platform error or lost connection outside the handler also leaves the page. Not checked in a real browser.
+- **Failures:** with JavaScript, the button sends a JSON `fetch` to `/api/leads/export` with one request at a time and a 75-second timeout that aborts it. The file is saved from a blob only after a `200` CSV. A 403, 429, 500, lost connection or timeout shows the reason in the panel and leaves the page, hand-added leads and drafts in place.
+- **Fallback:** without JavaScript, or in a browser without `fetch` or blob URLs, the form posts. A failure then redirects to `/leads?export=<reason>`, which reloads the page. The older `?respond=stay` cookie path remains behind that form submit handler; a normal button click no longer reaches it.
+- **Not checked:** a blob download inside the real HighLevel iframe. If that iframe is sandboxed without `allow-downloads`, the browser may block the save without telling the page.
 
 ## Runbook notes
 - **Rotate `CRON_SECRET`:** set the new value in Vercel (the cron picks it up on the next deploy); until then the sync answers 401.
