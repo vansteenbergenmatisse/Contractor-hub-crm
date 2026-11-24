@@ -13,7 +13,7 @@ import { useCurrentStep } from "../hooks/use-current-step";
 import { useSaveValues } from "../hooks/use-save-values";
 import { useSettings } from "../hooks/use-settings";
 import { useSignOut } from "../hooks/use-sign-out";
-import type { Field, ImageUploader, PhoneNumbersView, PrepareImage, SaveValues, SectionKey } from "../types";
+import type { Field, ImageUploader, PhoneNumbersSource, PrepareImage, SaveValues, SectionKey } from "../types";
 import { ChoicesPanel } from "./ChoicesPanel";
 import { ConnectionsPanel } from "./ConnectionsPanel";
 import { ImageChange } from "./ImageChange";
@@ -29,8 +29,9 @@ type Props = {
   initialSection?: SectionKey;
   // From a good server read: the image hosts. Never a value.
   account?: AccountLayout;
-  // The account's phone numbers, read on the server. Left out: the row says "Not available yet".
-  phoneNumbers?: PhoneNumbersView;
+  // The account's phone numbers, read on the server; a promise while that read runs.
+  // Left out: the row says "Not available yet".
+  phoneNumbers?: PhoneNumbersSource;
   readOnly?: boolean;
   // Given only when this owner may save to the sub-account. Without it Save lasts for this visit.
   saveValues?: SaveValues;
@@ -119,9 +120,13 @@ export function SettingsPage({ initial, initialValues, initialSection, account, 
   }, [dispatch]);
 
   const onEdit = useCallback((key: string, value: string) => dispatch({ type: "edit", key, value }), [dispatch]);
+  // Focus waits on the card's heading, because the panel closes and Save is disabled while saving.
+  // The result message takes it over when the save ends.
   const onConfirmClear = useCallback((id: string) => {
-    const fromBar = !!reviewOpener.current?.closest(".ga-sbar");
-    void runSave(id, true).then(() => { if (fromBar) setReveal({ id }); });
+    const heading = document.getElementById(`s-t-${id}`);
+    heading?.setAttribute("tabindex", "-1");
+    heading?.focus({ preventScroll: true });
+    void runSave(id, true).then(() => setReveal({ id }));
   }, [runSave]);
   // Focus moves before the panel closes, so it is never lost with the Go back button.
   const onKeep = useCallback((id: string) => {

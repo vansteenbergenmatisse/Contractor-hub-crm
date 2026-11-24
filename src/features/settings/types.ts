@@ -47,6 +47,8 @@ export type SaveValues = (changes: ValueChange[]) => Promise<SaveAnswer>;
 export type PhoneNumbersView =
   | { state: "ok"; numbers: { number: string; name: string | null }[]; complete: boolean }
   | { state: "no-access" | "not-connected" | "inactive" | "unavailable" };
+// A promise while the server is still reading, so a slow phone read never holds up the page.
+export type PhoneNumbersSource = PhoneNumbersView | undefined | Promise<PhoneNumbersView | undefined>;
 
 // Change image. The page gets the uploader from outside: this feature makes no network call.
 export type ImageKind = "svg" | "photo";

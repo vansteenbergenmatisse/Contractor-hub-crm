@@ -1,4 +1,5 @@
-import type { PhoneNumbersView } from "../types";
+import { usePhoneNumbers } from "../hooks/use-phone-numbers";
+import type { PhoneNumbersSource, PhoneNumbersView } from "../types";
 
 const MESSAGE: Record<Exclude<PhoneNumbersView["state"], "ok">, string> = {
   "no-access": "We do not have access to your phone numbers yet. Ask Forge Forward to reconnect your account.",
@@ -8,12 +9,14 @@ const MESSAGE: Record<Exclude<PhoneNumbersView["state"], "ok">, string> = {
 };
 
 // The business phone row: only numbers the account really lists. No API gives an A2P status.
-export function PhoneRow({ phone }: { phone?: PhoneNumbersView }) {
+export function PhoneRow({ phone: source }: { phone?: PhoneNumbersSource }) {
+  const shown = usePhoneNumbers(source);
+  const phone = shown.loading ? undefined : shown.phone;
   return (
     <li className="sv-cr">
       <span className="sv-crt">
         <span className="sv-crn">Business phone</span>
-        {!phone ? <span className="sv-crs">Not available yet</span> : phone.state !== "ok" ? (
+        {shown.loading ? <span className="sv-crs" role="status">Checking your phone numbers…</span> : !phone ? <span className="sv-crs">Not available yet</span> : phone.state !== "ok" ? (
           <span className="sv-crs">{MESSAGE[phone.state]}</span>
         ) : phone.numbers.length === 0 ? (
           <span className="sv-crs">No number that can text was found.</span>

@@ -26,14 +26,13 @@ export default async function Page({ searchParams }: Props = {}) {
   const user = await getRequestUser();
   const canSave = !user?.viewing && user?.role === "owner" && !!user.tenantId && isWriteBackEnabled(user.tenantId);
   const read = user?.viewing ? getTenantCustomValuesReadOnly : canSave ? freshValuesReader(getTenantCustomValues) : getTenantCustomValues;
-  // Runs next to the values read. A failure here only changes the phone row.
-  const phones = readPhones(user);
+  // Not awaited: the row gets the pending read, so a slow or failed read only changes that row.
+  const phoneNumbers = readPhones(user);
   const loaded: { layout?: AccountLayout } = {};
   const values = await loadSettingsValues(user?.tenantId, read, (layout) => {
     loaded.layout = layout;
   });
   const section = sectionFromParam((await searchParams)?.section) ?? undefined;
-  const phoneNumbers = await phones;
   return user?.viewing ? (
     <SettingsPage initialValues={values} initialSection={section} account={loaded.layout} phoneNumbers={phoneNumbers} readOnly />
   ) : canSave ? (

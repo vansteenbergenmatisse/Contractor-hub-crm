@@ -1,4 +1,4 @@
-import type { PhoneNumbersView } from "../types";
+import type { PhoneNumbersSource } from "../types";
 import { HandoffRow } from "./HandoffRow";
 import { PhoneRow } from "./PhoneRow";
 
@@ -13,7 +13,7 @@ const NOT_CONNECTED = [
 ];
 
 // Each row states only what has a real source. Nothing here ever says Connected.
-export function ConnectionsPanel({ phone, hidden }: { phone?: PhoneNumbersView; hidden: boolean }) {
+export function ConnectionsPanel({ phone, hidden }: { phone?: PhoneNumbersSource; hidden: boolean }) {
   return (
     <section className="sv-card ga-xsec" aria-labelledby="s-t-conn" hidden={hidden}>
       <h2 className="ga-xt" id="s-t-conn">Connections</h2>
