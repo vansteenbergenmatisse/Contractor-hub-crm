@@ -40,6 +40,10 @@ export function TodayPage({ ownerFirst, leadsTile, leadsCard, greetingWord, appo
   const router = useRouter();
   // The shell's details follow a Settings edit; the server's name is only the fallback.
   const first = useShell().business?.first ?? ownerFirst;
+  const calendar = calendarCard
+    ? <Suspense fallback={<TodayCalendarCard result={null} />}>{calendarCard}</Suspense>
+    : <NotAvailableCard id="fd-cal-h" title="Today’s calendar" index={6} />;
+  // The design order needs a real Needs you card: Needs you, then the calendar before leads.
   return (
     <>
       <Greeting first={first} word={greetingWord ? <Suspense fallback="Hello">{greetingWord}</Suspense> : undefined} />
@@ -53,17 +57,13 @@ export function TodayPage({ ownerFirst, leadsTile, leadsCard, greetingWord, appo
         }}
         onOpen={(page: PageKey) => router.push(PAGE_PATH[page])}
       />
-      {/* Leads come first because they are the only real records here. When Needs you has real data,
-          restore the design order: Needs you, then .fd-two with the calendar before leads. */}
+      {needsCard ? <Suspense fallback={<TodayNeedsLoading />}>{needsCard}</Suspense> : null}
       <div className="fd-two">
-        <Suspense fallback={<TodayLeadsCard result={null} />}>{leadsCard ?? <TodayLeadsCard result={{ state: "unavailable" }} />}</Suspense>
-        {calendarCard
-          ? <Suspense fallback={<TodayCalendarCard result={null} />}>{calendarCard}</Suspense>
-          : <NotAvailableCard id="fd-cal-h" title="Today’s calendar" index={6} />}
+        {needsCard ? calendar : null}
+        <Suspense fallback={<TodayLeadsCard result={null} index={needsCard ? 7 : 5} />}>{leadsCard ?? <TodayLeadsCard result={{ state: "unavailable" }} index={needsCard ? 7 : 5} />}</Suspense>
+        {needsCard ? null : calendar}
       </div>
-      {needsCard
-        ? <Suspense fallback={<TodayNeedsLoading />}>{needsCard}</Suspense>
-        : <NotAvailableCard id="fd-need-h" title="Needs you" index={7} className="fd-need" />}
+      {needsCard ? null : <NotAvailableCard id="fd-need-h" title="Needs you" index={7} className="fd-need" />}
       {moneyCards ? <Suspense fallback={<MoneyCards busy />}>{moneyCards}</Suspense> : <MoneyCards />}
     </>
   );

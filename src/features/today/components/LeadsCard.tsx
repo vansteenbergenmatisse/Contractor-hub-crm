@@ -15,15 +15,16 @@ const bar = (width: string): CSSProperties => ({ display: "block", width, height
 
 // Both lists stay in the page; the CSS fades the one that is off (class is-off), as in the design.
 // Real contacts: the received time, no waiting chip and no button. Null `result`: still loading.
-export function LeadsCard({ result, range, onRange, timeZone }: {
+export function LeadsCard({ result, range, onRange, timeZone, index = 5 }: {
   result: LeadsResult | null;
   range: LeadRange;
   onRange: (range: LeadRange) => void;
   timeZone: string;
+  index?: number;
 }) {
   const panes = result?.state === "ready" ? leadPanes(result, timeZone) : null;
   return (
-    <section className="fd-card fd-in" style={{ "--i": 5 } as CSSProperties} aria-labelledby="fd-lead-h">
+    <section className="fd-card fd-in" style={{ "--i": index } as CSSProperties} aria-labelledby="fd-lead-h">
       <div className="fd-ch">
         <h2 className="fd-ct" id="fd-lead-h">New leads</h2>
         {panes ? (

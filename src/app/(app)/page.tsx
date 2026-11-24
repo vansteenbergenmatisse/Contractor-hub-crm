@@ -76,7 +76,7 @@ async function InvoicesTileData() {
 
 async function NeedsCardData() {
   const [leads, invoices, timeZone] = await Promise.all([loadTenantLeads(), loadTenantInvoices(), locationZone()]);
-  return <TodayNeedsCard leads={leads} toSend={invoicesToSend(invoices)} invoicesLive={isInvoicesPageLive()} timeZone={timeZone} />;
+  return <TodayNeedsCard leads={leads} toSend={invoicesToSend(invoices)} owed={moneyOwed(invoices)} invoicesLive={isInvoicesPageLive()} timeZone={timeZone} />;
 }
 
 async function MoneyCardsData() {
@@ -91,7 +91,7 @@ async function LeadsTileData() {
 
 async function LeadsCardData() {
   const [result, timeZone] = await Promise.all([loadTenantLeads(), locationZone()]);
-  return <TodayLeadsCard result={result} timeZone={timeZone} />;
+  return <TodayLeadsCard result={result} timeZone={timeZone} index={7} />;
 }
 
 async function AppointmentsTileData() {

@@ -18,7 +18,7 @@ function newLeads(result: LeadsResult, timeZone: string): number | null {
 // Shown while the reads run, so a slow load never says "Not available yet".
 export function TodayNeedsLoading() {
   return (
-    <section className="fd-card fd-need fd-in" style={{ "--i": 7 } as CSSProperties} aria-labelledby="fd-need-h" aria-busy="true">
+    <section className="fd-card fd-need fd-in" style={{ "--i": 5 } as CSSProperties} aria-labelledby="fd-need-h" aria-busy="true">
       <div className="fd-ch"><h2 className="fd-ct" id="fd-need-h">Needs you</h2></div>
     </section>
   );
@@ -27,21 +27,29 @@ export function TodayNeedsLoading() {
 // What needs the owner, as links to the page that holds it. Read-only: no row sends or changes
 // anything. A source that could not be read is named, so a short list never reads as "all clear".
 // With the Invoices page off no invoice check ran, so the card neither reports a failure nor an all-clear.
-export function TodayNeedsCard({ leads, toSend, invoicesLive = true, timeZone: locationZone }: { leads: LeadsResult; toSend: number | null; invoicesLive?: boolean; timeZone?: string | null }) {
+// Owed invoices count too: the all-clear needs leads, drafts and owed all proven zero.
+export function TodayNeedsCard({ leads, toSend, owed = 0, invoicesLive = true, timeZone: locationZone }: { leads: LeadsResult; toSend: number | null; owed?: number | null; invoicesLive?: boolean; timeZone?: string | null }) {
   const viewerZone = useTimeZone();
   const fresh = newLeads(leads, locationZone ?? viewerZone);
-  if (fresh === null && toSend === null) return <NotAvailableCard id="fd-need-h" title="Needs you" index={7} className="fd-need" />;
+  if (fresh === null && toSend === null) return <NotAvailableCard id="fd-need-h" title="Needs you" index={5} className="fd-need" />;
+  // A failed invoice read is reported once, as Invoices, and shows no owed count.
+  const owedCount = toSend === null ? null : owed;
   const rows = [
     fresh ? { href: PAGE_PATH.leads, text: `${plural(fresh, "new lead", "new leads")} today` } : null,
     toSend ? { href: PAGE_PATH.invoices, text: `${plural(toSend, "invoice", "invoices")} to send` } : null,
+    owedCount ? { href: PAGE_PATH.invoices, text: `${plural(owedCount, "invoice", "invoices")} owed` } : null,
   ].filter((row) => row !== null);
-  const missing = [fresh === null ? "Leads" : null, toSend === null && invoicesLive ? "Invoices" : null].filter(Boolean);
+  const missing = [
+    fresh === null ? "Leads" : null,
+    toSend === null && invoicesLive ? "Invoices" : null,
+    toSend !== null && owedCount === null && invoicesLive ? "Money owed" : null,
+  ].filter(Boolean);
   return (
-    <section className="fd-card fd-need fd-in" style={{ "--i": 7 } as CSSProperties} aria-labelledby="fd-need-h">
+    <section className="fd-card fd-need fd-in" style={{ "--i": 5 } as CSSProperties} aria-labelledby="fd-need-h">
       <div className="fd-ch"><h2 className="fd-ct" id="fd-need-h">Needs you</h2></div>
       {rows.length ? (
         <ul className="fd-rows">
-          {rows.map((row) => <li key={row.href} className="fd-row fd-nr"><Link className="fd-nl" href={row.href}><div className="fd-rx"><p className="fd-rt">{row.text}</p></div></Link></li>)}
+          {rows.map((row) => <li key={row.text} className="fd-row fd-nr"><Link className="fd-nl" href={row.href}><div className="fd-rx"><p className="fd-rt">{row.text}</p></div></Link></li>)}
         </ul>
       ) : null}
       {!rows.length && !missing.length ? <div className="fd-none fx-none" role="status"><p>{invoicesLive ? "Nothing needs you right now." : "No new leads today."}</p></div> : null}
