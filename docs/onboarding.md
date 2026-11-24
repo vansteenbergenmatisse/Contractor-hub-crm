@@ -42,6 +42,13 @@ Built 2026-11-22. Source of the facts: HighLevel's OpenAPI files and webhook doc
 ## Migration
 `prisma/migrations/20261122000000_onboarding_tables` creates `GhlUserLink` and `MissingAppAlert` (new tables only). `prisma/migrations/20261122120000_tenant_sync_state` creates `TenantSyncState` (new table only; the on-visit sync stays off until it is applied). `prisma/migrations/20261122180000_unused_account_marker` creates `UnusedAccountMarker` (new table only, NOT applied yet; until it is, no account can be proven unused, so nothing moves and sign-in works as before). On develop: `set -a; . ./.env.local; set +a; pnpm exec prisma migrate deploy`. Staging and production: CI runs it on merge.
 
+## Leads export
+- **Foreign rows:** if any row in a HighLevel answer names another location, the export stops and no file is made. Phone and email come only from the row that passed the location check.
+- **Delimiters:** the file is comma-separated (RFC 4180). A cell holding `;` or a tab is quoted, and a formula character after a comma, `;`, a tab or a line break, even with spaces or quotes between, gets a `'` in front, so opening the file with another delimiter does not create a formula cell. Not checked in real Excel or Sheets.
+- **Failures:** with JavaScript, the button sends a JSON `fetch` to `/api/leads/export` with one request at a time and a 75-second timeout that aborts it. The file is saved from a blob only after a `200` CSV. A 403, 429, 500, lost connection or timeout shows the reason in the panel and leaves the page, hand-added leads and drafts in place.
+- **Fallback:** without JavaScript, or in a browser without `fetch` or blob URLs, the form posts. A failure then redirects to `/leads?export=<reason>`, which reloads the page. The older `?respond=stay` cookie path remains behind that form submit handler; a normal button click no longer reaches it.
+- **Not checked:** a blob download inside the real HighLevel iframe. If that iframe is sandboxed without `allow-downloads`, the browser may block the save without telling the page.
+
 ## Runbook notes
 - **Rotate `CRON_SECRET`:** set the new value in Vercel (the cron picks it up on the next deploy); until then the sync answers 401.
 - **Sync stuck or failing:** read the `Sync:` log lines (counts and step names only). `failures` counts steps that threw; `conflicts` and `capped` and `suspicious` show skipped users.

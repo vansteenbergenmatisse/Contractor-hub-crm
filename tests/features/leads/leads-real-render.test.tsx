@@ -52,10 +52,10 @@ describe("real rendering", () => {
     expect(screen.getByRole("button", { name: "Book visit" })).toBeDisabled();
   });
 
-  it("hides the tiles and the sources it cannot prove on a cut-off page", () => {
+  it("hides the tiles it cannot prove and labels the sources as the newest rows on a cut-off page", () => {
     const { container } = render(<LeadsPage result={ready([real()], false)} />);
     expect(container.querySelector(".fd-sumc")).toBeNull();
-    expect(screen.queryByText("Where your leads come from")).toBeNull();
+    expect(screen.getByText(/From your newest lead\. There may be more\./)).toBeInTheDocument();
     expect(screen.getByText("Showing your newest lead.")).toBeInTheDocument();
   });
 

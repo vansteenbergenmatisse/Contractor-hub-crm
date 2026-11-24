@@ -838,6 +838,37 @@ a.fd-lead:focus-visible{outline:3px solid var(--main-color);outline-offset:-3px}
   .fd-cin,.fd-send{min-height:48px}
 }
 
+/* ===== Inbox and Pipeline on every screen =====
+   The reply box stays on screen, above the keyboard and the home bar; content clears the notch in landscape. */
+@media (min-width: 1024px){
+  .fd-app .fd-ixg{height:clamp(480px,calc(100dvh - 214px),800px)}
+}
+@media (max-width: 1023px){
+  .fd-app .fd-ix:not(.is-open),.fd-app .fd-kb{padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
+  .fd-app .fd-kb .fd-snav{margin-left:calc(-16px - env(safe-area-inset-left,0px));margin-right:calc(-16px - env(safe-area-inset-right,0px));padding-left:calc(16px + env(safe-area-inset-left,0px));padding-right:calc(16px + env(safe-area-inset-right,0px))}
+  .fd-app .fd-ix.is-open .fd-th{padding-bottom:var(--fd-kb,0px)}
+  .fd-app .fd-ix.is-open .fd-thh{padding-left:calc(12px + env(safe-area-inset-left,0px));padding-right:calc(16px + env(safe-area-inset-right,0px))}
+  .fd-app .fd-ix.is-open .fd-tm{padding-left:calc(16px + env(safe-area-inset-left,0px));padding-right:calc(16px + env(safe-area-inset-right,0px))}
+  .fd-app .fd-ix.is-open .fd-cmp{bottom:calc(-20px + var(--fd-kb,0px));padding-left:calc(16px + env(safe-area-inset-left,0px));padding-right:calc(16px + env(safe-area-inset-right,0px));padding-bottom:calc(10px + env(safe-area-inset-bottom,0px))}
+  .fd-app .fd-ix.is-open[data-kb] .fd-cmp{padding-bottom:10px}
+  .fd-app .fd-qr{overflow-x:auto;scrollbar-width:none;margin:-3px -3px 3px;padding:3px}
+  .fd-app .fd-qb{flex:none}
+  .fd-app .fd-sti:focus-visible{outline-offset:-3px}
+}
+@media (max-width: 479px){
+  .fd-app .fd-tback{justify-content:center;min-width:44px;min-height:44px;margin-right:0}
+  .fd-tbl{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+}
+/* a phone on its side has little height: the headers scroll away and the open keyboard leaves just the reply row */
+@media (max-width: 1023px) and (max-height: 500px){
+  .fd-app .fd-ix.is-open .fd-thh,.fd-app .fd-kb .fd-snav{position:static}
+  .fd-app .fd-ix.is-open[data-kb] .fd-clb{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+  .fd-app .fd-ix.is-open .fd-cin,.fd-app .fd-ix.is-open .fd-send{min-height:44px}
+}
+@media (max-width: 1023px),(pointer: coarse){ .fd-app .fd-ix .fd-wsgo{min-height:44px} .fd-app .fd-ix .fd-wsb{height:44px} }
+.fd-app .fd-kb nav a:focus-visible{outline:3px solid var(--main-color);outline-offset:2px}
+.fd-app .fd-kwrap:focus-visible{outline:3px solid var(--main-color);outline-offset:-3px}
+
 /* ===== Inbox, calmer (round 5) =====
    A row holds four things: where it came from (a colored tile with a plain icon), who, how long they wait, and one line of the last message.
    The wait chip sits where the time sat, so the eye finds urgency in one fixed spot. A conversation that needs no reply shows the time there.
@@ -1436,6 +1467,22 @@ select.fd-lin{padding:0 10px}
 .fd-shl{display:grid;grid-template-columns:minmax(0,1fr) 112px;align-items:end;gap:8px;margin-top:10px}
 .fd-app .fd-shl .fd-ll{margin-top:0}
 .fd-she .fd-pna .fd-btn{min-height:44px}
+/* a long amount wraps inside its tile on the money pages */
+.fd-app :is([data-pg=quotes],[data-pg=invoices],[data-pg=payments],[data-pg=automations]) .fd-smv{white-space:normal}
+:is([data-pg=quotes],[data-pg=invoices],[data-pg=payments],[data-pg=automations]) .fd-smv .fd-h{min-width:0;overflow-wrap:anywhere}
+/* quotes, invoices, automations: a focused field stops clear of the sticky header, the tab bar and the save bar */
+@media (max-width: 1023px){/* money pages */
+  .fd-app .fd-dv .fd-lin,.fd-app .fd-au .fd-lin{scroll-margin-top:76px;scroll-margin-bottom:calc(112px + env(safe-area-inset-bottom,0px))}
+  .fd-app .fd-dv.is-doc .fd-lin,.fd-app .fd-au.is-edit .fd-lin{scroll-margin-bottom:calc(148px + env(safe-area-inset-bottom,0px))}
+  .fd-app .fd-view .fd-dv.is-doc .fd-docact:empty{display:none}
+  .fd-app .fd-view .fd-dv.is-doc .fd-docact,.fd-app .fd-view .fd-au.is-edit .fd-auf .fd-pna{bottom:-20px;padding-bottom:calc(32px + env(safe-area-inset-bottom,0px))}
+  .fd-app .fd-main:has(.fd-dv.is-doc),.fd-app .fd-main:has(.fd-au.is-edit){scroll-padding:76px 0 calc(148px + env(safe-area-inset-bottom,0px))}
+}/* end money pages */
+/* a short screen (landscape, or the keyboard is open): the save bar scrolls with the form, so it never hides a field */
+@media (max-width: 1023px) and (max-height: 520px){/* money pages */
+  .fd-app .fd-view .fd-dv.is-doc .fd-docact,.fd-app .fd-view .fd-au.is-edit .fd-auf .fd-pna{position:static;box-shadow:none;padding-bottom:env(safe-area-inset-bottom,0px)}
+  .fd-app .fd-dv.is-doc .fd-lin,.fd-app .fd-au.is-edit .fd-lin{scroll-margin-top:72px;scroll-margin-bottom:calc(16px + env(safe-area-inset-bottom,0px))}
+}/* end money pages */
 /* payments: is the payment processor connected? */
 .fd-ppb{display:flex;flex-wrap:wrap;align-items:center;gap:8px;max-width:760px;margin:0 0 12px;padding:10px 14px;border-radius:12px;background:var(--main-background-color);font-size:0.9375rem;font-weight:var(--weight-semibold);line-height:1.25rem;letter-spacing:-0.016em;--apl-lh:1.25rem;--apl-lh-loose:1.375rem;--apl-lh-tight:1.125rem;--weight-regular:400;--weight-medium:400;--weight-semibold:600;--weight-bold:600;--weight-black:600}
 .fd-app .fd-ppb{color:var(--main-hover-color)}
@@ -1533,6 +1580,47 @@ select.fd-lin{padding:0 10px}
 .fd-cdl{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;max-width:560px;margin:0 0 12px;padding:10px 14px;border:1px solid var(--fd-line);border-radius:12px;background:var(--fd-card);font-size:0.9375rem;font-weight:var(--weight-semibold);line-height:1.25rem;letter-spacing:-0.016em;--apl-lh:1.25rem;--apl-lh-loose:1.375rem;--apl-lh-tight:1.125rem;--weight-regular:400;--weight-medium:400;--weight-semibold:600;--weight-bold:600;--weight-black:600}
 .fd-cdl.is-off{display:none}
 .fd-view .fd-cdl{animation:fdShow var(--t-mid) var(--e-out)}
+/* Today, Calendar, Routes at every size. The paragraph reset removed the notice's own spacing. */
+.fd-app .fd-cal .fd-cdl{margin:0 0 12px;padding:10px 14px}
+@media (max-width: 1023px){
+  .fd-app:has([data-pg=calendar]) .fx-acc,.fd-app:has([data-pg=calendar]) .fx-accg{min-width:0}
+  .fd-app:has([data-pg=calendar]) .fx-accg .fd-btn{min-width:44px;padding:0 8px}
+  .fd-app [data-pg=calendar] .fd-cnew:not(.is-off){max-height:88dvh}
+}
+/* narrow phones: Estimate and Job keep their words and give up the plus icon */
+@media (max-width: 379px){
+  .fd-app:has([data-pg=calendar]) .fx-accg .fd-btn{padding:0 4px}
+  .fd-app:has([data-pg=calendar]) .fx-accg .fd-btn svg{display:none}
+}
+@media (max-width: 359px){
+  .fd-app [data-pg=calendar] .fd-cal .fd-cdays{margin-inline:-14px;gap:1px}
+}
+/* keyboard focus stops clear of the 64px top bar and the floating bars */
+@media (max-width: 1023px){
+  .fd-app .fd-main:has([data-pg=today],[data-pg=calendar],[data-pg=routes]){scroll-padding-top:72px}
+  .fd-app .fd-main:has([data-pg=today],[data-pg=calendar],[data-pg=routes]).fx-cap{scroll-padding-bottom:calc(100px + env(safe-area-inset-bottom,0px))}
+  .fd-app .fd-main:has([data-pg=today],[data-pg=calendar],[data-pg=routes]).fx-cap.fx-capacc{scroll-padding-bottom:calc(164px + env(safe-area-inset-bottom,0px))}
+}
+/* short landscape phones: two bars would take almost half the screen, so the actions return to the page */
+@media (max-width: 1023px) and (max-height: 500px){
+  .fd-app:has([data-pg=calendar]) .fx-acc{display:none}
+  .fd-app .fd-main.fx-cap.fx-capacc:has([data-pg=calendar]){padding-bottom:calc(100px + env(safe-area-inset-bottom,0px))}
+  .fd-app .fd-main:has([data-pg=calendar]).fx-cap.fx-capacc{scroll-padding-bottom:calc(100px + env(safe-area-inset-bottom,0px))}
+  .fd-app [data-pg=calendar] .fd-cal .fd-cnav{display:flex}
+  .fd-app [data-pg=calendar] .fd-cal .fd-cadd{display:inline-flex;align-items:center;justify-content:center}
+  .fd-app [data-pg=calendar] .fd-cal .fd-csyncl{max-width:none}
+  .fd-app [data-pg=calendar] .fd-cal .fd-csynct{flex:1 1 100%}
+  .fd-app [data-pg=calendar] .fd-cdet.is-on,.fd-app [data-pg=calendar] .fd-cf .fd-cfb{max-height:88dvh}
+}
+@media (max-width: 1023px) and (orientation: landscape){
+  .fd-app [data-pg=today],.fd-app [data-pg=calendar],.fd-app [data-pg=routes]{padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
+  .fd-app [data-pg=calendar] .fd-cdet.is-on,.fd-app [data-pg=calendar] .fd-cf .fd-cfb,.fd-app [data-pg=calendar] .fd-cnew:not(.is-off){padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .fd-app:has([data-pg=today],[data-pg=calendar],[data-pg=routes]) .fd-mtop{padding-left:calc(16px + env(safe-area-inset-left,0px));padding-right:calc(16px + env(safe-area-inset-right,0px))}
+  .fd-app:has([data-pg=today],[data-pg=calendar],[data-pg=routes]) .fx-tcap{left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px))}
+}
+@media (max-width: 359px) and (orientation: landscape){
+  .fd-app:has([data-pg=today],[data-pg=calendar],[data-pg=routes]) .fx-tcap{left:max(8px,env(safe-area-inset-left,0px));right:max(8px,env(safe-area-inset-right,0px))}
+}
 .fd-cns .fd-btn{min-height:44px}
 .fd-app .fd-cns .fd-btn{color:var(--error-color)}
 .fd-ev.fd-evn{cursor:pointer}
@@ -1996,6 +2084,7 @@ select.fd-lin{padding:0 10px}
 .fd-app .fx-acx span{font-size:0.9375rem;line-height:1.25rem;letter-spacing:-0.016em;font-weight:400;color:var(--fd-muted);overflow-wrap:break-word}
 .fx-addact{display:flex;flex-direction:column;gap:0}
 .fd-app .fx-addx{display:none}
+.fd-app [data-new-lead-dialog] .fx-addx{display:flex}
 @media (max-width: 1023px){
   /* sign in: the brand on top, the button at the bottom, in thumb reach */
   .fd-app.fd-login .fd-lmain{display:flex;padding:0;min-height:100dvh}
@@ -2006,7 +2095,7 @@ select.fd-lin{padding:0 10px}
   .fd-app .fd-mtop .fd-menub,.fd-app .fd-mtop .fd-tools{display:none}
   .fd-app .fd-mtop{min-height:64px}
   /* five tabs: Today, Leads, Inbox, Calendar, More */
-  .fd-app .fx-tcap .fd-tabs{flex:1 1 0;min-width:0;grid-template-columns:repeat(5,minmax(0,1fr))}
+  .fd-app .fx-tcap .fd-tabs{flex:1 1 0;min-width:0;grid-template-columns:repeat(5,minmax(44px,auto))}
   .fd-app .fx-tmore{display:flex}
   .fd-app .fx-tcap .fd-tab{padding:4px 2px}
   /* More: the other pages in a bottom sheet (the side menu, without the four tab pages) */
@@ -2043,11 +2132,24 @@ select.fd-lin{padding:0 10px}
   .fx-search.is-ph .fx-scope{order:2;padding-top:10px;border-top:.5px solid var(--fd-hair)}
   .fx-search.is-ph .fx-sbar{order:3;padding:4px 16px calc(10px + env(safe-area-inset-bottom,0px))}
 }
-/* the smallest phones (under 360px): five tabs need the full width, so Search moves to the top of the More sheet */
-@media (max-width: 359px){
+/* phones under 430px: the longest tab label needs the room, so the Search button keeps only its icon (it keeps its aria-label) */
+@media (max-width: 429px){
+  .fx-tcap{left:8px;right:8px;gap:4px}
+  .fd-app .fx-tsrch{width:48px}
+  .fd-app .fx-tsrch .fx-tsl{display:none}
+}
+/* the smallest phones (under 375px): five tabs need the full width, so Search moves to the top of the More sheet */
+@media (max-width: 374px){
   .fx-tcap{left:8px;right:8px}
   .fd-app .fx-tsrch{display:none}
   .fd-app .fd-side .fd-dsearch{display:flex}
 }
 @media (prefers-reduced-transparency: reduce){ .fx-acc{background:var(--fd-card);-webkit-backdrop-filter:none;backdrop-filter:none} }
 @media (prefers-reduced-motion: reduce){ .fd-app .fd-side,.fd-app .fx-addp.is-sheet,.fd-app .fd-cnew:not(.is-off),.fx-addscrim.is-on{animation:none;transition:none} }
+
+/* Leads: address suggestions sit in the form's flow, so a sheet or dialog never clips them. */
+.fd-adl{margin:4px 0 0;padding:4px;list-style:none;border:1px solid var(--fd-line);border-radius:12px;background:var(--fd-card)}
+.fd-adl[hidden]{display:none}
+.fd-adl li{display:flex;align-items:center;min-height:44px;padding:8px 10px;border-radius:8px;cursor:pointer;overflow-wrap:anywhere}
+.fd-adl li.is-on{background:var(--main-background-color);color:var(--main-hover-color)}
+.fd-app .fd-lsave{color:var(--error-color)}

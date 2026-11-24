@@ -1,8 +1,8 @@
 "use client";
 
-import { useId, useMemo, useRef } from "react";
+import { useEffect, useId, useMemo, useRef } from "react";
 import { PageAction, useHorizontalSwipe, useRowFocus, useSearchRows } from "@/features/app-shell";
-import { boardChunks, chunkLabel, chunkOfStage, chunkSpan, liveSearchRows, slotOfStage } from "../api/live-board";
+import { boardChunks, chunkLabel, chunkOfStage, chunkSpan, columnScroll, liveSearchRows, slotOfStage } from "../api/live-board";
 import { useLiveBoard } from "../hooks/use-live-board";
 import type { PipelineResult } from "../types";
 import { Arrow } from "./Arrow";
@@ -24,6 +24,14 @@ export function LivePipelineBoard({ result }: { result: Ready }) {
   useSearchRows("pipeline", rows);
   useHorizontalSwipe(grid, { onSwipeLeft: b.next, onSwipeRight: b.prev, enabled: b.open });
   useRowFocus(columns[b.stage].cards.map((card) => `pipeline-${card.id}`));
+  // On a narrow computer or tablet the board scrolls sideways: keep the chosen stage in view.
+  useEffect(() => {
+    const wrap = grid.current?.parentElement;
+    const header = grid.current?.querySelector<HTMLElement>(".fd-kh.is-sel");
+    if (!wrap || !header) return;
+    const left = columnScroll({ left: header.offsetLeft, width: header.offsetWidth }, { scrollLeft: wrap.scrollLeft, viewWidth: wrap.clientWidth });
+    if (left !== wrap.scrollLeft) wrap.scrollTo({ left });
+  }, [b.stage]);
 
   const chunks = boardChunks(columns.length);
   const inView = chunkOfStage(b.stage);
@@ -90,7 +98,7 @@ export function LivePipelineBoard({ result }: { result: Ready }) {
         <span className="fd-sarr">{arrows}</span>
       </div>
 
-      <section className="fd-kwrap fd-in" style={{ "--i": 2 } as React.CSSProperties} aria-label="The board">
+      <section className="fd-kwrap fd-in" style={{ "--i": 2 } as React.CSSProperties} aria-label="The board" tabIndex={0}>
         <div className="fd-kls" aria-hidden="true">
           {visible.map((column, slot) => <i key={column.id} className={slot === slotOfStage(b.stage) ? "is-sel" : ""} />)}
         </div>

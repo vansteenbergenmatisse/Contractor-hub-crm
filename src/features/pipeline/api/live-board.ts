@@ -19,6 +19,16 @@ export function boardChunks(stageCount: number): BoardChunk[] {
 export const chunkOfStage = (stage: number): number => Math.floor(stage / CHUNK_SIZE);
 export const slotOfStage = (stage: number): number => stage % CHUNK_SIZE;
 
+// Where a sideways-scrolling board should sit so the chosen column is fully in view. A column with
+// no width is not drawn (phone layout), so the board stays where it is.
+export function columnScroll(column: { left: number; width: number }, view: { scrollLeft: number; viewWidth: number }): number {
+  if (column.width <= 0) return view.scrollLeft;
+  const right = column.left + column.width;
+  if (column.left < view.scrollLeft || column.width >= view.viewWidth) return column.left;
+  if (right > view.scrollLeft + view.viewWidth) return right - view.viewWidth;
+  return view.scrollLeft;
+}
+
 export function chunkLabel(chunk: BoardChunk, stageCount: number): string {
   if (stageCount <= CHUNK_SIZE) return "All stages";
   return chunk.first === chunk.last ? `Stage ${chunk.first + 1}` : `Stages ${chunk.first + 1}-${chunk.last + 1}`;

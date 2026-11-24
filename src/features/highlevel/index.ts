@@ -222,3 +222,21 @@ export {
   type ContactTagRequests,
   type ContactTagState,
 } from "./api/contact-tag";
+export {
+  CONTACT_CLAIM_MS,
+  EXPORT_MAX_PAGES,
+  contactClaimKeys,
+  createContactCreateAdapter,
+  createContactCreateRequests,
+  createContactOnce,
+  createTenantContactCreateAdapter,
+  createTenantContactCreator,
+  toE164,
+  type ContactCreateDeps,
+  type ContactOnceDeps,
+  type ContactCreateOutcome,
+  type ContactCreateRequests,
+  type ContactExportRead,
+  type ContactExportRow,
+  type NewContact,
+} from "./api/contact-create";
