@@ -41,11 +41,16 @@ export async function loadAdminValues(tenantId: string): Promise<AdminValuesView
   if (!TENANT_ID.test(tenantId)) return null;
   const tenant = await connectedTenant(tenantId);
   if (!tenant) return null;
-  const [read, locked] = await Promise.all([
+  const [values, locked] = await Promise.all([
     createTenantCustomValueAdapter().read(tenantId).catch(() => ({ ok: false as const, reason: "retry" as const })),
-    lockedKeysOf(tenantId),
+    // Without the locks the page could show a locked key as unlocked: it shows the load error instead.
+    lockedKeysOf(tenantId).catch(() => {
+      console.error("Admin values did not load: step=locks");
+      return null;
+    }),
   ]);
+  const read = locked ? values : { ok: false as const, reason: "retry" as const };
   if (!read.ok) console.error(`Admin values did not load: step=read reason=${read.reason}`);
   else console.info(`Admin values loaded: keys=${read.values.length}`);
-  return buildAdminValuesView({ tenantId, clientName: tenant.name, read, locked, writable: isWriteBackEnabled(tenantId) });
+  return buildAdminValuesView({ tenantId, clientName: tenant.name, read, locked: locked ?? new Set(), writable: isWriteBackEnabled(tenantId) });
 }

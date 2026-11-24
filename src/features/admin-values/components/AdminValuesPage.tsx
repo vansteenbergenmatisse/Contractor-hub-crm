@@ -37,7 +37,13 @@ function ValueRow({ row, tenantId, writable }: { row: AdminValueRow; tenantId: s
   const dirty = state.draft.trim() !== state.saved.trim();
   const patch = (next: Partial<RowState>) => setState((current) => ({ ...current, ...next }));
 
+  // Buttons are never `disabled` while working or when there is nothing to save: a disabled button
+  // drops keyboard focus to the page. `aria-disabled` says it, and the handlers ignore the click.
+  const saveOff = !dirty || !!state.pending;
+
   async function save() {
+    if (saveOff) return;
+    const emptied = state.draft.trim() === "";
     patch({ pending: true, message: undefined });
     try {
       const response = await post(tenantId, { action: "save", key: row.key, expected: state.saved, value: state.draft });
@@ -49,6 +55,7 @@ function ValueRow({ row, tenantId, writable }: { row: AdminValueRow; tenantId: s
       if (!result) return patch({ message: "Not saved. Try again." });
       if (result.status === "saved" || result.status === "unchanged") return patch({ saved: state.draft.trim(), draft: state.draft.trim(), message: STATUS_TEXT[result.status] });
       if (result.status === "conflict") return patch({ message: `Not saved. HighLevel now holds ${result.current?.trim() ? result.current : "an empty value"}. Reload and try again.` });
+      if (result.status === "invalid" && emptied) return patch({ message: "Not saved. This value cannot be empty." });
       patch({ message: STATUS_TEXT[result.status] ?? "Not saved. Try again." });
     } catch {
       patch({ message: "Could not reach the server. Try again." });
@@ -58,6 +65,7 @@ function ValueRow({ row, tenantId, writable }: { row: AdminValueRow; tenantId: s
   }
 
   async function toggleLock() {
+    if (state.pending) return;
     const action = state.locked ? "unlock" : "lock";
     patch({ pending: true, message: undefined });
     try {
@@ -71,37 +79,43 @@ function ValueRow({ row, tenantId, writable }: { row: AdminValueRow; tenantId: s
     }
   }
 
+  const name = (
+    <>
+      <strong>{row.label}</strong> <code style={{ overflowWrap: "anywhere" }}>{row.key}</code>
+    </>
+  );
+
   return (
     <li style={{ marginBottom: 16 }}>
-      <label htmlFor={id}>
-        <strong>{row.label}</strong> <code>{row.key}</code>
-      </label>
+      {row.value === null ? <div>{name}</div> : <label htmlFor={id}>{name}</label>}
       <div>
         {row.value === null ? (
           <p>Too long to edit here. Change it in HighLevel.</p>
         ) : (
-          <textarea id={id} rows={row.value.length > 80 ? 4 : 1} cols={60} value={state.draft} readOnly={!canEdit} onChange={(event) => patch({ draft: event.target.value })} />
+          <textarea id={id} rows={row.value.length > 80 ? 4 : 1} value={state.draft} readOnly={!canEdit} onChange={(event) => patch({ draft: event.target.value })} style={{ width: "100%", maxWidth: 480, boxSizing: "border-box" }} />
         )}
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
         {canEdit ? (
-          <button type="button" aria-label={`Save ${row.label}`} disabled={!dirty || state.pending} onClick={save}>
+          <button type="button" aria-label={`Save ${row.label}`} aria-disabled={saveOff} onClick={save}>
             {state.pending ? "Saving..." : "Save"}
           </button>
         ) : null}
         {row.secret ? (
           <span>Secret: always hidden from the owner</span>
+        ) : row.ownerReadOnly && !state.locked ? (
+          <span>Owner sees it read-only</span>
         ) : (
           <>
             <span>{state.locked ? "Locked" : "Owner can change"}</span>
-            <button type="button" aria-label={`${state.locked ? "Unlock" : "Lock"} ${row.label}`} disabled={state.pending} onClick={toggleLock}>
+            <button type="button" aria-label={`${state.locked ? "Unlock" : "Lock"} ${row.label}`} aria-disabled={!!state.pending} onClick={toggleLock}>
               {state.locked ? "Unlock" : "Lock"}
             </button>
           </>
         )}
         {row.editable ? null : row.value === null ? null : <span>Read-only here (listed twice in HighLevel or an unusual key name)</span>}
       </div>
-      {state.message ? <p role="status">{state.message}</p> : null}
+      <p role="status">{state.message ?? ""}</p>
     </li>
   );
 }

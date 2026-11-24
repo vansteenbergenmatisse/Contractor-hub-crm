@@ -1,4 +1,4 @@
-import { MAX_VALUE_LENGTH, type SaveResult, type ValueChange } from "@/features/settings";
+import { MAX_VALUE_LENGTH, classifyKey, type SaveResult, type ValueChange } from "@/features/settings";
 import { ADMIN_KEY } from "./view";
 
 // POST /api/admin/clients/[tenantId]/values. Admin only, same Origin, JSON only, refused during View
@@ -30,7 +30,31 @@ function audit(event: string, fields: Record<string, string>) {
   console.info(JSON.stringify({ audit: event, ...fields }));
 }
 
-type Body = { action: "save"; change: ValueChange } | { action: "lock" | "unlock"; key: string };
+// Stops reading at the limit, so an oversized body is never fully buffered. Null: too large.
+async function readCapped(request: Request): Promise<string | null> {
+  if (!request.body) return "";
+  const declared = Number(request.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > MAX_BODY_CHARS) {
+    await request.body.cancel().catch(() => {});
+    return null;
+  }
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  let size = 0;
+  let text = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) return text + decoder.decode();
+    size += value.byteLength;
+    if (size > MAX_BODY_CHARS) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+}
+
+type Body ={ action: "save"; change: ValueChange } | { action: "lock" | "unlock"; key: string };
 
 const hasOnly = (value: object, keys: readonly string[]) => Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
 
@@ -38,7 +62,13 @@ function parseBody(raw: unknown): Body | null {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
   const body = raw as Record<string, unknown>;
   if (typeof body.key !== "string" || !ADMIN_KEY.test(body.key)) return null;
-  if (body.action === "lock" || body.action === "unlock") return hasOnly(body, ["action", "key"]) ? { action: body.action, key: body.key } : null;
+  if (body.action === "lock" || body.action === "unlock") {
+    if (!hasOnly(body, ["action", "key"])) return null;
+    // A secret key is always hidden from the owner (implicitly locked): no row for it. Unlock still
+    // works, so an old row can be removed.
+    if (body.action === "lock" && classifyKey(body.key) === "secret") return null;
+    return { action: body.action, key: body.key };
+  }
   if (body.action !== "save" || !hasOnly(body, ["action", "key", "expected", "value"])) return null;
   const { key, expected, value } = body;
   if (typeof expected !== "string" || typeof value !== "string" || expected.length > MAX_VALUE_LENGTH || value.length > MAX_VALUE_LENGTH) return null;
@@ -60,8 +90,8 @@ export async function handleAdminValues(request: Request, tenantId: string, deps
   if (!allowed) return reply(429, { error: "rate_limited" });
   if (!(request.headers.get("content-type") ?? "").toLowerCase().startsWith("application/json")) return reply(415, { error: "unsupported" });
   if (!TENANT_ID.test(tenantId)) return reply(400, { error: "invalid_request" });
-  const text = await request.text();
-  if (text.length > MAX_BODY_CHARS) return reply(400, { error: "invalid_request" });
+  const text = await readCapped(request);
+  if (text === null) return reply(400, { error: "invalid_request" });
   let raw: unknown;
   try {
     raw = JSON.parse(text);
