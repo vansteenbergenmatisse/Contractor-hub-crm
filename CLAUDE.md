@@ -76,7 +76,7 @@ prisma/schema.prisma    Single schema, one section per feature (comment header p
 tests/                  Mirrors src/ (tests/features/<feature>/...)
 .claude/                Project plugins, skills, commands (committed)
 PROGRESS.md             Running log: resume guide, current state, plans, blockers, history
-docs/                   Long-form notes and plans (e.g. docs/gohighlevel-integration.md)
+docs/                   Long-form notes and plans (e.g. docs/greenlane/hl-api-notes.md)
 ```
 
 Existing features: `today`, `highlevel`, `auth`, `brand`, `admin`, `embed`, `app-shell`, `onboarding`, `inbox`, `pipeline`, `calendar`, `routes`, `leads`, `quotes`, `invoices`, `payments`, `automations`, `settings`, `settings-write-back`, `mailbox-prompt`, `alerts`, `template-copy`, `admin-values`.
@@ -105,7 +105,7 @@ Signed-in pages live in the route group `src/app/(app)/` (one layout: session gu
 - Branches: `develop` (daily work), `staging` (pre-release), `main` (production). Work on `develop` or a short branch from it named `feat/<feature>-<short>` or `fix/<feature>-<short>`.
 - Promotion is `develop` → `staging` → `main` via pull request. Never commit straight to `staging` or `main`.
 - Commit after every major step (a schema change, a finished module with its tests, a finished page, a docs or config change), not only at the end of a ticket, so the log explains each step. Each commit passes `pnpm check` and updates `PROGRESS.md` in the same commit. The body says what changed and why. Message format: `<type>(<feature>): <summary>` with type one of `feat`, `fix`, `refactor`, `test`, `docs`, `chore`. Example: `feat(today): add pipeline summary card`.
-- Stage files by name. Do not commit `.env*`, secrets or `.claude/skills/looper/.venv/`.
+- Stage files by name. Do not commit `.env*` or secrets.
 - Do not push, force-push, merge or delete branches without explicit approval.
 - Hosting is Vercel. GitHub Actions CI (`.github/workflows/ci.yml`) must pass before merging.
 
@@ -122,4 +122,3 @@ Signed-in pages live in the route group `src/app/(app)/` (one layout: session gu
 ## Local tooling
 
 - Plugins (project scope, in `.claude/settings.json`): `mattpocock-skills`, `loop-engineering`.
-- Looper is vendored in `.claude/skills/looper/` (see `VENDORED.md`). After a fresh clone recreate its venv: `python3 -m venv .claude/skills/looper/.venv && .claude/skills/looper/.venv/bin/python -m pip install "PyYAML>=6.0"`.
