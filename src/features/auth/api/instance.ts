@@ -29,9 +29,10 @@ import { findLink, findLinkByUserId, findUserByEmail, findUserById, insertLink, 
 import { prismaAuthDatabase } from "../db/auth-database";
 import { createMoveStore } from "../db/account-move";
 import { readSourceUnproven } from "./account-move";
-import type { EmbedResolution } from "./embed-login";
+import type { EmbedResolution, EmbedWho } from "./embed-login";
 import { parseSignInSlug, resolveHighLevelSignIn, type HighLevelSignIn } from "./highlevel-sign-in";
-import { findLocationIdBySlug } from "../db/highlevel-sign-in";
+import { findLocationIdBySlug, findSignInSlugByTenant } from "../db/highlevel-sign-in";
+import { resolveSignInPage, type SignInPage } from "./sign-in-hint";
 
 // The "Sign in with HighLevel" target for /sign-in (?client= is checked here; a malformed value
 // causes no lookup). HIGHLEVEL_CRM_MENU_URL is read per call so the build needs no env.
@@ -42,6 +43,11 @@ export function loadHighLevelSignIn(client: unknown): Promise<HighLevelSignIn> {
   });
 }
 
+// Everything /sign-in shows that depends on ?client= and the sign-in hint cookie's raw value.
+export function loadSignInPage(client: unknown, hint: string | undefined): Promise<SignInPage> {
+  return resolveSignInPage({ client, hint }, { template: process.env.HIGHLEVEL_CRM_MENU_URL, findLocationId: findLocationIdBySlug });
+}
+
 // The /embed sign-in: decrypt HighLevel's user data with the shared secret, find the CRM user, and,
 // when the sub-account is installed but the person has no account yet, check with HighLevel that
 // they belong to it and create the account on the spot (same mapping as the onboarding sync). The
@@ -49,11 +55,14 @@ export function loadHighLevelSignIn(client: unknown): Promise<HighLevelSignIn> {
 // Log lines carry step names, reason codes and key names only: no email, no ids, no payload.
 export async function resolveEmbedLogin(payload: string, options: { provision?: boolean } = {}): Promise<string | null | { reason: string }> {
   const result = await resolveEmbedSession(payload, options);
-  return result !== null && typeof result === "object" && "userId" in result ? result.userId : (result as string | null | { reason: string });
+  if (result !== null && typeof result === "object") return "userId" in result ? result.userId : { reason: result.reason };
+  return result;
 }
 
-// The same, naming the tenant the sign-in is for, so the session can be bound to it.
-async function resolveEmbedSession(payload: string, options: { provision?: boolean } = {}): Promise<EmbedResolution> {
+// The same, naming the tenant the sign-in is for, so the session can be bound to it. A refusal also
+// carries HighLevel's user type and role (`who`, never the email or an id): an agency login that is
+// not on the sub-account's list gets its own message.
+export async function resolveEmbedSession(payload: string, options: { provision?: boolean } = {}): Promise<EmbedResolution> {
   let context;
   try {
     context = decryptUserContext(payload, parseEnv("highlevel").GHL_APP_SHARED_SECRET);
@@ -63,15 +72,19 @@ async function resolveEmbedSession(payload: string, options: { provision?: boole
   }
   const present = Object.entries(context).filter(([, v]) => v !== undefined).map(([k]) => k).sort().join(",");
   console.info(JSON.stringify({ audit: "embed_resolve", step: "decrypt", ok: true, fields: present }));
+  const who: EmbedWho = {};
+  if (context.type !== undefined) who.type = context.type;
+  if (context.role !== undefined) who.role = context.role;
+  const deny = (reason: string) => (who.type !== undefined || who.role !== undefined ? { reason, who } : { reason });
   const access = await resolveEmbedAccess(context, { findCandidate: findEmbedCandidate, findTenant: findEmbedTenant });
   if (access.kind === "user") {
     if (options.provision === false) return access.userId; // a plain lookup: no session follows
     const tenant = await findEmbedTenant(context.activeLocation).catch(() => null);
-    return tenant ? { userId: access.userId, tenantId: tenant.tenantId } : { reason: "lookup_failed" };
+    return tenant ? { userId: access.userId, tenantId: tenant.tenantId } : deny("lookup_failed");
   }
   if (access.kind === "denied") {
     console.info(JSON.stringify({ audit: "embed_resolve", step: "access", reason: access.reason }));
-    return options.provision === false ? null : { reason: access.reason };
+    return options.provision === false ? null : deny(access.reason);
   }
   if (options.provision === false) return null;
   try {
@@ -79,7 +92,7 @@ async function resolveEmbedSession(payload: string, options: { provision?: boole
     // is not reliable, see hl-api-notes.md).
     const users = await listTenantUsers(access.tenantId);
     const match = users.find((user) => !user.deleted && user.email.trim().toLowerCase() === context.email);
-    if (!match) return { reason: "not_in_location" };
+    if (!match) return deny("not_in_location");
     const result = await provisionGhlUser(getProvisionDeps(), {
       tenantId: access.tenantId,
       ghlUserId: match.id,
@@ -91,10 +104,10 @@ async function resolveEmbedSession(payload: string, options: { provision?: boole
       moveProof: { kind: "embed", readSourceEmails: readSourceUnproven },
     });
     console.info(JSON.stringify({ audit: "embed_resolve", step: "provision", outcome: result.outcome }));
-    return result.userId ? { userId: result.userId, tenantId: access.tenantId } : { reason: result.outcome };
+    return result.userId ? { userId: result.userId, tenantId: access.tenantId } : deny(result.outcome);
   } catch (error) {
     console.error("Embed provisioning failed:", error instanceof Error ? error.name : "unknown error");
-    return { reason: "provision_failed" };
+    return deny("provision_failed");
   }
 }
 
@@ -153,6 +166,7 @@ export function getAuth(): Auth {
       tenantName: async (tenantId) => (await findTenantForInvite(tenantId))?.name ?? null,
       appUrl: env.APP_URL,
       deviceSignIn: true,
+      signInHint: { slugForTenant: (tenantId) => findSignInSlugByTenant(tenantId) },
     });
   }
   return instance;

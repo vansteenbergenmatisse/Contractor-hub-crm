@@ -3,6 +3,8 @@
 // HighLevel's docs give no timeout or retry rule and name no parent origin, so: the answer is only
 // accepted from the parent window itself, the request is repeated every second, and it gives up after
 // `giveUpAfterMs`.
+import { EMBED_DENIAL_HEADER, isEmbedDenialCode, type EmbedDenialCode } from "./denial";
+
 export type HandshakeResult = "signed_in" | "no_access" | "no_data" | "not_embedded";
 
 type MessageEventLike = { source: unknown; data: unknown };
@@ -14,8 +16,9 @@ export type HandshakeDeps = {
   fetchImpl: (
     url: string,
     init: { method: string; headers: Record<string, string>; body: string; credentials: "same-origin" },
-  ) => Promise<{ ok: boolean; status: number; json?: () => Promise<unknown> }>;
-  onResult: (result: HandshakeResult) => void;
+  ) => Promise<{ ok: boolean; status: number; headers?: { get(name: string): string | null }; json?: () => Promise<unknown> }>;
+  // With "no_access", why: the server's public code on a 403, else "other".
+  onResult: (result: HandshakeResult, denial?: EmbedDenialCode) => void;
   // Called before "signed_in" when the server also gave a single-use handoff token (to continue
   // full-screen). Only a well-formed token is passed on.
   onHandoff?: (token: string) => void;
@@ -30,11 +33,18 @@ export function startHandshake(deps: HandshakeDeps): () => void {
   }
   let finished = false;
   let sent = false;
-  const finish = (result: HandshakeResult) => {
+  const finish = (result: HandshakeResult, denial?: EmbedDenialCode) => {
     if (finished) return;
     finished = true;
     stop();
-    deps.onResult(result);
+    if (denial) deps.onResult(result, denial);
+    else deps.onResult(result);
+  };
+  // Only a 403 carries a reason; anything else (rate limit, server error) is "other".
+  const denialOf = (response: { status: number; headers?: { get(name: string): string | null } }): EmbedDenialCode => {
+    if (response.status !== 403) return "other";
+    const code = response.headers?.get(EMBED_DENIAL_HEADER) ?? null;
+    return isEmbedDenialCode(code) ? code : "other";
   };
   const ask = () => deps.parent.postMessage({ message: "REQUEST_USER_DATA" }, "*");
 
@@ -54,7 +64,7 @@ export function startHandshake(deps: HandshakeDeps): () => void {
         credentials: "same-origin",
       })
       .then(async (response) => {
-        if (!response.ok) return finish("no_access");
+        if (!response.ok) return finish("no_access", denialOf(response));
         if (deps.onHandoff && response.json) {
           const body = (await response.json().catch(() => null)) as { handoff?: unknown } | null;
           const token = body?.handoff;
@@ -62,7 +72,7 @@ export function startHandshake(deps: HandshakeDeps): () => void {
         }
         finish("signed_in");
       })
-      .catch(() => finish("no_access"));
+      .catch(() => finish("no_access", "other"));
   });
   const retry = setInterval(ask, deps.retryEveryMs);
   const giveUp = setTimeout(() => finish("no_data"), deps.giveUpAfterMs);

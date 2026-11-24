@@ -3,7 +3,10 @@
 import { useEffect, useState } from "react";
 import { startHandshake, type HandshakeResult } from "../api/handshake";
 import { claimAutoJump, fullScreenUrl, tryTopNavigation, type TabStorage, type TopWindow } from "../api/full-screen";
+import { EMBED_DENIAL_MESSAGES, type EmbedDenialCode } from "../api/denial";
 
+// "no_access" says why when the handshake knows (it always does in the browser: the server's code,
+// or "other"). The plain text below is only left for a refusal that came with no reason.
 const MESSAGES: Record<Exclude<HandshakeResult, "signed_in">, string> = {
   no_access: "Ask Forge Forward for access.",
   no_data: "HighLevel did not answer. Reload this page, or open it from the HighLevel menu.",
@@ -40,6 +43,7 @@ export function EmbedBridge({
 } = {}) {
   const [result, setResult] = useState<HandshakeResult | null>(null);
   const [handoffUrl, setHandoffUrl] = useState<string | null>(null);
+  const [denial, setDenial] = useState<EmbedDenialCode | null>(null);
 
   useEffect(() => {
     let url: string | null = null;
@@ -55,7 +59,8 @@ export function EmbedBridge({
       onHandoff: (token) => {
         url = fullScreenUrl(window.location.origin, token);
       },
-      onResult: (value) => {
+      onResult: (value, why) => {
+        if (why) setDenial(why);
         setResult(value);
         if (value !== "signed_in") return;
         if (url) {
@@ -91,7 +96,13 @@ export function EmbedBridge({
 
   return (
     <main style={{ padding: 24, fontFamily: "system-ui, sans-serif" }}>
-      <p role="status">{result === null || result === "signed_in" ? "Signing you in…" : MESSAGES[result]}</p>
+      <p role="status">
+        {result === null || result === "signed_in"
+          ? "Signing you in…"
+          : result === "no_access" && denial
+            ? EMBED_DENIAL_MESSAGES[denial]
+            : MESSAGES[result]}
+      </p>
     </main>
   );
 }

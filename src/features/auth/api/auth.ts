@@ -1,4 +1,6 @@
 import { betterAuth } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
+import { encodeSignInHint, maskEmailHint, SIGN_IN_HINT_COOKIE, SIGN_IN_HINT_MAX_AGE_SECONDS } from "./sign-in-hint";
 import type { EmailSender } from "./email-sender";
 import { embedLoginPlugin, type EmbedLoginOptions } from "./embed-login";
 import { deviceSignInPlugin } from "./device-sign-in";
@@ -34,7 +36,41 @@ export type CreateAuthOptions = {
   // "Open on this device": handoff from the /embed sign-in and pairing by QR code or link
   // (api/device-sign-in.ts). Left out, those endpoints do not exist and /embed gives no handoff.
   deviceSignIn?: boolean;
+  // The way back after a long session ends (api/sign-in-hint.ts): the personal-link slug of a tenant,
+  // or null. Left out, no hint cookie is written.
+  signInHint?: { slugForTenant: (tenantId: string) => Promise<string | null> };
 };
+
+// Where a long, first-party session is created for a person: password sign-in and the device sign-in
+// (full-screen handoff from HighLevel, or pairing). Not /embed-login: that one-day session lives in
+// HighLevel's frame.
+const HINT_PATHS = new Set(["/sign-in/email", "/device-sign-in"]);
+
+function signInHintHook(options: CreateAuthOptions) {
+  const hint = options.signInHint;
+  const secure = new URL(options.baseURL).protocol === "https:";
+  return createAuthMiddleware(async (ctx) => {
+    if (!hint || !HINT_PATHS.has(ctx.path)) return;
+    const created = ctx.context.newSession;
+    const user = created?.user as { email?: string; role?: string; tenantId?: string | null } | undefined;
+    // Only a client's person (owner or office) with a tenant; never Forge Forward staff.
+    if (!user?.email || !user.tenantId || (user.role !== "owner" && user.role !== "office")) return;
+    // The hint is a convenience: a failure never touches the sign-in.
+    try {
+      const slug = await hint.slugForTenant(user.tenantId).catch(() => null);
+      if (!maskEmailHint(user.email)) return;
+      ctx.setCookie(SIGN_IN_HINT_COOKIE, encodeSignInHint({ slug, email: user.email }), {
+        httpOnly: true,
+        secure,
+        sameSite: "lax",
+        path: "/",
+        maxAge: SIGN_IN_HINT_MAX_AGE_SECONDS,
+      });
+    } catch {
+      // nothing: no hint this time
+    }
+  });
+}
 
 export function createAuth(options: CreateAuthOptions) {
   return betterAuth({
@@ -102,6 +138,7 @@ export function createAuth(options: CreateAuthOptions) {
       },
     },
     rateLimit: { enabled: true, storage: "database" },
+    hooks: { after: signInHintHook(options) },
     // On Vercel the platform sets these headers; the first is not forgeable by the client.
     advanced: { ipAddress: { ipAddressHeaders: ["x-vercel-forwarded-for", "x-forwarded-for"] } },
     databaseHooks: {
