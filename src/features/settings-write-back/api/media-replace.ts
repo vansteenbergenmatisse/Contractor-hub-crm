@@ -36,7 +36,9 @@ export type MediaDeps = SaveDeps & {
 // `unlocked`: the protected folder this change was made in, passed on to the save's guard.
 type Input = { tenantId: string; actorId: string; key: string; expected: string; file: CheckedImage; unlocked?: string };
 type Run = { answer: ImageAnswer; keepLease: boolean };
-type Target = { file: MediaFile; uploadedNow: boolean };
+// `relist`: for an upload whose stored name is not known for sure (a format change names the file
+// itself, and HighLevel may store another name): finds the file in a fresh listing by its id and URL.
+type Target = { file: MediaFile; uploadedNow: boolean; relist?: () => Promise<MediaFile | null> };
 
 const stopped = (status: ImageStatus, keepLease = false): Run => ({ answer: { status }, keepLease });
 const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
@@ -72,7 +74,8 @@ async function closeAudit(id: string, outcome: AuditOutcome, deps: MediaDeps) {
 }
 
 // The exact URL, exactly one live file. Anything else stops before the first write.
-async function findOld(input: Input, url: string, deps: MediaDeps): Promise<{ old: MediaFile; siblings: MediaFile[] } | { stop: ImageStatus }> {
+type Located = { old: MediaFile; siblings: MediaFile[]; library?: MediaFile[] };
+async function findOld(input: Input, url: string, deps: MediaDeps): Promise<Located | { stop: ImageStatus }> {
   let found: MediaFind;
   try {
     found = await deps.find(input.tenantId, url);
@@ -85,7 +88,7 @@ async function findOld(input: Input, url: string, deps: MediaDeps): Promise<{ ol
   }
   if (found.files.length === 0) return { stop: "not_found" };
   if (found.files.length > 1) return { stop: "ambiguous" };
-  return { old: found.files[0], siblings: found.siblings };
+  return found.library ? { old: found.files[0], siblings: found.siblings, library: found.library } : { old: found.files[0], siblings: found.siblings };
 }
 
 // A same-name file in the folder may be this image from an earlier try. Its real bytes decide: the
@@ -220,7 +223,8 @@ async function trashVerified(input: Input, file: MediaFile, started: number, dep
 }
 
 // Runs only after the read-back confirmed the new URL. A fresh read of every custom value decides.
-async function removeOld(input: Input, old: MediaFile, target: MediaFile, started: number, deps: MediaDeps): Promise<ImageOldFile> {
+async function removeOld(input: Input, old: MediaFile, to: Target, started: number, deps: MediaDeps): Promise<ImageOldFile> {
+  const target = to.file;
   if (old.id === target.id || old.url === target.url) return "kept";
   if (deps.now() - started > REMOVE_CUTOFF_MS) return "kept";
   const all = await deps.readAll(input.tenantId).catch(() => null);
@@ -228,7 +232,7 @@ async function removeOld(input: Input, old: MediaFile, target: MediaFile, starte
   const own = all.rows.filter((row) => row.key === input.key);
   if (own.length !== 1 || own[0].value.trim() !== target.url) return "kept";
   if (all.rows.some((row) => row.key !== input.key && row.value.includes(old.url))) return "in_use";
-  if (!(await isProvenNew(input, target, deps))) return "unproven";
+  if (!(await isProvenNew(input, to, deps))) return "unproven";
   const outcome = await trashVerified(input, old, started, deps);
   if (outcome === "trashed") return "trashed";
   return outcome === "unconfirmed" ? "unconfirmed" : "kept";
@@ -236,23 +240,37 @@ async function removeOld(input: Input, old: MediaFile, target: MediaFile, starte
 
 // The upload answer holds only an id and URL. The listing must show the name and folder we asked
 // for, and the stored bytes must be the ones sent, or the old file is the only good copy.
-async function isProvenNew(input: Input, target: MediaFile, deps: MediaDeps): Promise<boolean> {
-  if (!(await deps.verify(input.tenantId, target).catch(() => false))) return false;
-  const bytes = await deps.fetchBytes(target.url, MAX_IMAGE_BYTES).catch(() => null);
+async function isProvenNew(input: Input, to: Target, deps: MediaDeps): Promise<boolean> {
+  if (!(await isListed(input, to, deps))) return false;
+  const bytes = await deps.fetchBytes(to.file.url, MAX_IMAGE_BYTES).catch(() => null);
   return !!bytes && sha256(bytes) === input.file.hash;
 }
 
+// Whether the folder lists the target with its id, URL and name. When HighLevel stored the upload
+// under another name than the one asked for, a fresh listing found by id and URL gives the real name,
+// which every later step uses.
+async function isListed(input: Input, to: Target, deps: MediaDeps): Promise<boolean> {
+  if (await deps.verify(input.tenantId, to.file).catch(() => false)) return true;
+  if (!to.relist) return false;
+  const listed = await to.relist().catch(() => null);
+  if (!listed || listed.name === to.file.name) return false;
+  to.file = listed;
+  return deps.verify(input.tenantId, listed).catch(() => false);
+}
+
 // The value did not move: only the file this request uploaded may go, and only if nothing points at it.
-async function removeUploaded(input: Input, file: MediaFile, started: number, deps: MediaDeps): Promise<boolean> {
+async function removeUploaded(input: Input, to: Target, started: number, deps: MediaDeps): Promise<boolean> {
   if (deps.now() - started > REMOVE_CUTOFF_MS) return false;
   const all = await deps.readAll(input.tenantId).catch(() => null);
-  if (!all?.ok || all.rows.some((row) => row.value.includes(file.url))) return false;
-  return (await trashVerified(input, file, started, deps)) === "trashed";
+  if (!all?.ok || all.rows.some((row) => row.value.includes(to.file.url))) return false;
+  // Listed under the name HighLevel stored, so the trash check (verify) finds this very file.
+  if (to.relist && !(await isListed(input, to, deps))) return false;
+  return (await trashVerified(input, to.file, started, deps)) === "trashed";
 }
 
 async function failAfterUpload(input: Input, run: Run, target: Target, started: number, deps: MediaDeps): Promise<Run> {
   if (!target.uploadedNow || run.keepLease) return run;
-  const removed = await removeUploaded(input, target.file, started, deps);
+  const removed = await removeUploaded(input, target, started, deps);
   return removed ? run : { ...run, answer: { ...run.answer, leftover: true } };
 }
 
@@ -292,7 +310,7 @@ async function run(input: Input, deps: MediaDeps): Promise<Run> {
   const sending = FORMAT_OF_TYPE[input.file.contentType];
   if (wanted && wanted !== sending) {
     // Another format cannot take the old name: it becomes a new file next to the old one.
-    if (add) return changeFormat(input, old, started, add);
+    if (add) return changeFormat(input, old, located.library ?? null, started, add);
     return { answer: wanted === "other" ? { status: "format_mismatch" } : { status: "format_mismatch", format: wanted }, keepLease: false };
   }
 
@@ -325,7 +343,7 @@ async function moveTo(input: Input, old: MediaFile, target: Target, started: num
   if (deps.now() - started > PUT_CUTOFF_MS) return failAfterUpload(input, stopped("retry"), target, started, deps);
   const saved = await pointValueAt(input, target.file.url, started, deps);
   if (saved.answer.status !== "saved") return failAfterUpload(input, saved, target, started, deps);
-  const oldFile = await removeOld(input, old, target.file, started, deps);
+  const oldFile = await removeOld(input, old, target, started, deps);
   return { answer: { ...saved.answer, oldFile }, keepLease: false };
 }
 
@@ -401,12 +419,15 @@ async function placeFor(input: Input, deps: AddDeps): Promise<Place> {
   return { parentId: made.id, files: [] };
 }
 
-// One upload, never repeated. After no answer the library is read again; only a new same-name file
-// with the same bytes counts as this upload.
-async function uploadInto(input: Input, name: string, parentId: string | null, before: readonly MediaFile[], deps: AddDeps): Promise<Target | Run> {
+// One upload, never repeated. After no answer the library is read again; only a new file in the
+// folder with the same bytes counts as this upload: with the same name, or (`nearName`, a format
+// change) a name HighLevel may have changed slightly, such as another case or a " (1)" suffix.
+// The audit row names the file and folder asked for (ids and names only, no secrets).
+async function uploadInto(input: Input, name: string, parentId: string | null, before: readonly MediaFile[], deps: AddDeps, nearName = false): Promise<Target | Run> {
   let auditId: string;
   try {
-    auditId = await deps.begin({ tenantId: input.tenantId, actorId: input.actorId, key: input.key, previousValue: input.expected, newValue: `upload:${input.key}-${input.file.hash.slice(0, 12)}` });
+    const upload = `upload:${input.key}-${input.file.hash.slice(0, 12)} name=${name} folder=${parentId ?? "top"}`;
+    auditId = await deps.begin({ tenantId: input.tenantId, actorId: input.actorId, key: input.key, previousValue: input.expected, newValue: upload });
   } catch {
     console.error("Settings image failed: step=audit-start");
     return stopped("retry");
@@ -419,7 +440,15 @@ async function uploadInto(input: Input, name: string, parentId: string | null, b
   }
   if (sent.kind === "uploaded") {
     await closeAudit(auditId, "saved", deps);
-    return { file: { id: sent.fileId, name, url: sent.url, parentId }, uploadedNow: true };
+    const file = { id: sent.fileId, name, url: sent.url, parentId };
+    if (!nearName) return { file, uploadedNow: true };
+    // The file is known by the id and URL HighLevel answered; its stored name is read when needed.
+    const relist = async () => {
+      const library = await readLibrary(input.tenantId, deps);
+      if (!library.ok) return null;
+      return library.files.find((item) => item.id === file.id && item.url === file.url && item.parentId === parentId) ?? null;
+    };
+    return { file, uploadedNow: true, relist };
   }
   if (sent.kind !== "no_answer") {
     await closeAudit(auditId, sent.kind === "rejected" ? "rejected" : sent.kind === "permission" ? "permission" : "failed", deps);
@@ -428,7 +457,7 @@ async function uploadInto(input: Input, name: string, parentId: string | null, b
   const again = await readLibrary(input.tenantId, deps);
   if (again.ok) {
     const known = new Set(before.map((file) => file.id));
-    const appeared = again.files.filter((file) => !known.has(file.id) && file.name === name && file.parentId === parentId);
+    const appeared = again.files.filter((file) => !known.has(file.id) && file.parentId === parentId && (nearName ? isNearName(file.name, name) : file.name === name));
     const match = await matchSibling(input, appeared, deps);
     if (match && "id" in match) {
       await closeAudit(auditId, "saved", deps);
@@ -466,47 +495,72 @@ async function addImage(input: Input, started: number, oldFile: "none" | "outsid
 
 // Tried in order for a format change: logo.webp, then logo-2.webp up to logo-8.webp.
 const MAX_NEW_NAMES = 8;
+// The longest new file name, suffix and extension included.
+const MAX_NAME_LENGTH = 120;
 
 // The old name without its image extension. A name with none (or a dot that is no format) stays whole.
 function baseName(name: string): string {
   return extensionFormat(name) ? name.replace(/\.[a-z0-9]+$/i, "") : name;
 }
 
-function newNames(old: MediaFile, extension: string): string[] {
-  const base = baseName(old.name);
-  return Array.from({ length: MAX_NEW_NAMES }, (_, n) => (n === 0 ? `${base}.${extension}` : `${base}-${n + 1}.${extension}`));
+// Control characters and slashes are dropped; an empty base (a name like ".svg") becomes the key.
+function newNames(input: Input, old: MediaFile): string[] {
+  const base = baseName(old.name).replace(/[\p{Cc}/\\]/gu, "").trim() || input.key;
+  return Array.from({ length: MAX_NEW_NAMES }, (_, n) => {
+    const tail = `${n === 0 ? "" : `-${n + 1}`}.${input.file.extension}`;
+    return `${[...base].slice(0, MAX_NAME_LENGTH - tail.length).join("").trimEnd()}${tail}`;
+  });
+}
+
+// The same name apart from case or a " (1)" style suffix HighLevel may add before the extension.
+function isNearName(listed: string, asked: string): boolean {
+  const plain = (name: string) => name.toLowerCase().replace(/\s*\(\d+\)(?=\.[^.]*$|$)/, "");
+  return plain(listed) === plain(asked);
+}
+
+// The first file holding exactly the bytes sent. A file that cannot be read (a host not on the list,
+// a failed fetch) is skipped: it holds the new format, so it is never the live image.
+async function identicalIn(input: Input, files: readonly MediaFile[], deps: MediaDeps): Promise<MediaFile | null> {
+  const readable = files.slice(0, MAX_CANDIDATES).filter((file) => isAllowedLogoUrl(file.url, deps.hosts));
+  const all = await Promise.all(readable.map((file) => deps.fetchBytes(file.url, MAX_IMAGE_BYTES).catch(() => null)));
+  const at = all.findIndex((bytes) => !!bytes && sha256(bytes) === input.file.hash);
+  return at >= 0 ? readable[at] : null;
 }
 
 // A new format cannot take the old file's name, so it becomes a new file in the old file's folder,
-// named after it with the new extension. A file there with that name and the same bytes (an earlier
-// try) is reused; one with other bytes is someone else's and is left alone: the next name is tried.
-// Then the same steps as a replace: save with read-back, and the old file goes only if unused.
-async function changeFormat(input: Input, old: MediaFile, started: number, deps: AddDeps): Promise<Run> {
+// named after it with the new extension. A file there with (nearly) that name and the same bytes (an
+// earlier try) is reused; a file with that exact name and other or unreadable bytes is left alone and
+// the next name is tried. Then the same steps as a replace: save with read-back, and the old file goes
+// only if unused. `listed`: the files of the walk that found the old file, so the library is walked once.
+async function changeFormat(input: Input, old: MediaFile, listed: MediaFile[] | null, started: number, deps: AddDeps): Promise<Run> {
   const currentIs = await compareCurrent(input, old, deps);
   if (currentIs === "same") return { answer: { status: "saved", url: old.url, oldFile: "same" }, keepLease: false };
-  const library = await readLibrary(input.tenantId, deps);
-  if (!library.ok) return stopped(LIBRARY_STOPS[library.reason]);
+  let files = listed;
+  if (!files) {
+    const library = await readLibrary(input.tenantId, deps);
+    if (!library.ok) return stopped(LIBRARY_STOPS[library.reason]);
+    files = library.files;
+  }
+  const folder = files.filter((file) => file.id !== old.id && file.parentId === old.parentId);
   let target: Target | null = null;
   let name: string | null = null;
-  for (const candidate of newNames(old, input.file.extension)) {
-    const same = library.files.filter((file) => file.id !== old.id && file.name === candidate && file.parentId === old.parentId);
-    if (same.length === 0) {
-      name = candidate;
-      break;
-    }
-    const match = await matchSibling(input, same, deps);
-    if (match && "stop" in match) return stopped(match.stop);
+  for (const candidate of newNames(input, old)) {
+    const match = await identicalIn(input, folder.filter((file) => isNearName(file.name, candidate)), deps);
     if (match) {
-      // The copy may be the live image itself: moving to it could trash a file for no change.
+      // The live file could not be read: stop rather than move the value with nothing compared.
       if (currentIs === "unknown") return stopped("retry");
       target = { file: match, uploadedNow: false };
+      break;
+    }
+    if (!folder.some((file) => file.name === candidate)) {
+      name = candidate;
       break;
     }
   }
   if (!target) {
     if (!name) return stopped("ambiguous");
     if (deps.now() - started > UPLOAD_CUTOFF_MS) return stopped("retry");
-    const uploaded = await uploadInto(input, name, old.parentId, library.files, deps);
+    const uploaded = await uploadInto(input, name, old.parentId, files, deps, true);
     if (!("file" in uploaded)) return uploaded;
     target = uploaded;
   }
