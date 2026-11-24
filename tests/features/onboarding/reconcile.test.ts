@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { emptyUserCounts, handleCheckSubAccounts, onboardLocation, runSync, throttledCompanyIds, type OnboardDeps, type SyncDeps, type SyncSummary } from "@/features/onboarding";
 
@@ -178,34 +176,4 @@ describe("handleCheckSubAccounts", () => {
   });
 });
 
-describe("wiring (source checks)", () => {
-  const source = readFileSync(join(process.cwd(), "src/features/onboarding/api/instance.ts"), "utf8");
-  const section = (from: string) => source.slice(source.indexOf(from));
-
-  it("the admin visit schedules the reconcile, throttled per agency, without mails", () => {
-    const visit = source.slice(source.indexOf("export function scheduleTokenRenewal"), source.indexOf("// POST or GET /api/integrations/sync."));
-    expect(visit).toContain("throttledCompanyIds(");
-    expect(visit).toContain("agency-reconcile:${companyId}");
-    expect(visit).toContain("ADMIN_RECONCILE_INTERVAL_MS");
-    const deps = section("function reconcileDeps");
-    expect(deps).toContain("alerts: false");
-    expect(deps).toContain("adminEmail: null");
-  });
-
-  it("the button runs onboarding only and is rate limited per admin", () => {
-    const route = section("export async function checkSubAccountsRoute");
-    expect(route).toContain("resyncKnown: false");
-    expect(route).toContain("agency-reconcile:manual:${adminId}");
-    expect(route).toContain("guards.adminId");
-  });
-
-  it("the daily cron and the reconcile pass the run start as listedAt", () => {
-    expect(source.match(/listedAt: startedAt/g)?.length).toBe(2);
-  });
-
-  it("the route file is wired to the onboarding handler", () => {
-    const routeFile = readFileSync(join(process.cwd(), "src/app/api/admin/sub-accounts/check/route.ts"), "utf8");
-    expect(routeFile).toContain("checkSubAccountsRoute(request)");
-    expect(routeFile).toContain("export const POST");
-  });
-});
+// The wiring (admin visit, button, route file) is tested by behavior in reconcile-wiring.test.ts.

@@ -10,7 +10,8 @@ import { readSession } from "./session";
 import { checkInviteEligibility } from "./invite-check";
 import { createInviteService, newInviteCode, type InviteTenant } from "./invites";
 import { createSignInLinkService, type SignInLinkDeps } from "./sign-in-link";
-import { deleteResetTokens, findAccountByEmail, findAccountById, listTenantAccounts } from "../db/sign-in-link";
+import { createResetTokenStore } from "./reset-token-store";
+import { findAccountByEmail, findAccountById, listTenantAccounts } from "../db/sign-in-link";
 import { hitRateLimit } from "../db/rate-limit";
 import { isTenantLoginBlocked, isTenantLoginOff, isTenantUninstalled } from "../db/tenant-status";
 import {
@@ -174,11 +175,12 @@ const checkEligibility = (tenant: InviteTenant, email: string) =>
 
 // Invites, built per call (cheap). Mail goes through the delivery guard (createEmailSenderFromEnv):
 // with EMAIL_DELIVERY_MODE unset or "log", or an address outside the allowlist, nothing is sent and
-// the admin page says so; the link is always shown there.
-export function getInviteService() {
+// the admin page says so; the link is always shown there. `mailBudget`: the client's daily mail cap for
+// the set-password link "Invite owner" issues when the email already has a never-used account.
+export function getInviteService(options: { mailBudget?: SignInLinkDeps["mailBudget"] } = {}) {
   const env = parseEnv("auth");
   const auth = getAuth();
-  const signInLinks = getSignInLinkService();
+  const signInLinks = getSignInLinkService({ mailBudget: options.mailBudget });
   return createInviteService({
     now: () => new Date(),
     newCode: newInviteCode,
@@ -211,12 +213,7 @@ export function getSignInLinkService(options: { mailBudget?: SignInLinkDeps["mai
       findUserById: findAccountById,
       readSnapshot: moves.readSnapshot,
       listTenantAccounts,
-      async replaceResetToken(userId, token, expiresAt) {
-        await deleteResetTokens(userId);
-        const context = await auth.$context;
-        // Better Auth's own format, so its reset endpoint accepts the token.
-        await context.internalAdapter.createVerificationValue({ identifier: `reset-password:${token}`, value: userId, expiresAt });
-      },
+      ...createResetTokenStore(auth),
     },
   });
 }

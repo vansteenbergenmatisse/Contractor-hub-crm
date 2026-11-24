@@ -1,12 +1,14 @@
 // What the admin reads after "Invite owner" or "Send sign-in email". It never says an email was sent
 // unless the server says the provider took it ("sent"). The link is always shown next to it.
-export type MailOutcome = "sent" | "held" | "capped" | "failed";
+export type MailOutcome = "sent" | "held" | "capped" | "failed" | "unknown";
 
 const MAIL_TEXT: Record<MailOutcome, (email: string) => string> = {
   sent: (email) => `Email sent to ${email}. The link is also below if you want to send it yourself.`,
   held: () => "Email not sent: email is switched off for this address. Copy the link below.",
   capped: () => "Email not sent: this client reached today's limit of sign-in emails. Copy the link below.",
   failed: () => "Email not sent: the email service refused it. Copy the link below.",
+  // The daily limit could not be checked: never claim it was reached.
+  unknown: () => "Email status unknown: we could not check this client's daily email limit. Copy the link below and send it yourself.",
 };
 
 const isMailOutcome = (value: unknown): value is MailOutcome =>

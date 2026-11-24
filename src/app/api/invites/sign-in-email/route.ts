@@ -1,5 +1,5 @@
 import { getGuards, getInviteLimiter, getSignInLinkService, handleListSignInAccounts, handleSendSignInEmail } from "@/features/auth";
-import { createMailCap } from "@/features/onboarding";
+import { createSignInMailBudget } from "@/features/onboarding";
 import { parseEnv } from "@/shared/config";
 
 export const dynamic = "force-dynamic";
@@ -20,10 +20,9 @@ export async function GET(request: Request): Promise<Response> {
 export async function POST(request: Request): Promise<Response> {
   try {
     const env = parseEnv("auth");
-    const mailCap = createMailCap({ now: () => new Date(), gateOpen: () => true });
     return await handleSendSignInEmail(request, {
       guards: getGuards(),
-      service: getSignInLinkService({ mailBudget: (tenantId, send) => mailCap.send(tenantId, send) }),
+      service: getSignInLinkService({ mailBudget: createSignInMailBudget() }),
       appOrigin: new URL(env.APP_URL).origin,
       limiter: getInviteLimiter(),
     });

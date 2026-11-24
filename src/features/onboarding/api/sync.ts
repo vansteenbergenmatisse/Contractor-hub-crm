@@ -284,22 +284,37 @@ export function throttledCompanyIds(list: () => Promise<string[]>, claim: (compa
 }
 
 // POST /api/admin/sub-accounts/check: an admin asks to connect new sub-accounts now. Same-origin and
-// admin session first, then a per-admin rate limit. The answer holds counts only.
+// admin session first, then refused while the admin is in View as client (a look at a client must not
+// change anything), then a per-admin rate limit. The answer holds counts only.
 export async function handleCheckSubAccounts(
   request: Request,
-  deps: { appOrigin: string; adminId(request: Request): Promise<string | null>; allow(adminId: string): Promise<boolean>; run(): Promise<SyncSummary> },
+  deps: {
+    appOrigin: string;
+    adminId(request: Request): Promise<string | null>;
+    // True while the admin's View as client cookie is valid. Left out, it is not checked.
+    viewing?(request: Request): Promise<boolean>;
+    allow(adminId: string): Promise<boolean>;
+    run(): Promise<SyncSummary & { throttled?: number }>;
+  },
 ): Promise<Response> {
   const noStore = { "cache-control": "no-store" };
   if (request.headers.get("origin") !== deps.appOrigin) return Response.json({ error: "forbidden" }, { status: 403, headers: noStore });
   const admin = await deps.adminId(request);
   if (admin === null) return Response.json({ error: "forbidden" }, { status: 403, headers: noStore });
+  if (deps.viewing) {
+    let viewing: boolean;
+    try {
+      viewing = await deps.viewing(request);
+    } catch {
+      viewing = true; // fails closed
+    }
+    if (viewing) return Response.json({ error: "viewing" }, { status: 403, headers: noStore });
+  }
   try {
     if (!(await deps.allow(admin))) return Response.json({ error: "rate_limited" }, { status: 429, headers: noStore });
     const summary = await deps.run();
-    return Response.json(
-      { connected: summary.onboarded, installed: summary.installedLocations, agencies: summary.companies, failures: summary.failures },
-      { headers: noStore },
-    );
+    const counts = { connected: summary.onboarded, installed: summary.installedLocations, agencies: summary.companies, failures: summary.failures };
+    return Response.json(typeof summary.throttled === "number" ? { ...counts, throttled: summary.throttled } : counts, { headers: noStore });
   } catch (error) {
     console.error(`Reconcile: check failed: ${error instanceof Error ? error.name : "unknown error"}`);
     return Response.json({ error: "failed" }, { status: 500, headers: noStore });
