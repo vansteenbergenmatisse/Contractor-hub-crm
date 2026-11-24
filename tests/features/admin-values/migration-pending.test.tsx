@@ -16,12 +16,13 @@ vi.mock("@/features/auth", () => ({ clientViewCookieName: () => "view", currentU
 vi.mock("@/features/settings-write-back", () => ({ isWriteBackEnabled, lockedKeysOf, lockValue: vi.fn(), saveTenantValues: vi.fn(), unlockValue: vi.fn() }));
 
 import { AdminValuesPage, loadAdminValues } from "@/features/admin-values";
-import { render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 const MIGRATION = "20261124120000_custom_value_lock";
 let errors: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
+  cleanup();
   vi.clearAllMocks();
   vi.spyOn(console, "info").mockImplementation(() => {});
   errors = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -41,6 +42,17 @@ describe("loadAdminValues with the lock table missing", () => {
   it("keeps retry for any other lock read failure", async () => {
     lockedKeysOf.mockRejectedValue(new Error("db"));
     expect(await loadAdminValues("T1")).toMatchObject({ loadError: "retry" });
+  });
+
+  it("shows the pending answer on the row after Lock", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ error: "pending_update", migration: MIGRATION }), { status: 409 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const row = { key: "business_name", label: "Business name", value: "Test Co", secret: false, locked: false, editable: true, ownerReadOnly: false };
+    render(<AdminValuesPage view={{ tenantId: "T1", clientName: "Acme", writable: true, folders: [{ id: "biz", title: "Business", groups: [{ id: "g", title: "G", rows: [row] }] }] }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Lock Business name" }));
+    await waitFor(() => expect(screen.getByText(`Not locked. Database update pending: ${MIGRATION} is not applied on this environment.`)).toBeTruthy());
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
   });
 
   it("says which migration is missing on the page", () => {

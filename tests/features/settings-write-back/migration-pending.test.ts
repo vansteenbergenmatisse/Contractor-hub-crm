@@ -10,6 +10,7 @@ import {
   MigrationPendingError,
   handleMediaReplace,
   isMigrationPendingError,
+  loadLockedKeys,
   lockedKeysOf,
   lockValue,
   saveCustomValues,
@@ -46,6 +47,12 @@ describe("lockedKeysOf on a database without the lock table", () => {
   it("does the same for a lock write", async () => {
     findMany.mockRejectedValue(p2021());
     await expect(lockValue("T1", "business_name", "A1")).rejects.toBeInstanceOf(MigrationPendingError);
+  });
+
+  it("loadLockedKeys shows no locks and logs one line naming the migration", async () => {
+    findMany.mockRejectedValue(p2021());
+    expect(await loadLockedKeys("T1")).toEqual([]);
+    expect(errors.mock.calls).toEqual([[`Settings locks did not load: step=read reason=migration_pending migration=${MIGRATION}`]]);
   });
 
   it("leaves every other error unchanged", async () => {
