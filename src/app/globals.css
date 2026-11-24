@@ -1561,6 +1561,11 @@ select.fd-lin{padding:0 10px}
 @media (max-width: 1023px) and (orientation: landscape){
   .fd-app [data-pg=today],.fd-app [data-pg=calendar],.fd-app [data-pg=routes]{padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
   .fd-app [data-pg=calendar] .fd-cdet.is-on,.fd-app [data-pg=calendar] .fd-cf .fd-cfb,.fd-app [data-pg=calendar] .fd-cnew:not(.is-off){padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .fd-app:has([data-pg=today],[data-pg=calendar],[data-pg=routes]) .fd-mtop{padding-left:calc(16px + env(safe-area-inset-left,0px));padding-right:calc(16px + env(safe-area-inset-right,0px))}
+  .fd-app:has([data-pg=today],[data-pg=calendar],[data-pg=routes]) .fx-tcap{left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px))}
+}
+@media (max-width: 359px) and (orientation: landscape){
+  .fd-app:has([data-pg=today],[data-pg=calendar],[data-pg=routes]) .fx-tcap{left:max(8px,env(safe-area-inset-left,0px));right:max(8px,env(safe-area-inset-right,0px))}
 }
 .fd-cns .fd-btn{min-height:44px}
 .fd-app .fd-cns .fd-btn{color:var(--error-color)}
