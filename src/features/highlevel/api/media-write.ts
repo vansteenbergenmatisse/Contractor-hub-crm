@@ -15,6 +15,18 @@ const MAX_VERIFY_PAGES = 20;
 const VERIFY_BUDGET_MS = 5_000;
 
 export type MediaFile = { id: string; name: string; url: string; parentId: string | null };
+// A folder of the library. `name` is "" when HighLevel sent none.
+export type MediaFolder = { id: string; name: string; parentId: string | null };
+// Every live file and folder of one location's library, or why it could not be read whole.
+export type MediaLibrary =
+  | { ok: true; files: MediaFile[]; folders: MediaFolder[] }
+  | { ok: false; reason: "permission" | "connection" | "retry" | "incomplete" };
+// UNVERIFIED CONTRACT: `POST /medias/folder` is in the public OpenAPI files, but its documented answer
+// (FolderDTO) carries no id. The id is taken from `_id`/`id` when present, else from a fresh list of
+// the parent folder by exact name. `unconfirmed`: the folder may exist; it is never created twice blindly.
+export type MediaFolderOutcome =
+  | { kind: "created"; id: string }
+  | { kind: "permission" | "rejected" | "retry" | "unconfirmed" | "connection" };
 // `files`: every live file holding the exact URL. `siblings`: other files with the same name in the
 // same folder as the single match. `incomplete`: the whole library could not be read.
 export type MediaFind =
@@ -35,6 +47,8 @@ export type MediaAdapterDeps = {
   requestFiles: (accessToken: string, locationId: string, page: ListPage) => Promise<Response>;
   requestUpload: (accessToken: string, file: MediaUpload) => Promise<Response>;
   requestTrash: (accessToken: string, locationId: string, fileId: string) => Promise<Response>;
+  // Only the template copy creates folders. Left out, `createFolder` answers `rejected`.
+  requestCreateFolder?: (accessToken: string, locationId: string, folder: { name: string; parentId: string | null }) => Promise<Response>;
   now?: () => number;
 };
 
@@ -47,7 +61,7 @@ class ListStop extends Error {
 const filled = (value: unknown): value is string => typeof value === "string" && value.trim().length > 0;
 
 // `gone`: a readable row of this location that is trashed or deleted.
-type Row = { kind: "file"; id: string; file: MediaFile } | { kind: "folder"; id: string } | { kind: "gone"; id: string };
+type Row = { kind: "file"; id: string; file: MediaFile } | { kind: "folder"; id: string; folder: MediaFolder } | { kind: "gone"; id: string };
 
 // Null: this row cannot be read, so a listing holding it cannot be called complete.
 function parseRow(raw: unknown, locationId: string): Row | null {
@@ -57,7 +71,9 @@ function parseRow(raw: unknown, locationId: string): Row | null {
   const id = filled(item._id) ? item._id : filled(item.id) ? item.id : null;
   if (!id) return null;
   if (item.deleted === true || item.status === "trashed" || item.status === "deleted") return { kind: "gone", id };
-  if (item.type === "folder") return { kind: "folder", id };
+  if (item.type === "folder") {
+    return { kind: "folder", id, folder: { id, name: typeof item.name === "string" ? item.name : "", parentId: filled(item.parentId) ? item.parentId : null } };
+  }
   if (!filled(item.name) || !filled(item.url)) return null;
   return { kind: "file", id, file: { id, name: item.name, url: item.url, parentId: filled(item.parentId) ? item.parentId : null } };
 }
@@ -111,7 +127,50 @@ function uploadKindOf(status: number): "rejected" | "permission" | "retry" | "no
   return "rejected";
 }
 
+// Every folder of the library, breadth first, inside the call and time budget.
+async function walkLibrary(deps: MediaAdapterDeps, token: string, locationId: string, clock: () => number): Promise<Map<string, Row>> {
+  const started = clock();
+  let calls = 0;
+  const spend = () => {
+    calls += 1;
+    if (calls > MAX_LIST_CALLS || clock() - started > WALK_BUDGET_MS) throw new ListStop("incomplete");
+  };
+  const rows = new Map<string, Row>();
+  const queue: (string | null)[] = [null];
+  const walked = new Set<string | null>();
+  while (queue.length > 0) {
+    const parent = queue.shift() as string | null;
+    if (walked.has(parent)) continue;
+    walked.add(parent);
+    await readFolder(deps, token, locationId, "file", parent, spend, rows);
+    await readFolder(deps, token, locationId, "folder", parent, spend, rows);
+    for (const row of rows.values()) if (row.kind === "folder" && !walked.has(row.id)) queue.push(row.id);
+  }
+  return rows;
+}
+
+function createdFolderId(json: unknown): string | null {
+  if (typeof json !== "object" || json === null) return null;
+  const item = json as Record<string, unknown>;
+  const inner = typeof item.folder === "object" && item.folder !== null ? (item.folder as Record<string, unknown>) : item;
+  return filled(inner._id) ? inner._id : filled(inner.id) ? inner.id : null;
+}
+
+// Settings' Change image: find, verify, trash and upload. No permanent delete, rename or folder change.
 export function createMediaAdapter(deps: MediaAdapterDeps) {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { library, createFolder, ...media } = buildMediaAdapter(deps);
+  return media;
+}
+
+// The admin template copy: reads a whole library and creates folders. Kept apart so Change image
+// never gains a folder write.
+export function createMediaLibraryAdapter(deps: MediaAdapterDeps) {
+  const { library, createFolder } = buildMediaAdapter(deps);
+  return { library, createFolder };
+}
+
+function buildMediaAdapter(deps: MediaAdapterDeps) {
   const clock = deps.now ?? Date.now;
   return {
     // Walks every folder of the tenant's library and matches the URL exactly.
@@ -120,23 +179,7 @@ export function createMediaAdapter(deps: MediaAdapterDeps) {
         const locationId = await deps.readLocationId(tenantId);
         if (!locationId) return { ok: false, reason: "connection" };
         const token = await deps.getLocationToken(tenantId);
-        const started = clock();
-        let calls = 0;
-        const spend = () => {
-          calls += 1;
-          if (calls > MAX_LIST_CALLS || clock() - started > WALK_BUDGET_MS) throw new ListStop("incomplete");
-        };
-        const rows = new Map<string, Row>();
-        const queue: (string | null)[] = [null];
-        const walked = new Set<string | null>();
-        while (queue.length > 0) {
-          const parent = queue.shift() as string | null;
-          if (walked.has(parent)) continue;
-          walked.add(parent);
-          await readFolder(deps, token, locationId, "file", parent, spend, rows);
-          await readFolder(deps, token, locationId, "folder", parent, spend, rows);
-          for (const row of rows.values()) if (row.kind === "folder" && !walked.has(row.id)) queue.push(row.id);
-        }
+        const rows = await walkLibrary(deps, token, locationId, clock);
         const all = [...rows.values()].flatMap((row) => (row.kind === "file" ? [row.file] : []));
         const files = all.filter((file) => file.url === url);
         const only = files.length === 1 ? files[0] : null;
@@ -146,6 +189,69 @@ export function createMediaAdapter(deps: MediaAdapterDeps) {
         if (error instanceof ListStop) return { ok: false, reason: error.reason };
         console.error("HighLevel media list failed: step=read");
         return { ok: false, reason: tokenReason(error) };
+      }
+    },
+
+    // The whole library (files and folders), for the template copy. Read only.
+    async library(tenantId: string): Promise<MediaLibrary> {
+      try {
+        const locationId = await deps.readLocationId(tenantId);
+        if (!locationId) return { ok: false, reason: "connection" };
+        const token = await deps.getLocationToken(tenantId);
+        const rows = [...(await walkLibrary(deps, token, locationId, clock)).values()];
+        return {
+          ok: true,
+          files: rows.flatMap((row) => (row.kind === "file" ? [row.file] : [])),
+          folders: rows.flatMap((row) => (row.kind === "folder" ? [row.folder] : [])),
+        };
+      } catch (error) {
+        if (error instanceof ListStop) return { ok: false, reason: error.reason };
+        console.error("HighLevel media list failed: step=library");
+        return { ok: false, reason: tokenReason(error) };
+      }
+    },
+
+    // One folder under `parentId` (null: the top). One create attempt; see MediaFolderOutcome.
+    async createFolder(tenantId: string, name: string, parentId: string | null): Promise<MediaFolderOutcome> {
+      if (!deps.requestCreateFolder) return { kind: "rejected" };
+      let locationId: string | null;
+      let token: string;
+      try {
+        locationId = await deps.readLocationId(tenantId);
+        if (!locationId) return { kind: "connection" };
+        token = await deps.getLocationToken(tenantId);
+      } catch (error) {
+        console.error("HighLevel media folder failed: step=token");
+        return { kind: tokenReason(error) === "connection" ? "connection" : "retry" };
+      }
+      let id: string | null = null;
+      try {
+        const response = await deps.requestCreateFolder(token, locationId, { name, parentId });
+        if (!response.ok) {
+          await response.body?.cancel().catch(() => {});
+          console.error(`HighLevel media folder failed: status=${response.status}`);
+          const kind = uploadKindOf(response.status);
+          return { kind: kind === "no_answer" ? "unconfirmed" : kind };
+        }
+        try {
+          id = createdFolderId(JSON.parse(await response.text()));
+        } catch {
+          id = null;
+        }
+      } catch {
+        console.error("HighLevel media folder failed: step=send");
+        return { kind: "unconfirmed" };
+      }
+      if (id) return { kind: "created", id };
+      // No id in the answer: the folder is looked up by its exact name under the same parent.
+      try {
+        const rows = new Map<string, Row>();
+        await readFolder(deps, token, locationId, "folder", parentId, () => {}, rows);
+        const named = [...rows.values()].flatMap((row) => (row.kind === "folder" && row.folder.name === name ? [row.folder.id] : []));
+        return named.length === 1 ? { kind: "created", id: named[0] } : { kind: "unconfirmed" };
+      } catch {
+        console.error("HighLevel media folder failed: step=lookup");
+        return { kind: "unconfirmed" };
       }
     },
 

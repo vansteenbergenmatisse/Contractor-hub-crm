@@ -556,7 +556,26 @@ export function createHighLevelClient(config: HighLevelClientConfig) {
     }
   }
 
-  return { exchangeAgencyCode, exchangeCode, listAgencyLocations, listCustomValues, listLocationUsers, listInstalledLocations, mintLocationToken, readInstallToFutureLocations, refreshToken, requestContactSearch, requestCustomValues, requestMediaFiles, requestMediaTrash, requestMediaUpload, requestUpdateCustomValue, searchUsers };
+  // POST /medias/folder with { altId, altType: "location", name, parentId } (OpenAPI medias.json and
+  // medias-v3.json, CreateFolderParams). UNVERIFIED CONTRACT: no real response seen; the documented
+  // answer has no folder id. One attempt; only media-write.ts calls it, for the template copy.
+  async function requestMediaCreateFolder(accessToken: string, locationId: string, folder: { name: string; parentId: string | null }): Promise<Response> {
+    const body: Record<string, string> = { altId: locationId, altType: "location", name: folder.name };
+    if (folder.parentId) body.parentId = folder.parentId;
+    try {
+      return await doFetch(`${base}/medias/folder`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${accessToken}`, version: API_VERSION, accept: "application/json", "content-type": "application/json" },
+        body: JSON.stringify(body),
+        redirect: "error",
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+    } catch {
+      throw new HighLevelHttpError("HighLevel media folder could not reach HighLevel.", null);
+    }
+  }
+
+  return { exchangeAgencyCode, exchangeCode, listAgencyLocations, listCustomValues, listLocationUsers, listInstalledLocations, mintLocationToken, readInstallToFutureLocations, refreshToken, requestContactSearch, requestCustomValues, requestMediaCreateFolder, requestMediaFiles, requestMediaTrash, requestMediaUpload, requestUpdateCustomValue, searchUsers };
 }
 
 // Ids of people a parsed user list named but dropped for having no email. They are still in

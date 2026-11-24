@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { ClientsTable, ClientViewBanner, listClients } from "@/features/admin";
 import { scheduleTokenRenewal } from "@/features/onboarding";
+import { loadTemplateCopyView } from "@/features/template-copy";
 import { getRequestUser } from "../../session";
 
 export const metadata = { title: "Clients" };
@@ -24,5 +25,8 @@ export default async function Page() {
       </>
     );
   }
-  return <ClientsTable clients={clients} />;
+  // Copy from template and its "still template values" warning: off unless TEMPLATE_COPY_ENABLED,
+  // never during a view, and bounded in time (an unknown client shows no warning).
+  const templateCopy = await loadTemplateCopyView(clients.map((client) => client.tenantId));
+  return <ClientsTable clients={clients} templateCopy={templateCopy} />;
 }
