@@ -2,6 +2,7 @@ import { clientViewCookieName, currentUserFromHeaders, getGuards, hitRateLimit }
 import { createTenantCustomValueAdapter } from "@/features/highlevel";
 import { isWriteBackEnabled, lockValue, lockedKeysOf, saveTenantValues, unlockValue } from "@/features/settings-write-back";
 import { parseEnv } from "@/shared/config";
+import { isMigrationPendingError } from "@/shared/lib/migration-pending";
 import type { AdminValuesView } from "../types";
 import { connectedTenant } from "../db/tenant";
 import { handleAdminValues } from "./route";
@@ -44,11 +45,19 @@ export async function loadAdminValues(tenantId: string): Promise<AdminValuesView
   const [values, locked] = await Promise.all([
     createTenantCustomValueAdapter().read(tenantId).catch(() => ({ ok: false as const, reason: "retry" as const })),
     // Without the locks the page could show a locked key as unlocked: it shows the load error instead.
-    lockedKeysOf(tenantId).catch(() => {
+    lockedKeysOf(tenantId).catch((error: unknown) => {
+      if (isMigrationPendingError(error)) {
+        console.error(`Admin values did not load: step=locks reason=migration_pending migration=${error.migration}`);
+        return { pending: error.migration };
+      }
       console.error("Admin values did not load: step=locks");
       return null;
     }),
   ]);
+  // The lock table is not in this database: the page names the migration instead of "try again".
+  if (locked && "pending" in locked) {
+    return { tenantId, clientName: tenant.name, writable: isWriteBackEnabled(tenantId), loadError: "pending_update", pendingMigration: locked.pending, folders: [] };
+  }
   const read = locked ? values : { ok: false as const, reason: "retry" as const };
   if (!read.ok) console.error(`Admin values did not load: step=read reason=${read.reason}`);
   else console.info(`Admin values loaded: keys=${read.values.length}`);

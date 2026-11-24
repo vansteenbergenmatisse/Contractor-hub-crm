@@ -18,12 +18,9 @@ How to bring `TenantLoginLock` to an environment. The admin Login column reads t
 5. **Deploy the code.**
 6. **Run the dry run again.** A client turned off by the old code between steps 4 and 5 has no lock. If it lists a new client, review it and repeat step 4 with the approval for this environment.
 
-## Why the order is not automatic today
+## Why the order is not automatic (updated 2026-11-24)
 
-- `.github/workflows/ci.yml` runs `prisma migrate deploy` on a push to `staging` or `main`, after `pnpm check`.
-- `vercel.json` has no build command, and nothing in the repo makes Vercel wait for that job. A merge that carries both the migration and the code can therefore serve the code before the table exists. How Vercel orders this for this project has not been checked.
-- CI does not migrate `develop`. There the migration is applied by hand under the rule in `loop-constraints.md`.
-
-## Way to keep the order without a CI change (proposal, not done)
-
-Promote in two pull requests: first one that carries only the migration, wait for the `migrate` job to pass, run steps 2 to 4, then the one that carries the code. Changing CI or Vercel so the deploy waits for the migration is a separate decision for the user.
+- Step 1 is now part of the deploy: for `staging` and `main` the Vercel build runs `prisma migrate deploy` before `next build` (`vercel.json` `buildCommand`, `scripts/vercel-migrate.ts`). A failed migration fails the build, so the code never serves without its table. CI no longer migrates. See `docs/release-migrations.md`.
+- The backfill (steps 2 to 4) is not automatic and must not be: it needs a human review of each client. With the migration and the code in one deploy, steps 2 to 4 run right after that deploy, and step 6 covers clients turned off in between. Until the backfill has run, a client turned off before the table existed reads **on** (see the top of this file).
+- `develop` is still migrated by hand under the rule in `loop-constraints.md`; its Vercel build only checks (`prisma migrate status`).
+- To keep the strict order (backfill before the code is live), promote in two pull requests: first one that carries only the migration (its build applies it), run steps 2 to 4, then the one that carries the code.

@@ -129,7 +129,9 @@ export function AdminValuesPage({ view }: { view: AdminValuesView }) {
       {view.writable ? null : (
         <p role="note"><strong>Saving to this client is off</strong> (write-back is off or this client is excluded). Values are read-only here. Locks still work.</p>
       )}
-      {view.loadError ? <p role="alert">{LOAD_ERROR[view.loadError]}</p> : null}
+      {view.loadError === "pending_update" ? (
+        <p role="alert">Database update pending: {view.pendingMigration} is not applied on this environment. <a href="/admin/migrations">See migrations</a></p>
+      ) : view.loadError ? <p role="alert">{LOAD_ERROR[view.loadError]}</p> : null}
       {view.folders.map((folder) => (
         <section key={folder.id} aria-labelledby={`af-${folder.id}`}>
           <h2 id={`af-${folder.id}`}>{folder.title}</h2>

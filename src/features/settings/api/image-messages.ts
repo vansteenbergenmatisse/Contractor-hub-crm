@@ -35,6 +35,7 @@ const MESSAGES: Record<Exclude<ImageStatus, "saved">, string> = {
   library_limit: "We could not check your whole media library, so nothing was changed. Your current image is still live. Try again or ask Forge Forward.",
   format_mismatch: "The new file is a different format from your current file, so nothing was changed. Your current image is still live.",
   locked: "Locked by Forge Forward. Ask us to change it. Your current image is still live.",
+  pending_update: "Database update pending. Your change was not saved. Forge Forward is finishing an update; try again later.",
 };
 
 // The same stops on an empty value: there is no current image, so none is said to be live.

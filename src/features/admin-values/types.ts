@@ -9,11 +9,13 @@ export type AdminValueGroup = { id: string; title: string; rows: AdminValueRow[]
 export type AdminValueFolder = { id: string; title: string; groups: AdminValueGroup[] };
 
 // `writable`: the write-back flag is on for this tenant (not off, not EXCLUDED). Without it the page
-// is read-only. `loadError`: HighLevel's values could not be read.
+// is read-only. `loadError`: HighLevel's values could not be read, or (`pending_update`) this
+// database lacks the lock table; `pendingMigration` then names the migration.
 export type AdminValuesView = {
   tenantId: string;
   clientName: string;
   writable: boolean;
-  loadError?: "permission" | "retry";
+  loadError?: "permission" | "retry" | "pending_update";
+  pendingMigration?: string;
   folders: AdminValueFolder[];
 };

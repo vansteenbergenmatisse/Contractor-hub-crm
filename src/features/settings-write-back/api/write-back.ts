@@ -1,5 +1,6 @@
 import type { CustomValueDetail, CustomValueRead, CustomValueWriteOutcome } from "@/features/highlevel";
 import { MAX_VALUE_LENGTH, classifyKey, isClearableKey, isSecretValue, isSettingsKeyAllowed, validateValues, writeGuardOf, type CustomValues, type SaveResult, type SaveStatus, type ValueChange } from "@/features/settings";
+import { isMigrationPendingError } from "@/shared/lib/migration-pending";
 import { isSafeToWrite } from "./value-rules";
 
 const UNITS_AT_ONCE = 3;
@@ -287,7 +288,12 @@ async function runSave(input: Input, deps: SaveDeps, startedAt?: number): Promis
   if (!admin && deps.locks) {
     try {
       locked = await deps.locks(tenantId);
-    } catch {
+    } catch (error) {
+      // The lock table is not in this database yet: trying again cannot help, so say so and write nothing.
+      if (isMigrationPendingError(error)) {
+        console.error(`Settings save failed: step=locks reason=migration_pending migration=${error.migration}`);
+        return { results: changes.map(({ key }) => ({ key, status: "pending_update" as const })), keepLease: false };
+      }
       console.error("Settings save failed: step=locks");
       return { results: changes.map(({ key }) => ({ key, status: "retry" as const })), keepLease: false };
     }

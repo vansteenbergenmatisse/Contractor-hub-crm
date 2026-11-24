@@ -1,6 +1,7 @@
 import { getBrandService } from "@/features/brand";
 import { createTenantCustomValueAdapter } from "@/features/highlevel";
 import { isSettingsKeyAllowed, type ValueChange } from "@/features/settings";
+import { isMigrationPendingError } from "@/shared/lib/migration-pending";
 import { beginValueChange, finishValueChange } from "../db/value-changes";
 import { claimSaveLock, releaseSaveLock } from "../db/save-lock";
 import { lockedKeysOf } from "../db/value-locks";
@@ -50,8 +51,10 @@ export async function loadLockedKeys(tenantId: string | null | undefined): Promi
   try {
     // Only names of keys the owner is shown: a hidden key's name never reaches the browser.
     return [...(await lockedKeysOf(tenantId))].filter(isSettingsKeyAllowed).sort();
-  } catch {
-    console.error("Settings locks did not load: step=read");
+  } catch (error) {
+    // No lock table yet: none is shown, and the save answers "update pending" without writing.
+    if (isMigrationPendingError(error)) console.error(`Settings locks did not load: step=read reason=migration_pending migration=${error.migration}`);
+    else console.error("Settings locks did not load: step=read");
     return [];
   }
 }
