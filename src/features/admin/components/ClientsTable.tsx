@@ -12,7 +12,8 @@ import type { TemplateCopyView } from "@/features/template-copy";
 
 // Plain styling on purpose (build prompt section 4.8). All text states are words, not colors.
 // `templateCopy`: set only while the template copy is on (TEMPLATE_COPY_ENABLED).
-export function ClientsTable({ clients, templateCopy }: { clients: ClientRow[]; templateCopy?: TemplateCopyView }) {
+// `editValues`: link each client to its admin values page (never during View as client).
+export function ClientsTable({ clients, templateCopy, editValues = false }: { clients: ClientRow[]; templateCopy?: TemplateCopyView; editValues?: boolean }) {
   const [rows, setRows] = useState(clients);
   const [copyFor, setCopyFor] = useState<string | null>(null);
   // `link` is a one-time link (invite or set-password) shown under the client with a Copy button.
@@ -237,6 +238,9 @@ export function ClientsTable({ clients, templateCopy }: { clients: ClientRow[]; 
                           >
                             Copy values from template
                           </button>
+                        ) : null}
+                        {editValues && row.status !== "Uninstalled" ? (
+                          <a href={`/admin/clients/${encodeURIComponent(row.tenantId)}/values`} aria-label={`Edit values for ${row.name}`}>Edit values</a>
                         ) : null}
                         {row.login === "off" ? (
                           <button type="button" disabled={pending.has(row.tenantId)} onClick={() => setLogin(row.tenantId, false)}>Turn on login</button>

@@ -28,5 +28,5 @@ export default async function Page() {
   // Copy from template and its "still template values" warning: off unless TEMPLATE_COPY_ENABLED,
   // never during a view, and bounded in time (an unknown client shows no warning).
   const templateCopy = await loadTemplateCopyView(clients.map((client) => client.tenantId));
-  return <ClientsTable clients={clients} templateCopy={templateCopy} />;
+  return <ClientsTable clients={clients} templateCopy={templateCopy} editValues />;
 }
