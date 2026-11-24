@@ -360,18 +360,24 @@ describe("replaceImage: finding the old file", () => {
 
 describe("replaceImage: the file keeps its name, so the format must match", () => {
   const named = (name: string): MediaFind => ({ ok: true, files: [{ ...OLD_FILE, name }], siblings: [] });
-
-  it.each([["logo.png", "png"], ["logo.PNG", "png"], ["a.jpg", "jpeg"], ["a.JPEG", "jpeg"], ["a.svg", "svg"]])("refuses a WebP for %s and names the format", async (name, format) => {
-    const d = deps({ found: named(name) });
-    expect(await run(d)).toEqual({ status: "format_mismatch", format });
-    expect(d.begin).not.toHaveBeenCalled();
-    expect(d.upload).not.toHaveBeenCalled();
+  // A format change is a new file in the old file's folder: it needs the library reader.
+  const withLibrary = (d: ReturnType<typeof deps>, file: { name: string; url: string } = { name: NAME, url: OLD }) => ({
+    ...d,
+    library: vi.fn<NonNullable<MediaDeps["library"]>>(async () => ({ ok: true, files: [{ ...OLD_FILE, ...file }], folders: [] })),
+    createFolder: vi.fn<NonNullable<MediaDeps["createFolder"]>>(async () => ({ kind: "rejected" })),
+    folderOf: vi.fn<NonNullable<MediaDeps["folderOf"]>>(() => null),
   });
 
-  it("refuses a format the browser cannot write, without naming one", async () => {
-    const d = deps({ found: named("banner.gif") });
-    expect(await run(d)).toEqual({ status: "format_mismatch" });
-    expect(d.upload).not.toHaveBeenCalled();
+  it.each([["logo.png", "logo.webp"], ["logo.PNG", "logo.webp"], ["a.jpg", "a.webp"], ["a.JPEG", "a.webp"], ["a.svg", "a.webp"]])("takes a WebP for %s as a new file %s in the same folder", async (name, newName) => {
+    const d = withLibrary(deps({ found: named(name) }), { name, url: OLD });
+    expect(await run(d)).toEqual(SAVED);
+    expect(d.upload).toHaveBeenCalledWith("T1", expect.objectContaining({ name: newName, fileName: newName, parentId: FOLDER, contentType: "image/webp" }));
+  });
+
+  it("takes a WebP over a format the browser cannot write, as a new file", async () => {
+    const d = withLibrary(deps({ found: named("banner.gif") }), { name: "banner.gif", url: OLD });
+    expect(await run(d)).toEqual(SAVED);
+    expect(d.upload).toHaveBeenCalledWith("T1", expect.objectContaining({ name: "banner.webp", parentId: FOLDER }));
   });
 
   it("uploads a PNG under a .png name, unchanged", async () => {
@@ -382,10 +388,13 @@ describe("replaceImage: the file keeps its name, so the format must match", () =
   });
 
   it("uses the URL's extension when the name has none", async () => {
-    const d = deps({ found: { ok: true, files: [{ ...OLD_FILE, name: "Team photo", url: OLD.replace(".webp", ".png") }], siblings: [] } });
-    d.store.get(KEY)!.value = OLD.replace(".webp", ".png");
-    const answer = await run(d, { expected: OLD.replace(".webp", ".png") });
-    expect(answer).toEqual({ status: "format_mismatch", format: "png" });
+    const png = OLD.replace(".webp", ".png");
+    const d = withLibrary(deps({ found: { ok: true, files: [{ ...OLD_FILE, name: "Team photo", url: png }], siblings: [] } }), { name: "Team photo", url: png });
+    d.store.get(KEY)!.value = png;
+    d.fetchBytes.mockImplementation(async (url) => (url === png ? OLD_BYTES : BYTES));
+    const answer = await run(d, { expected: png });
+    expect(answer).toEqual({ ...SAVED, oldFile: "trashed" });
+    expect(d.upload).toHaveBeenCalledWith("T1", expect.objectContaining({ name: "Team photo.webp", parentId: FOLDER }));
   });
 
   it("does not read a dot in a name as a format", async () => {

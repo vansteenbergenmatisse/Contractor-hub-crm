@@ -40,6 +40,26 @@ describe("media adapter: find", () => {
     });
   });
 
+  it("hands back every file of the same walk when asked (withLibrary), with no second walk", async () => {
+    const requestFiles = library({
+      root: { folder: [own({ _id: "d1", type: "folder", name: "Logos" })], file: [own({ _id: "f1", name: "a.png", url: `${URL_A}top` })] },
+      d1: { file: [own({ _id: "f9", name: "Logo.PNG", url: URL_A, parentId: "d1" })] },
+    });
+    const { media } = adapter({ requestFiles });
+    const plain = await media.find("t1", URL_A);
+    const calls = requestFiles.mock.calls.length;
+    const result = await media.find("t1", URL_A, { withLibrary: true });
+    expect(requestFiles.mock.calls.length).toBe(calls * 2);
+    expect(plain).not.toHaveProperty("library");
+    expect(result).toEqual({
+      ok: true,
+      files: [{ id: "f9", name: "Logo.PNG", url: URL_A, parentId: "d1" }],
+      siblings: [],
+      library: expect.arrayContaining([{ id: "f1", name: "a.png", url: `${URL_A}top`, parentId: null }, { id: "f9", name: "Logo.PNG", url: URL_A, parentId: "d1" }]),
+    });
+    expect(result.ok && result.library).toHaveLength(2);
+  });
+
   it("matches the URL exactly, never by a prefix, other case or query", async () => {
     const requestFiles = library({ root: { file: [own({ _id: "f1", name: "a", url: `${URL_A}?v=1` }), own({ _id: "f2", name: "a", url: URL_A.toUpperCase() }), own({ _id: "f3", name: "a", url: `${URL_A}/b` })] } });
     expect(await adapter({ requestFiles }).media.find("t1", URL_A)).toEqual({ ok: true, files: [], siblings: [] });

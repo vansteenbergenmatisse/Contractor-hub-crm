@@ -28,9 +28,11 @@ export type MediaFolderOutcome =
   | { kind: "created"; id: string }
   | { kind: "permission" | "rejected" | "retry" | "unconfirmed" | "connection" };
 // `files`: every live file holding the exact URL. `siblings`: other files with the same name in the
-// same folder as the single match. `incomplete`: the whole library could not be read.
+// same folder as the single match. `library`: every live file of the walk, only when asked for
+// (`withLibrary`), so a caller that needs the whole list does not walk the library a second time.
+// `incomplete`: the whole library could not be read.
 export type MediaFind =
-  | { ok: true; files: MediaFile[]; siblings: MediaFile[] }
+  | { ok: true; files: MediaFile[]; siblings: MediaFile[]; library?: MediaFile[] }
   | { ok: false; reason: "permission" | "connection" | "retry" | "incomplete" };
 export type MediaUpload = { bytes: Uint8Array; name: string; fileName: string; contentType: string; parentId?: string | null };
 // `no_answer`: a timeout, 5xx or unreadable 2xx, so the file may exist. It is never uploaded again blindly.
@@ -176,7 +178,7 @@ function buildMediaAdapter(deps: MediaAdapterDeps) {
   const clock = deps.now ?? Date.now;
   return {
     // Walks every folder of the tenant's library and matches the URL exactly.
-    async find(tenantId: string, url: string): Promise<MediaFind> {
+    async find(tenantId: string, url: string, options: { withLibrary?: boolean } = {}): Promise<MediaFind> {
       try {
         const locationId = await deps.readLocationId(tenantId);
         if (!locationId) return { ok: false, reason: "connection" };
@@ -186,7 +188,7 @@ function buildMediaAdapter(deps: MediaAdapterDeps) {
         const files = all.filter((file) => file.url === url);
         const only = files.length === 1 ? files[0] : null;
         const siblings = only ? all.filter((file) => file.id !== only.id && file.name === only.name && file.parentId === only.parentId) : [];
-        return { ok: true, files, siblings };
+        return options.withLibrary ? { ok: true, files, siblings, library: all } : { ok: true, files, siblings };
       } catch (error) {
         if (error instanceof ListStop) return { ok: false, reason: error.reason };
         console.error("HighLevel media list failed: step=read");

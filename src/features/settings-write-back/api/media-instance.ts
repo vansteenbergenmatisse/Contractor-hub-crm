@@ -29,7 +29,8 @@ export function replaceTenantImage(input: { tenantId: string; actorId: string; k
     release: releaseSaveLock,
     now: () => Date.now(),
     wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-    find: media.find,
+    // The whole file list comes back with the find, so a format change walks the library only once.
+    find: (tenantId, url) => media.find(tenantId, url, { withLibrary: true }),
     verify: media.verify,
     trash: media.trash,
     upload: media.upload,
