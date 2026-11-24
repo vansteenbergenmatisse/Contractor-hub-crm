@@ -167,6 +167,12 @@ H. Promote `develop` to `staging` to `main` only on the user's word.
 
 ## Log
 
+### 2026-11-24 - `integrate/onboarding` and `integrate/signin` fast-forwarded into local `develop`; SOP Step 4 written
+- Local `develop` is at 816f966, 64 commits ahead of origin. Not pushed. `pnpm check` on develop: exit 0; 353 test files passed and 1 skipped; 5105 tests passed and 9 skipped; lint has 0 errors and the 3 warnings that were already there.
+- The user's SOP "STEP 4: Give them access to the CRM" was written outside the repo, to `~/Downloads/SOP-Step-4-Add-Client-To-CRM.md`. It has a one-time agency setup part and a per-client part, and its main path is Sign in with HighLevel. The repo copy of the procedure stays in `docs/sop-highlevel-install.md`.
+- Session length: kept at the existing 1 year, renewed while used (Claude's reading of the user's "log in once, then just use it"; this replaces the 90-day proposal and can be changed).
+- Not verified: everything live. The user will create a new sub-account to test the whole path.
+
 ### 2026-11-24 - One login (Sign in with HighLevel) and the onboarding follow-ups integrated on `integrate/signin`
 - USER DECISION (chat, 2026-11-24): one login for the client, their HighLevel login. Main path: a **Sign in with HighLevel** button on the CRM sign-in page sends the person to their sub-account's CRM menu page in HighLevel (HighLevel's own login if needed); `/embed` identifies them; the browser comes back to the full-screen CRM with a single-use, short-lived token and a long session on that device. If HighLevel's frame blocks the jump back, an **Open full screen** tap does it. Pairing another device by link stays as a fallback (the decision said QR or link). CRM password emails become optional. Rejected: copying or asking for HighLevel passwords (no API offers it, and it looks like phishing). Claude's earlier reversible default "session ends after 90 days without use" was NOT built: sessions stay 1 year, renewed daily while used (`LONG_SESSION_SECONDS` in `src/features/auth/api/auth.ts`); this needs the user's decision (see Blockers).
 - Branch `integrate/signin` from `develop` 7a356c5. Merged with `--no-ff`, no conflicts: `feat/auth-sign-in-with-highlevel-r3` at b6e3c64 (47ac654 sign-in with HighLevel, handoff and pairing; 9f6689a redeem even with a session cookie; b6e3c64 back-button loop fix) and `fix/onboarding-review-followups` at e8e646b. Both approved by two reviewer types with no blockers. No code fix needed after the merge.
