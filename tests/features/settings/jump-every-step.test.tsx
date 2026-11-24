@@ -78,7 +78,8 @@ describe("Jump to a step, every time", () => {
     stubMedia(false);
     spy();
     page();
-    for (const [title, id] of [["Location and hours", "loc"], ["Brand colors", "col"], ["Business", "biz"], ["Location and hours", "loc"]] as const) {
+    // Changed 2026-11-24: Location and hours is now a sub-group of Business, so the jumps alternate the two steps left.
+    for (const [title, id] of [["Brand colors", "col"], ["Business", "biz"], ["Brand colors", "col"], ["Business", "biz"]] as const) {
       jumpFromSheet(title);
       expect(screen.queryByRole("dialog", { name: "Jump to a step" })).toBeNull();
       // Every focus move during the close must leave the scroll alone.
@@ -105,7 +106,8 @@ describe("Jump to a step, every time", () => {
     spy();
     page();
     const rail = screen.getByRole("complementary", { name: "Steps" });
-    for (const [title, id] of [["Brand colors", "col"], ["Location and hours", "loc"], ["Business", "biz"]] as const) {
+    // Changed 2026-11-24: Location and hours is now a sub-group of Business.
+    for (const [title, id] of [["Brand colors", "col"], ["Business", "biz"], ["Brand colors", "col"]] as const) {
       focusCalls = [];
       scrollCalls = [];
       fireEvent.click(stepButton(rail, title));

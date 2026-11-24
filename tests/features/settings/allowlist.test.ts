@@ -35,7 +35,9 @@ describe("settingsValuesFrom (server allowlist)", () => {
     for (const k of bad) expect(isSettingsKeyAllowed(k)).toBe(false);
   });
 
-  it("keeps only the exact known business_main_* and business_hours* keys, no open-ended prefix", () => {
+  // Changed 2026-11-24 (every value shows, user decision): plain unknown business keys now show;
+  // every secret-looking name in the old hostile list stays refused.
+  it("keeps the known business_main_* and business_hours* keys and refuses every secret-looking one", () => {
     for (const k of [
       "business_hours", "business_hours_weekdays_open", "business_hours_weekdays_close", "business_hours_saturday_open",
       "business_hours_saturday_close", "business_hours_sunday_open", "business_hours_sunday_close", "business_main_city",
@@ -46,12 +48,14 @@ describe("settingsValuesFrom (server allowlist)", () => {
     }
     const hostile = [
       "business_main_stripe_key", "business_main_private_key", "business_main_credentials", "business_main_client_id",
-      "business_main_bearer", "business_main_x", "business_main_", "business_hoursx", "business_hours_stripe_key",
+      "business_main_bearer", "business_main_", "business_hours_stripe_key",
       "business_hours_private", "business_hours_weekdays_open_key", "business_main_city_password", "business_name_secret",
-      "main_color_token", "business_main_cityx",
+      "main_color_token",
     ];
     for (const k of hostile) expect(isSettingsKeyAllowed(k), k).toBe(false);
     expect(settingsValuesFrom(hostile.map((k) => row(k, "sk_test_made_up")))).toEqual({});
+    // Plain business names with no secret-looking word: shown, so a new custom value appears by itself.
+    for (const k of ["business_main_x", "business_hoursx", "business_main_cityx"]) expect(isSettingsKeyAllowed(k), k).toBe(true);
   });
 
   it("refuses business_main_map_embed and business_bank_account_number", () => {
@@ -84,7 +88,7 @@ describe("settingsValuesFrom (server allowlist)", () => {
     }
   });
 
-  it("drops a value longer than 2000 characters and keeps one of exactly 2000", () => {
+  it("drops a value longer than 2000 characters from the values and keeps one of exactly 2000", () => {
     const out = settingsValuesFrom([row("business_hours", "a".repeat(2001)), row("business_address", "b".repeat(2000))]);
     expect(out.business_hours).toBeUndefined();
     expect(out.business_address).toHaveLength(2000);

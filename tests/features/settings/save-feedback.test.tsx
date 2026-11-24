@@ -115,7 +115,7 @@ describe("the phone save bar", () => {
     page(send);
     await editOffer(user);
     await user.click(bar().getByRole("button", { name: "Save" }));
-    expect(await bar().findByRole("button", { name: "Saving Images and offers" })).toBeDisabled();
+    expect(await bar().findByRole("button", { name: "Saving Business" })).toBeDisabled();
     finish({ kind: "failed" });
     await screen.findByText(FAILED);
   });

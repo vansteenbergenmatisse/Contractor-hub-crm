@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
-import { BACKGROUND_KEY, IMAGE_KEYS, LINK_GROUP_KEYS, SVG_IMAGE_KEYS } from "../api/field-groups";
-import { COLOR_KEYS, labelOfKey } from "../api/fields";
+import { BACKGROUND_KEY, LINK_GROUP_KEYS, SVG_IMAGE_KEYS } from "../api/field-groups";
+import { COLOR_KEYS, isPageTextKey, labelOfKey } from "../api/fields";
+import { isImageKey } from "../api/image-keys";
 import { OUR_WORK_KEYS } from "../api/folder-keys";
 import { DEFAULT_IMAGE_HOSTS, previewSrc } from "../api/image-preview";
 import type { Field, Problem } from "../types";
@@ -16,7 +17,12 @@ type Props = {
   imageHosts?: readonly string[];
   onChange: (key: string, value: string) => void;
   imageControl?: (field: Field, saved: string, dirty: boolean) => ReactNode;
+  // The value is too long to send to the page: listed by name, read-only.
+  long?: boolean;
 };
+
+export const TOO_LONG_NOTE = "Too long to edit here. Change it in HighLevel";
+export const PAGE_TEXT_NOTE = "Website page text. Change it in HighLevel";
 
 const OUR_WORK: ReadonlySet<string> = new Set(OUR_WORK_KEYS);
 const COLORS: ReadonlySet<string> = new Set(COLOR_KEYS);
@@ -29,9 +35,13 @@ function helpersOf(key: string, value: string): string[] {
 }
 
 // One value on a step: the field, its image preview and its Change image control.
-export function StepField({ fieldKey: key, value, saved, error, readOnly, imageHosts = DEFAULT_IMAGE_HOSTS, onChange, imageControl }: Props) {
+export function StepField({ fieldKey: key, value, saved, error, readOnly, imageHosts = DEFAULT_IMAGE_HOSTS, onChange, imageControl, long = false }: Props) {
   const field = { key, label: labelOfKey(key) };
-  const hasImage = IMAGE_KEYS.has(key) || OUR_WORK.has(key);
+  // A page's text or address outside a protected folder: shown as plain text, never edited here.
+  if (long || isPageTextKey(key)) {
+    return <ValueField field={field} value={long ? "" : value} saved={long ? "" : saved} invalid={false} readOnly helpers={[long ? TOO_LONG_NOTE : PAGE_TEXT_NOTE]} onChange={onChange} />;
+  }
+  const hasImage = isImageKey(key);
   return (
     <ValueField
       field={field}

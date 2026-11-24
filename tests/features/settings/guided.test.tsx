@@ -18,7 +18,7 @@ vi.mock("@/features/app-shell", async (importOriginal) => {
 
 import { PageStateProvider } from "@/features/app-shell";
 import { SettingsPage, type SaveValues, type ValueChange } from "@/features/settings";
-import { STEPS, keysByStep } from "../../../src/features/settings/api/steps";
+import { arrangeSteps, keysByStep } from "../../../src/features/settings/api/steps";
 import { chunkChanges } from "../../../src/features/settings/hooks/use-save-values";
 
 afterEach(cleanup);
@@ -45,12 +45,15 @@ const page = (extra: Partial<React.ComponentProps<typeof SettingsPage>> = {}, va
 const card = (id: string) => within(document.getElementById(`s-card-${id}`) as HTMLElement);
 
 describe("the guided structure", () => {
-  it("has three tabs and seven steps in order", () => {
+  // Changed 2026-11-24: one step per HighLevel folder that holds a value (layout.ts), so the count
+  // follows the account. These values fill six folders (Business, Social, Google, Booking, Colors, Our work).
+  it("has three tabs and one step per folder with values, in order", () => {
     page();
     expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Your details", "Connections", "Your choices"]);
-    expect(STEPS.map((s) => s.title)).toEqual(["Business", "Location and hours", "Images and offers", "Social links", "Google Business Profile", "Booking links", "Brand colors"]);
+    const { steps } = arrangeSteps(Object.keys(VALUES));
+    expect(steps.map((s) => s.title)).toEqual(["Business", "Social links", "Google Business Profile", "Booking links", "Brand colors", "Our work"]);
     expect(screen.getByRole("heading", { level: 2, name: "Business" })).toBeInTheDocument();
-    expect(screen.getByText("Step 7 of 7")).toBeInTheDocument();
+    expect(screen.getByText("Step 6 of 6")).toBeInTheDocument();
   });
 
   it("switches tabs", async () => {
@@ -61,19 +64,22 @@ describe("the guided structure", () => {
     expect(screen.getByRole("heading", { name: "Connections" })).toBeVisible();
   });
 
-  it("keeps Business and Location and hours as one grid without subheadings", () => {
+  // Changed 2026-11-24: Business holds its folder's sub-groups (layout.ts), each with a heading;
+  // a folder with one sub-group on screen stays one grid without a heading.
+  it("shows Business in its sub-groups, and a one-group folder as one grid without subheadings", () => {
     page();
-    for (const id of ["biz", "loc"]) {
-      const el = document.getElementById(`s-card-${id}`) as HTMLElement;
-      expect(el.querySelectorAll(".sv-fields")).toHaveLength(1);
-      expect(el.querySelectorAll("fieldset, legend, h3, .ga-sg")).toHaveLength(0);
-    }
+    const biz = document.getElementById("s-card-biz") as HTMLElement;
+    expect([...biz.querySelectorAll("h3.ga-sg")].map((h) => h.textContent)).toEqual(["Name and contact", "Address", "Hours", "Logo and images", "Call to action", "Offers"]);
+    const soc = document.getElementById("s-card-soc") as HTMLElement;
+    expect(soc.querySelectorAll(".sv-fields")).toHaveLength(1);
+    expect(soc.querySelectorAll("fieldset, legend, h3, .ga-sg")).toHaveLength(0);
   });
 
+  // Changed 2026-11-24: Our work is its own folder step; hours sit in Business.
   it("keeps Our work images and the structured hours keys visible", () => {
     page();
-    expect(card("img").getByLabelText("Project 1, before")).toBeInTheDocument();
-    expect(card("loc").getByLabelText(/^Business hours weekdays open/)).toHaveValue("08:00");
+    expect(card("work").getByLabelText("Project 1, before")).toBeInTheDocument();
+    expect(card("biz").getByLabelText(/^Business hours weekdays open/)).toHaveValue("08:00");
   });
 
   it("omits the place id, the keys switch and the geocode button", () => {
@@ -92,8 +98,9 @@ describe("the guided structure", () => {
 
   it("counts progress from the saved values", () => {
     page({ account: { imageHosts: [] } });
+    // Changed 2026-11-24: the steps come from arrangeSteps, not a fixed STEPS list.
     const keys = keysByStep(Object.keys(VALUES));
-    const total = STEPS.reduce((sum, s) => sum + keys[s.id].length, 0);
+    const total = arrangeSteps(Object.keys(VALUES)).steps.reduce((sum, s) => sum + keys[s.id].length, 0);
     expect(screen.getByText(`${total - 1} of ${total} filled`)).toBeInTheDocument();
   });
 
@@ -118,11 +125,12 @@ describe("per-step save", () => {
     const user = userEvent.setup();
     page({ saveValues: send });
     await user.type(screen.getByLabelText(/^Phone/), "2");
-    await user.type(screen.getByLabelText(/^Full address/), "b");
+    await user.type(screen.getByLabelText(/^Facebook/), "b");
     await user.click(screen.getByRole("button", { name: "Save Business" }));
     await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
     expect(send.mock.calls[0][0]).toEqual([{ key: "business_phone_number", expected: "111", value: "1112" }]);
-    expect(screen.getByLabelText(/^Full address/)).toHaveValue("1 Test Stb");
+    // Changed 2026-11-24: the address is now in the Business step, so the other step is Social links.
+    expect(screen.getByLabelText(/^Facebook/)).toHaveValue("b");
   });
 
   it("does not let a bad value in another step stop this save", async () => {
@@ -140,10 +148,11 @@ describe("per-step save", () => {
     const user = userEvent.setup();
     page({ saveValues: vi.fn(allSaved) });
     await user.type(screen.getByLabelText(/^Phone/), "2");
-    await user.type(screen.getByLabelText(/^Full address/), "b");
+    await user.type(screen.getByLabelText(/^Facebook/), "b");
     await user.click(screen.getByRole("button", { name: "Cancel Business" }));
     expect(screen.getByLabelText(/^Phone/)).toHaveValue("111");
-    expect(screen.getByLabelText(/^Full address/)).toHaveValue("1 Test Stb");
+    // Changed 2026-11-24: the address is now in the Business step, so the other step is Social links.
+    expect(screen.getByLabelText(/^Facebook/)).toHaveValue("b");
   });
 });
 
@@ -153,7 +162,7 @@ describe("clearing a value", () => {
     const user = userEvent.setup();
     page({ saveValues: send });
     await user.clear(screen.getByLabelText(/^Seasonal offer text/));
-    await user.click(screen.getByRole("button", { name: "Save Images and offers" }));
+    await user.click(screen.getByRole("button", { name: "Save Business" }));
     expect(send).not.toHaveBeenCalled();
     expect(screen.getByText("Check before you clear")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Clear and save" }));
@@ -166,7 +175,7 @@ describe("clearing a value", () => {
     const user = userEvent.setup();
     page({ saveValues: send });
     await user.clear(screen.getByLabelText(/^Seasonal offer text/));
-    await user.click(screen.getByRole("button", { name: "Save Images and offers" }));
+    await user.click(screen.getByRole("button", { name: "Save Business" }));
     await user.click(screen.getByRole("button", { name: "Go back" }));
     expect(send).not.toHaveBeenCalled();
     expect(screen.queryByText("Check before you clear")).toBeNull();

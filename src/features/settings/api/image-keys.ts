@@ -10,3 +10,7 @@ export function imageKindOf(key: string): ImageKind | null {
   if (SVG_IMAGE_KEYS.has(key)) return "svg";
   return PHOTO_KEYS.has(key) ? "photo" : null;
 }
+
+// Keys whose value is an image link, for the preview only (Change image stays with imageKindOf).
+const IMAGE_NAME = /(_logo|_image|_img|_photo|_picture|_favicon_url)$|^\d+_our_work_(before|after)$/i;
+export const isImageKey = (key: string): boolean => imageKindOf(key) !== null || IMAGE_NAME.test(key);

@@ -29,7 +29,7 @@ describe("the 01a_Social_Links folder", () => {
     for (const key of KEYS) {
       expect(isSettingsKeyAllowed(key), key).toBe(true);
       expect(LINK_KEYS, key).toContain(key);
-      expect(folderIdOfKey(key), key).toBe("social");
+      expect(folderIdOfKey(key), key).toBe("soc"); // Changed 2026-11-24: folder ids are the layout step ids.
     }
   });
 
