@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { startHandshake, type HandshakeResult } from "../api/handshake";
-import { fullScreenUrl, tryTopNavigation } from "../api/full-screen";
+import { claimAutoJump, fullScreenUrl, tryTopNavigation, type TabStorage, type TopWindow } from "../api/full-screen";
 
 const MESSAGES: Record<Exclude<HandshakeResult, "signed_in">, string> = {
   no_access: "Ask Forge Forward for access.",
@@ -12,12 +12,32 @@ const MESSAGES: Record<Exclude<HandshakeResult, "signed_in">, string> = {
 
 // Plain markup on purpose: the design has no screen for this yet.
 // After sign-in with a handoff token (user decision 2026-11-24): first try to move the whole tab to the
-// full-screen CRM; if HighLevel's frame does not allow that, the person taps "Open full screen" (or a
+// full-screen CRM, once per tab and replacing the history entry, so Back does not loop; if HighLevel's
+// frame does not allow that, or this tab already jumped once, the person taps "Open full screen" (or a
 // new tab). "Use it here" keeps the CRM inside HighLevel, as before.
 // A full navigation, so the new cookie is sent with the very first request.
 const replaceLocation = (url: string) => window.location.replace(url);
+// Read lazily: touching sessionStorage can throw when the browser blocks storage in a frame.
+const tabStorage = (): TabStorage | null => window.sessionStorage;
+const realTop = (): TopWindow => window.top;
 
-export function EmbedBridge({ goTo = replaceLocation }: { goTo?: (url: string) => void } = {}) {
+function readStorage(get: () => TabStorage | null): TabStorage | null {
+  try {
+    return get();
+  } catch {
+    return null;
+  }
+}
+
+export function EmbedBridge({
+  goTo = replaceLocation,
+  storage = tabStorage,
+  topWindow = realTop,
+}: {
+  goTo?: (url: string) => void;
+  storage?: () => TabStorage | null;
+  topWindow?: () => TopWindow;
+} = {}) {
   const [result, setResult] = useState<HandshakeResult | null>(null);
   const [handoffUrl, setHandoffUrl] = useState<string | null>(null);
 
@@ -40,7 +60,7 @@ export function EmbedBridge({ goTo = replaceLocation }: { goTo?: (url: string) =
         if (value !== "signed_in") return;
         if (url) {
           setHandoffUrl(url);
-          tryTopNavigation(window.top, window, url);
+          if (claimAutoJump(readStorage(storage))) tryTopNavigation(topWindow(), window, url);
           return;
         }
         goTo("/");
