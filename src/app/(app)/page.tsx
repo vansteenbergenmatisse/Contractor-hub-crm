@@ -76,7 +76,7 @@ async function InvoicesTileData() {
 
 async function NeedsCardData() {
   const [leads, invoices, timeZone] = await Promise.all([loadTenantLeads(), loadTenantInvoices(), locationZone()]);
-  return <TodayNeedsCard leads={leads} toSend={invoicesToSend(invoices)} timeZone={timeZone} />;
+  return <TodayNeedsCard leads={leads} toSend={invoicesToSend(invoices)} invoicesLive={isInvoicesPageLive()} timeZone={timeZone} />;
 }
 
 async function MoneyCardsData() {

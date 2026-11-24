@@ -26,7 +26,8 @@ export function TodayNeedsLoading() {
 
 // What needs the owner, as links to the page that holds it. Read-only: no row sends or changes
 // anything. A source that could not be read is named, so a short list never reads as "all clear".
-export function TodayNeedsCard({ leads, toSend, timeZone: locationZone }: { leads: LeadsResult; toSend: number | null; timeZone?: string | null }) {
+// With the Invoices page off no invoice check ran, so the card neither reports a failure nor an all-clear.
+export function TodayNeedsCard({ leads, toSend, invoicesLive = true, timeZone: locationZone }: { leads: LeadsResult; toSend: number | null; invoicesLive?: boolean; timeZone?: string | null }) {
   const viewerZone = useTimeZone();
   const fresh = newLeads(leads, locationZone ?? viewerZone);
   if (fresh === null && toSend === null) return <NotAvailableCard id="fd-need-h" title="Needs you" index={7} className="fd-need" />;
@@ -34,7 +35,7 @@ export function TodayNeedsCard({ leads, toSend, timeZone: locationZone }: { lead
     fresh ? { href: PAGE_PATH.leads, text: `${plural(fresh, "new lead", "new leads")} today` } : null,
     toSend ? { href: PAGE_PATH.invoices, text: `${plural(toSend, "invoice", "invoices")} to send` } : null,
   ].filter((row) => row !== null);
-  const missing = [fresh === null ? "Leads" : null, toSend === null ? "Invoices" : null].filter(Boolean);
+  const missing = [fresh === null ? "Leads" : null, toSend === null && invoicesLive ? "Invoices" : null].filter(Boolean);
   return (
     <section className="fd-card fd-need fd-in" style={{ "--i": 7 } as CSSProperties} aria-labelledby="fd-need-h">
       <div className="fd-ch"><h2 className="fd-ct" id="fd-need-h">Needs you</h2></div>
@@ -43,7 +44,7 @@ export function TodayNeedsCard({ leads, toSend, timeZone: locationZone }: { lead
           {rows.map((row) => <li key={row.href} className="fd-row fd-nr"><Link className="fd-nl" href={row.href}><div className="fd-rx"><p className="fd-rt">{row.text}</p></div></Link></li>)}
         </ul>
       ) : null}
-      {!rows.length && !missing.length ? <div className="fd-none fx-none" role="status"><p>Nothing needs you right now.</p></div> : null}
+      {!rows.length && !missing.length ? <div className="fd-none fx-none" role="status"><p>{invoicesLive ? "Nothing needs you right now." : "No new leads today."}</p></div> : null}
       {missing.length ? <p className="fd-mf" role="status">{missing.join(" and ")} could not be checked.</p> : null}
     </section>
   );
