@@ -74,11 +74,12 @@ Updated 2026-11-24 (branch `integrate/onboarding`, not yet merged into `develop`
 4. Open `/admin/clients`. The background check runs on that visit. If the client is not there, click **Check for new sub-accounts**, then reload.
 5. If it is still missing, the app is not installed on that sub-account. Check in HighLevel, then repeat the Install steps from our link and include it. The daily sync (production) also emails `ADMIN_ALERT_EMAIL` about sub-accounts without the app.
 6. The client row shows the CRM tenant id with **Copy id**. Use it for the per-client flags in Vercel (`docs/onboarding.md`, `.env.example`).
-7. Give the owner a password. Either:
+7. Owner access, main path: **Sign in with HighLevel** (no CRM password needed). Set up once per environment, see "Owner access: Sign in with HighLevel" below. Send the owner `<site>/sign-in?client=<slug>` (their personal sign-in link from the client row) so the button opens their own CRM page.
+8. Optional, only if the owner also wants an email and password: give the owner a password. Either:
    - **Automatic:** with `ONBOARDING_SEND_SET_PASSWORD=true`, every new HighLevel user gets a "set your password" email when the account is created (24-hour link, at most 50 per client per day). Leave it off wherever the JCR owner could be emailed.
    - **By hand:** click **Users** on the client row. It lists the client's users and whether they signed in. **Send sign-in email** (for people who never signed in) makes a fresh 24-hour set-password link, emails it if the email guard allows, and always shows the link with **Copy link**. The page says exactly when the email was held back, the daily limit was hit or the email service refused it. Only the newest link works, so a second click cancels the first email's link.
    - **Invite owner** on an email that already has a never-used account in the same client now returns a set-password link instead of `email_taken`. A used account gets "ask them to use Forgot password"; a turned-off or removed account gets "login is turned off".
-8. The owner opens the link, sets a password and signs in at `<site>/sign-in`. **Forgot password** on the sign-in page works for synced users too (24-hour link).
+   - Then the owner opens the link, sets a password and signs in at `<site>/sign-in` under "Or use your email and password". **Forgot password** on the sign-in page works for synced users too (24-hour link).
 
 **Email env vars (names only):** `RESEND_API_KEY`, `EMAIL_FROM`, `EMAIL_DELIVERY_MODE` (`allowlist` or `live`), `EMAIL_ALLOWED_RECIPIENTS` (allowlist mode), `APP_URL`, and `ONBOARDING_SEND_SET_PASSWORD=true` only if the sync should mail new users itself. Keep dev on `allowlist`: in `live` mode **Send sign-in email** for the JCR owner would really email them.
 
@@ -89,9 +90,34 @@ Updated 2026-11-24 (branch `integrate/onboarding`, not yet merged into `develop`
 - whether a snapshot carries the app;
 - that a real email arrives (no mail was sent; the Resend From domain is unchecked);
 - the button, the Users panel and the background check in a browser (component tests only).
-- **Invite owner** on an existing account is not under the 50-per-day client cap (only the per-admin invite limit). An account made before the `UnusedAccountMarker` migration can't be proven unused, so it gets no admin link; that person uses Forgot password.
+- An account made before the `UnusedAccountMarker` migration can't be proven unused, so it gets no admin link; that person uses Forgot password. (Since `integrate/signin`, **Invite owner** on an existing account counts against the 50-per-day client cap.)
 
 On dev and staging, a new test sub-account is picked up only if the app is installed on it (the Test app install selects only the test account). Repeat the Install steps and select it, or install with "Select all" after the user approves creating CRM accounts for the agency's other sub-accounts.
+
+## Owner access: Sign in with HighLevel
+
+Added 2026-11-24 (branch `integrate/signin`, not yet merged into `develop`). User decision: one login for the client, their HighLevel login. Email and password stay as an optional second way in. Facts and unknowns about HighLevel's side: `docs/greenlane/hl-api-notes.md`, "Sign in with HighLevel".
+
+**One-time setup per environment (agency admin in HighLevel, then Vercel):**
+1. HighLevel agency view, **Settings > Custom Menu Links**, add a link:
+   - Icon: any. Title: `CRM`.
+   - URL: `<site>/embed` (for dev `https://dev.crm.forgeforward.io/embed`). No placeholders in the URL: identity comes only from HighLevel's encrypted user context.
+   - Open in: **Embedded Page (iFrame)**. Not New Tab or Current Tab: `/embed` signs the person in only inside HighLevel's frame.
+   - Show in: sub-account sidebar, only the sub-accounts that have the app (dev: only the test sub-account). Role visibility: All.
+   - **(not proven)** whether an agency custom menu link answers HighLevel's user-context request like the marketplace app's Custom Page. If `/embed` shows "HighLevel did not answer", use the marketplace app's Custom Page as the CRM menu item instead, pointing at the same `<site>/embed`.
+2. Open any sub-account, click **CRM** in the left menu, and copy the address bar. Replace that sub-account's id with `{locationId}` (exactly one), keep `https://`. Example shape (not proven): `https://<highlevel-host>/v2/location/{locationId}/custom-menu-link/<menuLinkId>`.
+3. In Vercel, for that environment only, set `HIGHLEVEL_CRM_MENU_URL` to that template and redeploy. It is not a secret. Unset or invalid: the button opens `https://app.gohighlevel.com/` and tells the person to open their business, then CRM.
+
+**What the owner does (laptop or phone browser):**
+1. Opens `<site>/sign-in?client=<slug>` (or `<site>/sign-in`). Taps **Sign in with HighLevel**.
+2. HighLevel opens (its own login if needed, never our page), on that sub-account's CRM page. Without `?client=`, they open their business and tap **CRM**.
+3. `/embed` inside HighLevel signs them in and gets a single-use, 2-minute handoff token. It then moves the whole tab to `<site>/device-sign-in` once per browser tab, replacing HighLevel's page in the history so Back does not loop. If HighLevel's frame does not allow that, the page shows **Open full screen**, **Open in a new tab** and **Use it here, inside HighLevel**.
+4. On `/device-sign-in` the owner taps **Continue**. The device gets a normal long session (1 year, renewed daily while used; unchanged by this work) and lands on Today.
+5. Back in HighLevel later in the same tab, the CRM page shows the three buttons instead of jumping again.
+
+**Fallback, another device:** in the CRM menu, **Open on my phone or laptop** makes a single-use, 5-minute link to copy (owner and office users). Opening it on the other device and tapping **Continue** signs that device in. There is no QR code yet (no QR library in the project; the sheet says so).
+
+**Only owners and office users** of a connected client get a handoff or pairing link. Forge Forward admins sign in with email and password.
 
 ## Troubleshooting
 
