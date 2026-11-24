@@ -4,6 +4,8 @@ import type { InviteEligibility } from "./invite-check";
 import { normalizeEmail } from "./invite-check";
 import type { InvitedUserInput } from "./auth";
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from "../types";
+import { cleanBusinessName } from "./set-password-email";
+import type { MailOutcome, SignInLinkResult } from "./sign-in-link";
 
 // Invite create / preview / accept. Pure logic over injected stores; the database part lives in
 // db/invites.ts. The code travels only in the link; the database holds its SHA-256.
@@ -19,6 +21,11 @@ export type InviteErrorCode =
   | "invalid_invite"
   | "weak_password"
   | "invalid_name"
+  // The account is already in use (or cannot be proven unused): the person uses Forgot password.
+  | "already_active"
+  // The person's login is turned off, or HighLevel removed them.
+  | "account_disabled"
+  | "not_found"
   | "failed";
 
 // Messages are fixed text: they never carry an email, a code or an upstream error.
@@ -58,6 +65,9 @@ export type InviteServiceDeps = {
   emailSender: EmailSender;
   checkEligibility: (tenant: InviteTenant, email: string) => Promise<InviteEligibility>;
   createUser: (input: InvitedUserInput) => Promise<{ userId: string }>;
+  // The email already has an account. When it is an account of THIS tenant that was never used, a
+  // fresh set-password link is issued instead of refusing. Left out, the invite refuses (email_taken).
+  existingAccount?: (tenant: InviteTenant, email: string) => Promise<SignInLinkResult>;
   // The HighLevel link of an accepted invite, so the sync can later revoke the account. `insert`
   // never changes a link that already exists.
   links?: {
@@ -97,13 +107,17 @@ function isOpen(invite: InviteRecord | null, now: Date): invite is InviteRecord 
   return invite !== null && invite.usedAt === null && invite.expiresAt.getTime() > now.getTime();
 }
 
+export type CreatedInvite =
+  | { kind?: "invite"; inviteId: string; link: string; email: string; mail?: MailOutcome }
+  | { kind: "set_password"; userId: string; link: string; email: string; mail: MailOutcome; expiresAt: Date };
+
 export function createInviteService(deps: InviteServiceDeps) {
   async function createInvite(input: {
     tenantId: string;
     email: string;
     role: InviteRole;
     createdById: string | null;
-  }): Promise<{ inviteId: string; link: string; email: string }> {
+  }): Promise<CreatedInvite> {
     if (input.role !== "owner" && input.role !== "office") throw new InviteError("invalid_role");
     const tenant = await deps.store.findTenant(input.tenantId);
     // No company id means HighLevel cannot be asked who belongs to this sub-account.
@@ -111,7 +125,11 @@ export function createInviteService(deps: InviteServiceDeps) {
     const email = normalizeEmail(input.email);
     const eligibility = await deps.checkEligibility(tenant, email);
     if (!eligibility.eligible) throw new InviteError("not_eligible");
-    if (await deps.store.emailTaken(email)) throw new InviteError("email_taken");
+    if (await deps.store.emailTaken(email)) {
+      if (!deps.existingAccount) throw new InviteError("email_taken");
+      const issued = await deps.existingAccount(tenant, email);
+      return { kind: "set_password", userId: issued.userId, link: issued.link, email: issued.email, mail: issued.mail, expiresAt: issued.expiresAt };
+    }
 
     const code = deps.newCode();
     const stored = await deps.store.insertInvite({
@@ -124,18 +142,26 @@ export function createInviteService(deps: InviteServiceDeps) {
       createdById: input.createdById,
     });
     const link = `${deps.appUrl.replace(/\/+$/, "")}/invite/${code}`;
+    const business = cleanBusinessName(tenant.name);
+    let delivered: boolean;
     try {
-      await deps.emailSender.send({
+      ({ delivered } = await deps.emailSender.send({
         kind: "invite",
         to: email,
-        subject: "You are invited",
-        text: `You have been invited. Open this link within 3 days to choose a password:\n${link}`,
-      });
+        subject: business ? `You are invited to the CRM for ${business}` : "You are invited",
+        text: [
+          business ? `You have been invited to the CRM for ${business}.` : "You have been invited.",
+          "",
+          `Open this link within 3 days to choose a password:\n${link}`,
+          "",
+          "If you did not expect this email, you can ignore it.",
+        ].join("\n"),
+      }));
     } catch {
       await deps.store.deleteInvite(stored.id).catch(() => {});
       throw new InviteError("send_failed");
     }
-    return { inviteId: stored.id, link, email };
+    return { kind: "invite", inviteId: stored.id, link, email, mail: delivered ? "sent" : "held" };
   }
 
   async function previewInvite(code: string): Promise<{ valid: true; email: string } | { valid: false }> {

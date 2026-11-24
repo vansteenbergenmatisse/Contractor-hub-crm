@@ -6,7 +6,7 @@ type Client = ReturnType<typeof getPrisma>;
 type Reader = Pick<Client, "user" | "ghlUserLink">;
 
 // A one-way fingerprint of the stored password hash: it shows that the hash changed, nothing more.
-const fingerprint = (passwordHash: string) => createHash("sha256").update(passwordHash).digest("hex");
+export const fingerprint = (passwordHash: string) => createHash("sha256").update(passwordHash).digest("hex");
 
 async function snapshotOf(db: Reader, userId: string): Promise<AccountSnapshot | null> {
   const user = await db.user.findUnique({
