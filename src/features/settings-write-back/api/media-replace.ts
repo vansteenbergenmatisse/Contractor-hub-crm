@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { isAllowedLogoUrl } from "@/features/brand";
-import type { CustomValueRawRead, MediaFile, MediaFind, MediaTrashOutcome, MediaUpload, MediaUploadOutcome } from "@/features/highlevel";
+import type { CustomValueRawRead, MediaFile, MediaFind, MediaFolderOutcome, MediaLibrary, MediaTrashOutcome, MediaUpload, MediaUploadOutcome } from "@/features/highlevel";
 import type { ImageAnswer, ImageFormat, ImageOldFile, ImageStatus } from "@/features/settings";
 import { saveCustomValues, type AuditOutcome, type SaveDeps } from "./write-back";
 import { MAX_IMAGE_BYTES } from "./webp-check";
@@ -25,8 +25,14 @@ export type MediaDeps = SaveDeps & {
   // Every row's raw value, for the in-use check before any file is removed.
   readAll: (tenantId: string) => Promise<CustomValueRawRead>;
   hosts: readonly string[];
+  // Adding an image to an empty value (see addImage). Without them an empty value stops as before.
+  library?: (tenantId: string) => Promise<MediaLibrary>;
+  createFolder?: (tenantId: string, name: string, parentId: string | null) => Promise<MediaFolderOutcome>;
+  // The library folder name for a key (settings' mediaFolderOf); null: the top of the library.
+  folderOf?: (key: string) => string | null;
 };
-type Input = { tenantId: string; actorId: string; key: string; expected: string; file: CheckedImage };
+// `unlocked`: the protected folder this change was made in, passed on to the save's guard.
+type Input = { tenantId: string; actorId: string; key: string; expected: string; file: CheckedImage; unlocked?: string };
 type Run = { answer: ImageAnswer; keepLease: boolean };
 type Target = { file: MediaFile; uploadedNow: boolean };
 
@@ -158,7 +164,7 @@ async function uploadNew(input: Input, old: MediaFile, before: readonly MediaFil
 async function pointValueAt(input: Input, url: string, started: number, deps: MediaDeps): Promise<Run> {
   // This replace already holds the tenant's lease, so the save must not claim or release it.
   const { results } = await saveCustomValues(
-    { tenantId: input.tenantId, actorId: input.actorId, changes: [{ key: input.key, expected: input.expected, value: url }] },
+    { tenantId: input.tenantId, actorId: input.actorId, changes: [{ key: input.key, expected: input.expected, value: url }], ...(input.unlocked ? { unlocked: input.unlocked } : {}) },
     { ...deps, claim: async () => "held", release: async () => {} },
     started,
   );
@@ -255,6 +261,7 @@ async function run(input: Input, deps: MediaDeps): Promise<Run> {
   if (!row) return stopped("missing");
   const current = row.value.trim();
   if (current !== input.expected.trim()) return { answer: { status: "conflict", current }, keepLease: false };
+  if (current === "" && deps.library && deps.createFolder && deps.folderOf) return addImage(input, started, { ...deps, library: deps.library, createFolder: deps.createFolder, folderOf: deps.folderOf });
 
   const located = await findOld(input, current, deps);
   if ("stop" in located) return stopped(located.stop);
@@ -291,6 +298,106 @@ async function run(input: Input, deps: MediaDeps): Promise<Run> {
   if (saved.answer.status !== "saved") return failAfterUpload(input, saved, target, started, deps);
   const oldFile = await removeOld(input, old, target.file, started, deps);
   return { answer: { ...saved.answer, oldFile }, keepLease: false };
+}
+
+type AddDeps = MediaDeps & Required<Pick<MediaDeps, "library" | "createFolder" | "folderOf">>;
+type Place = { parentId: string | null; files: MediaFile[] } | { stop: ImageStatus };
+
+const LIBRARY_STOPS: Readonly<Record<"permission" | "connection" | "retry" | "incomplete", ImageStatus>> = {
+  permission: "needs_approval", connection: "connection", retry: "retry", incomplete: "library_limit",
+};
+const FOLDER_STOPS: Readonly<Record<Exclude<MediaFolderOutcome["kind"], "created">, ImageStatus>> = {
+  permission: "needs_approval", rejected: "rejected", retry: "retry", connection: "connection",
+  // The folder may exist now: the next try finds it by name, so it is never created twice blindly.
+  unconfirmed: "retry",
+};
+
+async function readLibrary(tenantId: string, deps: AddDeps): Promise<MediaLibrary> {
+  return deps.library(tenantId).catch(() => ({ ok: false as const, reason: "retry" as const }));
+}
+
+// The folder named after the key's layout folder: the one with that exact name (the top-level one
+// when the name is used more than once), created at the top of the library when there is none.
+async function placeFor(input: Input, deps: AddDeps): Promise<Place> {
+  const library = await readLibrary(input.tenantId, deps);
+  if (!library.ok) return { stop: LIBRARY_STOPS[library.reason] };
+  const name = deps.folderOf(input.key);
+  if (name === null) return { parentId: null, files: library.files };
+  const named = library.folders.filter((folder) => folder.name === name);
+  const top = named.filter((folder) => folder.parentId === null);
+  const only = named.length === 1 ? named[0] : top.length === 1 ? top[0] : null;
+  if (only) return { parentId: only.id, files: library.files };
+  if (named.length > 1) return { stop: "ambiguous" };
+  let made: MediaFolderOutcome;
+  try {
+    made = await deps.createFolder(input.tenantId, name, null);
+  } catch {
+    made = { kind: "unconfirmed" };
+  }
+  if (made.kind !== "created") return { stop: FOLDER_STOPS[made.kind] };
+  return { parentId: made.id, files: [] };
+}
+
+// One upload, never repeated. After no answer the library is read again; only a new same-name file
+// with the same bytes counts as this upload.
+async function uploadInto(input: Input, name: string, parentId: string | null, before: readonly MediaFile[], deps: AddDeps): Promise<Target | Run> {
+  let auditId: string;
+  try {
+    auditId = await deps.begin({ tenantId: input.tenantId, actorId: input.actorId, key: input.key, previousValue: input.expected, newValue: `upload:${input.key}-${input.file.hash.slice(0, 12)}` });
+  } catch {
+    console.error("Settings image failed: step=audit-start");
+    return stopped("retry");
+  }
+  let sent: MediaUploadOutcome;
+  try {
+    sent = await deps.upload(input.tenantId, { bytes: input.file.bytes, contentType: input.file.contentType, name, fileName: name, parentId });
+  } catch {
+    sent = { kind: "no_answer" };
+  }
+  if (sent.kind === "uploaded") {
+    await closeAudit(auditId, "saved", deps);
+    return { file: { id: sent.fileId, name, url: sent.url, parentId }, uploadedNow: true };
+  }
+  if (sent.kind !== "no_answer") {
+    await closeAudit(auditId, sent.kind === "rejected" ? "rejected" : sent.kind === "permission" ? "permission" : "failed", deps);
+    return stopped(sent.kind === "permission" ? "needs_approval" : sent.kind);
+  }
+  const again = await readLibrary(input.tenantId, deps);
+  if (again.ok) {
+    const known = new Set(before.map((file) => file.id));
+    const appeared = again.files.filter((file) => !known.has(file.id) && file.name === name && file.parentId === parentId);
+    const match = await matchSibling(input, appeared, deps);
+    if (match && "id" in match) {
+      await closeAudit(auditId, "saved", deps);
+      return { file: match, uploadedNow: false };
+    }
+  }
+  await closeAudit(auditId, "unknown", deps);
+  return stopped("unknown", true);
+}
+
+// An empty value has no old file: a plain upload into the matching folder, then the value is written.
+// A same-name file there with the same bytes (an earlier try) is reused. Nothing is ever trashed.
+async function addImage(input: Input, started: number, deps: AddDeps): Promise<Run> {
+  const place = await placeFor(input, deps);
+  if ("stop" in place) return stopped(place.stop);
+  const name = `${input.key}.${input.file.extension}`;
+  const same = place.files.filter((file) => file.name === name && file.parentId === place.parentId);
+  const match = await matchSibling(input, same, deps);
+  if (match && "stop" in match) return stopped(match.stop);
+  let target: Target;
+  if (match) target = { file: match, uploadedNow: false };
+  else {
+    if (deps.now() - started > UPLOAD_CUTOFF_MS) return stopped("retry");
+    const uploaded = await uploadInto(input, name, place.parentId, place.files, deps);
+    if (!("file" in uploaded)) return uploaded;
+    target = uploaded;
+  }
+  if (!isAllowedLogoUrl(target.file.url, deps.hosts)) return failAfterUpload(input, stopped("bad_host"), target, started, deps);
+  if (deps.now() - started > PUT_CUTOFF_MS) return failAfterUpload(input, stopped("retry"), target, started, deps);
+  const saved = await pointValueAt(input, target.file.url, started, deps);
+  if (saved.answer.status !== "saved") return failAfterUpload(input, saved, target, started, deps);
+  return { answer: { ...saved.answer, oldFile: "none" }, keepLease: false };
 }
 
 export async function replaceImage(input: Input, deps: MediaDeps): Promise<ImageAnswer> {

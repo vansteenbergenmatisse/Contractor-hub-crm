@@ -9,6 +9,7 @@ const SAVED: Record<ImageOldFile, string> = {
   unconfirmed: "Image changed. We could not confirm that the old file was removed, so check your media library.",
   unproven: "Image changed. The old file was kept because we could not confirm the new file's name, folder and content. Ask Forge Forward to check it.",
   same: "This is already your current image, so nothing was changed.",
+  none: "Image added. It is in your media library.",
 };
 
 // What the owner reads when a change did not finish. Every one says where the old image stands.

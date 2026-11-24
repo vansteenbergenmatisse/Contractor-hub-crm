@@ -19,5 +19,5 @@ export type { BusinessPatch } from "./api/live-save";
 export type { PhoneNumbersView } from "./types";
 export type { ConnectionState, ConnectionStatus, CustomValues, Problem, SectionKey } from "./types";
 export type { SaveAnswer, SaveOptions, SaveResult, SaveStatus, SaveValues, ValueChange } from "./types";
-export { imageKindOf } from "./api/image-keys";
+export { imageKindOf, LOGO_ACCEPTS_PHOTO, mediaFolderOf } from "./api/image-keys";
 export type { ImageAnswer, ImageFormat, ImageKind, ImageOldFile, ImageStatus, ImageUploader, PreparedImage, PrepareImage, SvgProblemCode } from "./types";

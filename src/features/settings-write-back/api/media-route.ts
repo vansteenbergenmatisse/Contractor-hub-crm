@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { imageKindOf, isSettingsKeyAllowed, MAX_VALUE_LENGTH, type ImageAnswer } from "@/features/settings";
+import { imageKindOf, isSettingsKeyAllowed, LOGO_ACCEPTS_PHOTO, MAX_VALUE_LENGTH, UNLOCK_ID, writeGuardOf, type ImageAnswer } from "@/features/settings";
 import type { CheckedImage } from "./media-replace";
 import { checkJpeg, checkPng, isJpeg, isPng } from "./raster-check";
 import { inspectSvg, type SvgProblem } from "./svg-check";
@@ -18,7 +18,9 @@ export type MediaRouteDeps = {
   currentUser: (request: Request) => Promise<MediaUser | null>;
   isEnabled: (tenantId: string) => boolean;
   hit: (key: string, limit: number, windowMs: number, now: Date) => Promise<boolean>;
-  replace: (input: { tenantId: string; actorId: string; key: string; expected: string; file: CheckedImage }) => Promise<ImageAnswer>;
+  replace: (input: { tenantId: string; actorId: string; key: string; expected: string; file: CheckedImage; unlocked?: string }) => Promise<ImageAnswer>;
+  // The logo and favicon also take a photo. Left out: LOGO_ACCEPTS_PHOTO, the value the page reads.
+  logoAcceptsPhoto?: boolean;
 };
 
 const reply = (status: number, body: unknown) =>
@@ -56,9 +58,18 @@ async function readCapped(request: Request): Promise<Uint8Array<ArrayBuffer> | n
   return out;
 }
 
-type Fields = { key: string; expected: string; file: Blob };
+type Fields = { key: string; expected: string; file: Blob; unlocked?: string };
 
-// Strict: exactly these three fields, once each. Any other field, a tenant id included, refuses it.
+// The same guard as a save (writeGuardOf): a protected folder's key needs that folder's unlock, and a
+// read-only key is never written.
+function guardAllows(key: string, unlocked: string | undefined): boolean {
+  const guard = writeGuardOf(key);
+  if (guard.kind === "open") return true;
+  return guard.kind === "folder" && guard.folder === unlocked;
+}
+
+// Strict: exactly these three fields, once each, plus an optional `unlock` (a protected folder's id).
+// Any other field, a tenant id included, refuses it.
 async function parseFields(bytes: Uint8Array<ArrayBuffer>, contentType: string): Promise<Fields | null> {
   let form: FormData;
   try {
@@ -66,24 +77,32 @@ async function parseFields(bytes: Uint8Array<ArrayBuffer>, contentType: string):
   } catch {
     return null;
   }
-  const names = [...form.keys()].sort();
-  if (names.join(",") !== "expected,file,key") return null;
+  const names = [...form.keys()].sort().join(",");
+  if (names !== "expected,file,key" && names !== "expected,file,key,unlock") return null;
   const key = form.get("key");
   const expected = form.get("expected");
   const file = form.get("file");
+  const unlock = form.get("unlock");
   if (typeof key !== "string" || typeof expected !== "string" || !(file instanceof Blob)) return null;
-  if (expected.length > MAX_VALUE_LENGTH || !isSettingsKeyAllowed(key) || !imageKindOf(key)) return null;
-  return { key, expected, file };
+  if (unlock !== null && (typeof unlock !== "string" || !UNLOCK_ID.test(unlock))) return null;
+  const unlocked = unlock ?? undefined;
+  if (expected.length > MAX_VALUE_LENGTH || !isSettingsKeyAllowed(key) || !imageKindOf(key) || !guardAllows(key, unlocked)) return null;
+  return unlocked ? { key, expected, file, unlocked } : { key, expected, file };
 }
 
 type Checked = { ok: true; file: CheckedImage } | { ok: false; reason: string; problem?: SvgProblem };
 
-// The file's real bytes decide. The browser's name and type are never read.
-function checkFile(key: string, bytes: Uint8Array): Checked {
+const isWebpHeader = (bytes: Uint8Array) =>
+  bytes.length >= 12 && String.fromCharCode(...bytes.subarray(0, 4)) === "RIFF" && String.fromCharCode(...bytes.subarray(8, 12)) === "WEBP";
+
+// The file's real bytes decide. The browser's name and type are never read. The logo and favicon take
+// an SVG; with `logoPhoto` a PNG, JPEG or WebP too, checked like any photo.
+function checkFile(key: string, bytes: Uint8Array, logoPhoto: boolean): Checked {
   let out: Uint8Array;
   let contentType: string;
   let extension: string;
-  if (imageKindOf(key) === "svg") {
+  const raster = isPng(bytes) || isJpeg(bytes) || isWebpHeader(bytes);
+  if (imageKindOf(key) === "svg" && !(logoPhoto && raster)) {
     const svg = inspectSvg(bytes);
     if (!svg.ok) return { ok: false, reason: svg.reason, problem: svg.problem };
     out = svg.bytes;
@@ -124,7 +143,7 @@ export async function handleMediaReplace(request: Request, deps: MediaRouteDeps)
   if (!body) return reply(413, { error: "too_large" });
   const fields = await parseFields(body, contentType);
   if (!fields) return reply(400, { error: "invalid" });
-  const checked = checkFile(fields.key, new Uint8Array(await fields.file.arrayBuffer()));
+  const checked = checkFile(fields.key, new Uint8Array(await fields.file.arrayBuffer()), deps.logoAcceptsPhoto ?? LOGO_ACCEPTS_PHOTO);
   if (!checked.ok) {
     const response = reply(400, { error: "invalid", reason: checked.reason });
     // One fixed code from the checker, never text from the file.
@@ -132,7 +151,8 @@ export async function handleMediaReplace(request: Request, deps: MediaRouteDeps)
     return response;
   }
   try {
-    return reply(200, await deps.replace({ tenantId, actorId: user.id, key: fields.key, expected: fields.expected, file: checked.file }));
+    const unlocked = fields.unlocked ? { unlocked: fields.unlocked } : {};
+    return reply(200, await deps.replace({ tenantId, actorId: user.id, key: fields.key, expected: fields.expected, file: checked.file, ...unlocked }));
   } catch {
     console.error("Settings image failed: step=replace");
     return mediaFailure();
