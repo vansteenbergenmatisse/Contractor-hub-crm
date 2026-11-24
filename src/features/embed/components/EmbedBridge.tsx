@@ -14,7 +14,10 @@ const MESSAGES: Record<Exclude<HandshakeResult, "signed_in">, string> = {
 // After sign-in with a handoff token (user decision 2026-11-24): first try to move the whole tab to the
 // full-screen CRM; if HighLevel's frame does not allow that, the person taps "Open full screen" (or a
 // new tab). "Use it here" keeps the CRM inside HighLevel, as before.
-export function EmbedBridge() {
+// A full navigation, so the new cookie is sent with the very first request.
+const replaceLocation = (url: string) => window.location.replace(url);
+
+export function EmbedBridge({ goTo = replaceLocation }: { goTo?: (url: string) => void } = {}) {
   const [result, setResult] = useState<HandshakeResult | null>(null);
   const [handoffUrl, setHandoffUrl] = useState<string | null>(null);
 
@@ -40,12 +43,13 @@ export function EmbedBridge() {
           tryTopNavigation(window.top, window, url);
           return;
         }
-        // A full navigation, so the new cookie is sent with the very first request.
-        window.location.replace("/");
+        goTo("/");
       },
       retryEveryMs: 1000,
       giveUpAfterMs: 10_000,
     });
+    // The handshake runs once per page load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (result === "signed_in" && handoffUrl) {
@@ -58,7 +62,7 @@ export function EmbedBridge() {
         <a href={handoffUrl} target="_blank" rel="noopener noreferrer" style={{ padding: "12px 16px", minHeight: 44, textAlign: "center" }}>
           Open in a new tab
         </a>
-        <button type="button" onClick={() => window.location.replace("/")} style={{ padding: "12px 16px", minHeight: 44, background: "none", border: "1px solid currentColor", borderRadius: 8 }}>
+        <button type="button" onClick={() => goTo("/")} style={{ padding: "12px 16px", minHeight: 44, background: "none", border: "1px solid currentColor", borderRadius: 8 }}>
           Use it here, inside HighLevel
         </button>
       </main>

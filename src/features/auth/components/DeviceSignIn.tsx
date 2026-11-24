@@ -21,7 +21,18 @@ const MESSAGES: Partial<Record<State, string>> = {
   limited: "Too many tries. Wait a minute and try again.",
 };
 
-export function DeviceSignIn() {
+type Props = {
+  // The request already had a session (maybe only the framed one-day "do not remember" one, or another
+  // user's). A token is still redeemed on Continue and replaces it; without a token the visitor goes
+  // to the app once.
+  signedIn?: boolean;
+  goTo?: (url: string) => void;
+};
+
+// A full load, so the new cookie is sent with the first request.
+const replaceLocation = (url: string) => window.location.replace(url);
+
+export function DeviceSignIn({ signedIn = false, goTo = replaceLocation }: Props) {
   const [token, setToken] = useState<string | null>(null);
   const [state, setState] = useState<State>("busy");
 
@@ -29,10 +40,16 @@ export function DeviceSignIn() {
     const found = tokenFromHash(window.location.hash);
     // Keep the token out of the history and any later copy of the address.
     if (window.location.hash) window.history.replaceState(null, "", window.location.pathname);
+    if (!found && signedIn) {
+      goTo("/");
+      return;
+    }
     // Reading the address bar is a client-only fact, so it is set after the first render.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setToken(found);
     setState(found ? "ready" : "missing");
+    // Once, on arrival: the fragment is read and cleared a single time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function go() {
@@ -47,8 +64,7 @@ export function DeviceSignIn() {
       });
       if (response.ok) {
         setToken(null);
-        // A full load, so the new cookie is sent with the first request.
-        window.location.replace("/");
+        goTo("/");
         return;
       }
       setToken(null);
