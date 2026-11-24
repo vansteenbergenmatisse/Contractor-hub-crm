@@ -2,7 +2,7 @@
 
 Written 2026-11-22 from the code, `docs/greenlane/build-prompt.md` and that day's install attempts.
 
-**Status: the install from our link worked on dev for JCR on 2026-11-22.** Staging and production have not been installed. Steps marked **(not proven)** have not been run for real. After the first success in each environment, remove the mark or correct the step. A snapshot may not carry the app, so assume each new sub-account needs the Install steps.
+**Status: the install from our link worked on dev for JCR on 2026-11-22. On 2026-11-24 "Select all" on dev connected the agency's 3 other sub-accounts through the `INSTALL` webhook (see "Proven on dev, 2026-11-24").** Staging and production have not been installed. Steps marked **(not proven)** have not been run for real. After the first success in each environment, remove the mark or correct the step. A snapshot may not carry the app, so assume each new sub-account needs the Install steps.
 
 ## The short version
 
@@ -30,7 +30,9 @@ The build prompt lists `marketplace.gohighlevel.com` as the install host. That h
 
 ## Webhook events (once per HighLevel app)
 
-In the HighLevel developer portal, open the app, then **Advanced Settings**, then **Webhooks**. Set the webhook URL to `<site>/api/integrations/webhooks` and switch on: `INSTALL`/`UNINSTALL` (app events, if listed), **LocationCreate**, LocationUpdate, UserCreate, UserUpdate, UserDelete. Without LocationCreate, a new sub-account connects only through its INSTALL event or the reconcile.
+In the HighLevel developer portal, open the app, then **Advanced Settings**, then **Webhooks**. Set the webhook URL to `<site>/api/integrations/webhooks` and switch on: **LocationCreate**, LocationUpdate, UserCreate, UserUpdate, UserDelete. LocationDelete is not used. Without LocationCreate, a new sub-account connects only through its INSTALL event or the reconcile.
+
+The portal's event list has **no INSTALL or UNINSTALL switch** (seen 2026-11-24). They arrive anyway: on 2026-11-24 dev received five `INSTALL` events at the moment of the "Select all" install, with only the events above switched on.
 
 ## Before any install
 
@@ -46,8 +48,8 @@ In the HighLevel developer portal, open the app, then **Advanced Settings**, the
 2. In the same browser, open `<site>/api/integrations/oauth/start`. The link is valid for 10 minutes.
 3. Log in to HighLevel if asked, and click **Install**.
 4. Select the sub-accounts from the table above, then approve.
-5. You land on a plain page on our site, such as `{"installed":1,"failed":0}`.
-6. Open `<site>/admin/clients` and confirm each client shows **Connected**.
+5. First install for the agency: you land on a plain page on our site, such as `{"installed":1,"failed":0}`. **When the app is already installed** (HighLevel shows **Install to more sub-accounts**), HighLevel does not come back to our site: the browser stays on `marketplace.leadconnectorhq.com/v2/oauth/chooselocation` and shows the app page again (seen on dev, 2026-11-24). That is fine: the new sub-accounts connect through their `INSTALL` webhooks, using the agency connection stored by the first install.
+6. Open `<site>/admin/clients` and confirm each client shows **Connected** (on 2026-11-24 they were there within a minute; the clients were created about one second after the webhooks arrived).
 7. Open the client's Leads page and confirm its own leads show.
 
 ### Environment notes
@@ -83,8 +85,13 @@ Updated 2026-11-24 (branch `integrate/onboarding`, not yet merged into `develop`
 
 **Email env vars (names only):** `RESEND_API_KEY`, `EMAIL_FROM`, `EMAIL_DELIVERY_MODE` (`allowlist` or `live`), `EMAIL_ALLOWED_RECIPIENTS` (allowlist mode), `APP_URL`, and `ONBOARDING_SEND_SET_PASSWORD=true` only if the sync should mail new users itself. Keep dev on `allowlist`: in `live` mode **Send sign-in email** for the JCR owner would really email them.
 
-**Not proven yet (no real new sub-account has been tried):**
-- whether a sub-account added through "future locations" gets an `INSTALL` event at all, and how late;
+**Proven on dev, 2026-11-24** (user's browser session, plus the `WebhookEvent` and `Tenant` rows on Neon `develop`):
+- Install from our start link as CRM admin, app already on JCR: HighLevel offered **Install to more sub-accounts**, "Select all 3 sub-accounts", with **Auto-install on future sub-accounts** on by default (left on). 186 scopes approved. No redirect to our callback (see Install step 5).
+- Five `INSTALL` events arrived in the same second (13:37:05 UTC). The three new clients were created at 13:37:06 UTC, so the `INSTALL` webhook connected them, not the `/admin/clients` check.
+- `/admin/clients` then showed four Connected clients: the three new ones (one with 1 user, two with 0 users) and JCR.
+
+**Not proven yet (no new sub-account has been created since):**
+- whether a sub-account created later, through "future sub-accounts", gets an `INSTALL` event at all, and how late;
 - how soon it appears in `/oauth/installed-locations`, and whether minting its token fails before the install finishes;
 - whether `installToFutureLocations` is really sent, and the real `LocationCreate` payload;
 - whether a snapshot carries the app;
@@ -94,21 +101,22 @@ Updated 2026-11-24 (branch `integrate/onboarding`, not yet merged into `develop`
 
 On dev and staging, a new test sub-account is picked up only if the app is installed on it. **User decision (2026-11-24): on dev, install with "Select all" (including future sub-accounts)** to prove auto-connect. This creates CRM accounts for the agency's other sub-accounts and sends them no email while `ONBOARDING_SEND_SET_PASSWORD` is off. It writes nothing to HighLevel, so JCR stays read-only. Staging: still select only the test sub-account unless the user says otherwise.
 
-**Order for the one-time setup on an environment:** (1) switch on the webhooks ("Webhook events" above), (2) run the Install with "Select all", (3) add the CRM custom menu link and set `HIGHLEVEL_CRM_MENU_URL` ("Owner access: Sign in with HighLevel" below). The owner's HighLevel password is typed by the user, never by an agent.
+**Order for the one-time setup on an environment:** (1) switch on the webhooks ("Webhook events" above), (2) run the Install with "Select all", (3) point the app's Custom Page at `<site>/embed` and set `HIGHLEVEL_CRM_MENU_URL` ("Owner access: Sign in with HighLevel" below). The owner's HighLevel password is typed by the user, never by an agent.
 
 ## Owner access: Sign in with HighLevel
 
 Added 2026-11-24 (branch `integrate/signin`, not yet merged into `develop`). User decision: one login for the client, their HighLevel login. Email and password stay as an optional second way in. Facts and unknowns about HighLevel's side: `docs/greenlane/hl-api-notes.md`, "Sign in with HighLevel".
 
-**One-time setup per environment (agency admin in HighLevel, then Vercel):**
-1. HighLevel agency view, **Settings > Custom Menu Links**, add a link:
-   - Icon: any. Title: `CRM`.
-   - URL: `<site>/embed` (for dev `https://dev.crm.forgeforward.io/embed`). No placeholders in the URL: identity comes only from HighLevel's encrypted user context.
-   - Open in: **Embedded Page (iFrame)**. Not New Tab or Current Tab: `/embed` signs the person in only inside HighLevel's frame.
-   - Show in: sub-account sidebar, only the sub-accounts that have the app (dev: only the test sub-account). Role visibility: All.
-   - **(not proven)** whether an agency custom menu link answers HighLevel's user-context request like the marketplace app's Custom Page. If `/embed` shows "HighLevel did not answer", use the marketplace app's Custom Page as the CRM menu item instead, pointing at the same `<site>/embed`.
-2. Open any sub-account, click **CRM** in the left menu, and copy the address bar. Replace that sub-account's id with `{locationId}` (exactly one), keep `https://`. Example shape (not proven): `https://<highlevel-host>/v2/location/{locationId}/custom-menu-link/<menuLinkId>`.
-3. In Vercel, for that environment only, set `HIGHLEVEL_CRM_MENU_URL` to that template and redeploy. It is not a secret. Unset or invalid: the button opens `https://app.gohighlevel.com/` and tells the person to open their business, then CRM.
+**The CRM menu item is the marketplace app's Custom Page, not an agency custom menu link.** Tested on dev 2026-11-24 (once, as the agency admin, on `app.gohighlevel.com`): an agency custom menu link `CRM` → `<site>/embed`, Embedded Page (iFrame), showed "Signing you in…" and then "HighLevel did not answer". HighLevel's docs describe the user-context request (`REQUEST_USER_DATA`) for a marketplace app's Custom Page only, and the agency link did not answer it. Do not use an agency custom menu link for the CRM; delete it if one exists, or the sub-account shows two CRM items.
+
+**One-time setup per environment (developer portal, then Vercel):**
+1. In the HighLevel developer portal, open the app and set its **Custom Page** URL to `<site>/embed` (for dev `https://dev.crm.forgeforward.io/embed`). No placeholders: identity comes only from HighLevel's encrypted user context. **(not proven)** whether a change to the Custom Page URL reaches sub-accounts that already have the app without publishing a new version, and that the Custom Page then answers the user-context request.
+2. Open a sub-account, click **CRM** in the left menu, and copy the address bar. Replace that sub-account's id with `{locationId}` (exactly one), keep `https://`. Seen on dev: `https://app.gohighlevel.com/v2/location/<locationId>/custom-page-link/<customPageId>`. **(not proven)** that `<customPageId>` is the same in every sub-account: compare it in a second sub-account.
+3. Use the host the clients log in on. Clients of Forge Forward use the white-label host `https://app.forgeforward.io` (the agency admin uses `app.gohighlevel.com`). So the template is `https://app.forgeforward.io/v2/location/{locationId}/custom-page-link/<customPageId>`. **(not proven)** that the white-label host uses the same path; open it once as a client.
+4. **Code prerequisite:** `/embed` may only be framed by the hosts in `src/shared/config/frame-headers.ts`. On 2026-11-24 that list has `app.gohighlevel.com` and `app.leadconnectorhq.com` but not `app.forgeforward.io`, so the CRM page stays blank for clients on the white-label host until that host is added.
+5. In Vercel, for that environment only, set `HIGHLEVEL_CRM_MENU_URL` to that template and redeploy. It is not a secret. Unset or invalid: the button opens `https://app.gohighlevel.com/` and tells the person to open their business, then CRM.
+
+The old "Install your app" guide (a page on `sites.leadconnectorhq.com`) was the Custom Page's target until now. Its "Open the CRM" button and QR code point at production, which runs older code. `/embed` replaces it: after sign-in it offers **Open full screen**, **Open in a new tab** and **Use it here, inside HighLevel**.
 
 **What the owner does (laptop or phone browser):**
 1. Opens `<site>/sign-in?client=<slug>` (or `<site>/sign-in`). Taps **Sign in with HighLevel**.
@@ -131,6 +139,9 @@ To see a client's real data as a Forge Forward admin, use **View client** on `/a
 | `Forbidden` on the start link | Not signed in as a CRM admin | Sign in as admin in the same browser |
 | `Password has not been set for the user` | That HighLevel login has no password | Use "Forgot password?", then restart from the start link |
 | Error after approving | The link expired, or a different browser or session was used | Restart from the start link |
+| CRM page says "HighLevel did not answer" | The CRM menu item is an agency custom menu link, which gets no user context | Use the app's Custom Page as the CRM item (see "Owner access") |
+| CRM page is blank on `app.forgeforward.io` | That host is not allowed to frame `/embed` | Add it in `src/shared/config/frame-headers.ts` and deploy |
+| After "Install to more sub-accounts", no `{"installed":…}` page | Normal when the app is already installed | Check `/admin/clients`; the `INSTALL` webhooks connect them |
 | Installed in HighLevel, but no client in the CRM, and **Continue** is greyed out | Install did not start from our link, so no agency token is stored | Uninstall the app from that sub-account, then run the Install steps from our link |
 | Client shows `needs_reconnect` | HighLevel rejected the stored token | Run the Install steps again |
 | Leads says it can't load | Missing env, HighLevel error or read limit | Check the Vercel logs for `HighLevel contacts read failed: step=` |
