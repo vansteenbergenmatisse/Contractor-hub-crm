@@ -20,7 +20,7 @@ const FOCUSABLE = "[tabindex='0'],input,button";
 export function ColorPad({ anchor, host, label, startHex, onPick, onClose }: Props) {
   const [hsv, setHsv] = useState<Hsv>(() => hexToHsv(startHex ?? "#000000"));
   const [text, setText] = useState(startHex?.toUpperCase() ?? "");
-  const [spot, setSpot] = useState<{ top: number; left: number } | null>(null);
+  const [spot, setSpot] = useState<{ top: number; left: number; maxHeight: number } | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const square = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
@@ -31,23 +31,38 @@ export function ColorPad({ anchor, host, label, startHex, onPick, onClose }: Pro
   // Under the swatch, or above it when there is no room, and always inside the screen.
   useLayoutEffect(() => {
     function place() {
+      const box = root.current;
       const from = anchor.current?.getBoundingClientRect();
-      const pad = root.current?.getBoundingClientRect();
-      if (!from || !pad) return;
+      const pad = box?.getBoundingClientRect();
+      if (!box || !from || !pad) return;
+      // The visible area: above an open keyboard and inside the notch and home bar insets.
+      const styles = getComputedStyle(box);
+      const inset = (side: string) => parseFloat(styles.getPropertyValue(`--pad-safe-${side}`)) || 0;
+      const view = window.visualViewport;
+      const hasView = !!view && view.height > 0;
+      const viewTop = (hasView ? view.offsetTop : 0) + GUTTER + inset("t");
+      const viewBottom = (hasView ? view.offsetTop + view.height : window.innerHeight) - GUTTER - inset("b");
+      const maxHeight = Math.max(0, viewBottom - viewTop);
+      const height = Math.min(Math.max(pad.height, box.scrollHeight), maxHeight);
       const below = from.bottom + GUTTER;
-      const fits = below + pad.height <= window.innerHeight - GUTTER;
-      const top = fits ? below : from.top - pad.height - GUTTER;
+      const top = below + height <= viewBottom ? below : from.top - height - GUTTER;
       setSpot({
-        top: Math.max(GUTTER, Math.min(top, window.innerHeight - pad.height - GUTTER)),
-        left: Math.max(GUTTER, Math.min(from.left, window.innerWidth - pad.width - GUTTER)),
+        top: Math.max(viewTop, Math.min(top, viewBottom - height)),
+        left: Math.max(GUTTER + inset("l"), Math.min(from.left, window.innerWidth - pad.width - GUTTER - inset("r"))),
+        maxHeight,
       });
     }
     place();
+    const view = window.visualViewport;
     window.addEventListener("resize", place);
     window.addEventListener("scroll", place, true);
+    view?.addEventListener("resize", place);
+    view?.addEventListener("scroll", place);
     return () => {
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
+      view?.removeEventListener("resize", place);
+      view?.removeEventListener("scroll", place);
     };
   }, [anchor]);
 
@@ -122,7 +137,7 @@ export function ColorPad({ anchor, host, label, startHex, onPick, onClose }: Pro
       className="fd-pad"
       role="dialog"
       aria-label={label}
-      style={spot ? { top: spot.top, left: spot.left } : { top: 0, left: 0, visibility: "hidden" }}
+      style={spot ? { top: spot.top, left: spot.left, maxHeight: spot.maxHeight } :{ top: 0, left: 0, visibility: "hidden" }}
       onKeyDown={onKey}
     >
       <div
