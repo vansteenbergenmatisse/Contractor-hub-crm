@@ -37,10 +37,16 @@ describe("/sign-in with the hint", () => {
   it("shows the masked email, the direct link and the forgot-password step", async () => {
     jar.value = encodeSignInHint({ slug: "sample-roofing", email: "john@gmail.com" });
     const html = await render();
-    expect(html).toContain("Your sign-in has ended. Sign in again through HighLevel with j•••@g•••.com.");
+    const text = html.replace(/<span[^>]*style="[^"]*"[^>]*>[^<]*<\/span>/g, "").replace(/<[^>]+>/g, "");
+    expect(text).toContain("Sign in again with HighLevel. Use j•••@gmail.com.");
+    expect(html).toContain('<span aria-hidden="true">j•••@gmail.com</span>');
+    expect(html).toContain("email starting with j at gmail.com");
     expect(html).toContain('href="https://app.example-hl.test/v2/location/loc_1/custom-menu-link/m"');
-    expect(html).toContain("Forgot your HighLevel password? On the HighLevel login screen, choose Forgot password and use j•••@g•••.com.");
+    expect(html).toContain("Forgot that password? Reset it on the HighLevel login screen.");
+    expect(html).not.toContain("Your sign-in has ended");
     expect(html).not.toContain("john");
+    // The CRM's own password form stays, below the HighLevel way in.
+    expect(html.indexOf("Sign in with HighLevel")).toBeLessThan(html.indexOf('name="password"'));
     expect(loadSignInBrand).toHaveBeenCalledWith("sample-roofing");
   });
 
@@ -48,7 +54,7 @@ describe("/sign-in with the hint", () => {
     const plain = await render();
     jar.value = encodeSignInHint({ slug: "gone-client", email: "john@gmail.com" });
     expect(await render()).toBe(plain);
-    jar.value = Buffer.from(JSON.stringify({ s: "https://evil.test", e: "j•••@g•••.com" })).toString("base64url");
+    jar.value = Buffer.from(JSON.stringify({ s: "https://evil.test", e: "j•••@gmail.com" })).toString("base64url");
     expect(await render()).toBe(plain);
     expect(plain).not.toContain("Your sign-in has ended");
   });

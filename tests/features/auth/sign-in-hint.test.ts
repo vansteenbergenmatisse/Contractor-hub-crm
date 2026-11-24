@@ -17,23 +17,34 @@ afterEach(() => vi.restoreAllMocks());
 
 describe("maskEmailHint", () => {
   it.each([
-    ["john.doe@gmail.com", "j•••@g•••.com"],
-    ["j@x.io", "j•••@x•••.io"],
-    ["john+crm@gmail.com", "j•••@g•••.com"],
-    ["Pat@Mail.Example.co.uk", "p•••@m•••.uk"],
+    ["john.doe@gmail.com", "j•••@gmail.com"],
+    ["j@x.io", "j•••@x.io"],
+    ["jo@x.io", "j•••@x.io"],
+    ["john+crm@gmail.com", "j•••@gmail.com"],
+    ["Pat@Mail.Example.co.uk", "p•••@mail.example.co.uk"],
+    // An IDN domain is kept as given (lowercased); its top-level label is plain ASCII.
+    ["ana@bücher.de", "a•••@bücher.de"],
   ])("%s -> %s", (email, masked) => {
     expect(maskEmailHint(email)).toBe(masked);
   });
 
-  it("never returns the local part or the domain name in full", () => {
+  it("shows the whole domain but never the rest of the local part or a +tag", () => {
     const masked = maskEmailHint("secretname+tag@privatehost.com") ?? "";
+    expect(masked).toBe("s•••@privatehost.com");
     expect(masked).not.toContain("secretname");
     expect(masked).not.toContain("tag");
-    expect(masked).not.toContain("privatehost");
   });
 
   it("returns null for something that is not an email", () => {
-    for (const value of ["", "nobody", "@x.com", "a@", "a@nodot", "a b@x.com"]) expect(maskEmailHint(value)).toBeNull();
+    for (const value of ["", "nobody", "@x.com", "a@", "a@nodot", "a b@x.com", "a@x.c<m", "a@<b>.com"]) expect(maskEmailHint(value)).toBeNull();
+  });
+
+  it("a non-ASCII top-level label gives no hint, and nothing throws", () => {
+    expect(maskEmailHint("ivan@пример.рф")).toBeNull();
+    expect(maskEmailHint("x@y.中国")).toBeNull();
+    expect(() => maskEmailHint(undefined as unknown as string)).not.toThrow();
+    expect(() => encodeSignInHint({ slug: "ok", email: "ivan@пример.рф" })).not.toThrow();
+    expect(parseSignInHint(encodeSignInHint({ slug: "ok", email: "ivan@пример.рф" }))).toBeNull();
   });
 });
 
@@ -42,16 +53,16 @@ describe("hint cookie value", () => {
     const raw = encodeSignInHint({ slug: "sample-roofing", email: "john@gmail.com" });
     expect(raw).not.toContain("john");
     expect(Buffer.from(raw, "base64url").toString("utf8")).not.toContain("john@");
-    expect(parseSignInHint(raw)).toEqual({ slug: "sample-roofing", email: "j•••@g•••.com" });
+    expect(parseSignInHint(raw)).toEqual({ slug: "sample-roofing", email: "j•••@gmail.com" });
   });
 
   it("drops a hint with an invalid slug or an odd email, and garbage", () => {
     const forge = (value: object) => Buffer.from(JSON.stringify(value), "utf8").toString("base64url");
-    expect(parseSignInHint(forge({ s: "https://evil.test", e: "j•••@g•••.com" }))).toBeNull();
+    expect(parseSignInHint(forge({ s: "https://evil.test", e: "j•••@gmail.com" }))).toBeNull();
     expect(parseSignInHint(forge({ s: "ok-slug", e: "john@gmail.com" }))).toBeNull();
     expect(parseSignInHint("%%%")).toBeNull();
     expect(parseSignInHint(undefined)).toBeNull();
-    expect(parseSignInHint(forge({ s: null, e: "j•••@g•••.com" }))).toEqual({ slug: null, email: "j•••@g•••.com" });
+    expect(parseSignInHint(forge({ s: null, e: "j•••@gmail.com" }))).toEqual({ slug: null, email: "j•••@gmail.com" });
   });
 
   it("lives 400 days, the most a browser keeps a cookie", () => {
@@ -68,7 +79,7 @@ describe("resolveSignInPage", () => {
     const page = await resolveSignInPage({ client: undefined, hint }, { template: TEMPLATE, findLocationId });
     expect(page).toEqual({
       brandClient: "sample-roofing",
-      hint: { email: "j•••@g•••.com" },
+      hint: { email: "j•••@gmail.com" },
       highLevel: { href: "https://app.example-hl.test/v2/location/loc_1/custom-menu-link/m", direct: true },
     });
   });
@@ -123,7 +134,7 @@ describe("the hint cookie is set when a long session is created", () => {
     expect(cookie).toContain(`Max-Age=${400 * 24 * 3600}`);
     expect(cookie).not.toContain("john");
     const value = decodeURIComponent(cookie.split(";")[0].slice(SIGN_IN_HINT_COOKIE.length + 1));
-    expect(parseSignInHint(value)).toEqual({ slug: "sample-roofing", email: "j•••@g•••.com" });
+    expect(parseSignInHint(value)).toEqual({ slug: "sample-roofing", email: "j•••@gmail.com" });
   });
 
   it("on the full-screen handoff (device sign-in)", async () => {
@@ -135,7 +146,7 @@ describe("the hint cookie is set when a long session is created", () => {
     }));
     expect(response.status).toBe(200);
     const value = decodeURIComponent((hintCookie(response) ?? "").split(";")[0].slice(SIGN_IN_HINT_COOKIE.length + 1));
-    expect(parseSignInHint(value)).toEqual({ slug: "sample-roofing", email: "p•••@x•••.test" });
+    expect(parseSignInHint(value)).toEqual({ slug: "sample-roofing", email: "p•••@x.test" });
   });
 
   it("not for Forge Forward staff (admin) and not on a failed sign-in", async () => {
@@ -145,10 +156,72 @@ describe("the hint cookie is set when a long session is created", () => {
     expect(hintCookie(await signIn(auth, "nobody@forge.test"))).toBeUndefined();
   });
 
+  it("on an office user's password sign-in too", async () => {
+    const { auth } = setup();
+    await createInvitedUser(auth, { email: "olga@office.test", name: "O", password: "correct horse battery", role: "office", tenantId: "T1" });
+    const value = decodeURIComponent((hintCookie(await signIn(auth, "olga@office.test")) ?? "").split(";")[0].slice(SIGN_IN_HINT_COOKIE.length + 1));
+    expect(parseSignInHint(value)).toEqual({ slug: "sample-roofing", email: "o•••@office.test" });
+  });
+
+  it("an explicit sign-out clears it, so /sign-in then shows no hint", async () => {
+    const { auth } = setup();
+    await createInvitedUser(auth, { email: "john@gmail.com", name: "J", password: "correct horse battery", role: "owner", tenantId: "T1" });
+    const signedIn = await signIn(auth, "john@gmail.com");
+    expect(hintCookie(signedIn)).toBeDefined();
+    const jar = signedIn.headers.getSetCookie().map((c) => c.split(";")[0]).join("; ");
+    const out = await auth.handler(new Request(`${BASE}/api/auth/sign-out`, {
+      method: "POST", headers: { "content-type": "application/json", origin: BASE, cookie: jar }, body: "{}",
+    }));
+    expect(out.status).toBe(200);
+    const cleared = hintCookie(out) ?? "";
+    expect(cleared).toMatch(/Max-Age=0/);
+    const after = cleared.split(";")[0].slice(SIGN_IN_HINT_COOKIE.length + 1);
+    expect(after).toBe("");
+    const page = await resolveSignInPage({ client: undefined, hint: after }, { template: undefined, findLocationId: async () => "loc_1" });
+    expect(page.hint).toBeNull();
+  });
+
   it("the hint alone is no session", async () => {
     const { auth } = setup();
     const raw = encodeSignInHint({ slug: "sample-roofing", email: "john@gmail.com" });
     const session = await auth.api.getSession({ headers: new Headers({ cookie: `${SIGN_IN_HINT_COOKIE}=${raw}` }) });
     expect(session).toBeNull();
+  });
+});
+
+describe("the hint cookie is set on a successful /embed sign-in (inside HighLevel)", () => {
+  async function embedSignIn(role: "owner" | "office" | "admin") {
+    vi.spyOn(console, "info").mockImplementation(() => {});
+    let userId = "";
+    const auth = createAuth({
+      database: memoryAdapter({ user: [], session: [], account: [], verification: [], rateLimit: [] }),
+      secret: Buffer.alloc(32, 7).toString("base64"), baseURL: BASE,
+      emailSender: { send: async () => ({ delivered: false }) },
+      embedLogin: { resolveUserId: async () => userId },
+      signInHint: { slugForTenant: async () => "sample-roofing" },
+    });
+    ({ userId } = await createInvitedUser(auth, {
+      email: "kim@team.test", name: "K", password: "correct horse battery", role, tenantId: role === "admin" ? null : "T1",
+    }));
+    const response = await auth.handler(new Request(`${BASE}/api/auth/embed-login`, {
+      method: "POST", headers: { "content-type": "application/json", origin: BASE }, body: JSON.stringify({ payload: "cipher" }),
+    }));
+    expect(response.status).toBe(200);
+    return response.headers.getSetCookie().find((c) => c.startsWith(`${SIGN_IN_HINT_COOKIE}=`));
+  }
+
+  it.each(["owner", "office"] as const)("%s: SameSite=None; Secure; HttpOnly, masked email", async (role) => {
+    const cookie = (await embedSignIn(role)) ?? "";
+    expect(cookie).toMatch(/SameSite=None/i);
+    expect(cookie).toMatch(/;\s*Secure(;|$)/i);
+    expect(cookie).toMatch(/HttpOnly/i);
+    expect(cookie).toContain(`Max-Age=${400 * 24 * 3600}`);
+    expect(cookie).not.toContain("kim");
+    const value = decodeURIComponent(cookie.split(";")[0].slice(SIGN_IN_HINT_COOKIE.length + 1));
+    expect(parseSignInHint(value)).toEqual({ slug: "sample-roofing", email: "k•••@team.test" });
+  });
+
+  it("never for an admin", async () => {
+    expect(await embedSignIn("admin")).toBeUndefined();
   });
 });

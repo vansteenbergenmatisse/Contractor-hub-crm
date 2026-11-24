@@ -41,16 +41,26 @@ export type CreateAuthOptions = {
   signInHint?: { slugForTenant: (tenantId: string) => Promise<string | null> };
 };
 
-// Where a long, first-party session is created for a person: password sign-in and the device sign-in
-// (full-screen handoff from HighLevel, or pairing). Not /embed-login: that one-day session lives in
-// HighLevel's frame.
-const HINT_PATHS = new Set(["/sign-in/email", "/device-sign-in"]);
+// Where a session is created for a person: password sign-in, the device sign-in (full-screen handoff
+// from HighLevel, or pairing) and /embed-login inside HighLevel's frame, so someone who only ever uses
+// the CRM inside HighLevel also gets the hint.
+const HINT_PATHS = new Set(["/sign-in/email", "/device-sign-in", "/embed-login"]);
+// /embed-login answers inside HighLevel's cross-site frame, where a SameSite=Lax cookie is dropped by
+// the browser: that one is SameSite=None; Secure (it still grants nothing).
+const FRAMED_HINT_PATHS = new Set(["/embed-login"]);
 
 function signInHintHook(options: CreateAuthOptions) {
   const hint = options.signInHint;
   const secure = new URL(options.baseURL).protocol === "https:";
   return createAuthMiddleware(async (ctx) => {
-    if (!hint || !HINT_PATHS.has(ctx.path)) return;
+    if (!hint) return;
+    if (ctx.path === "/sign-out") {
+      // Shared devices: an explicit sign-out forgets which email was used here. SameSite=None where
+      // possible, so the clear also works when sign-out runs inside HighLevel's frame.
+      ctx.setCookie(SIGN_IN_HINT_COOKIE, "", { httpOnly: true, secure, sameSite: secure ? "none" : "lax", path: "/", maxAge: 0 });
+      return;
+    }
+    if (!HINT_PATHS.has(ctx.path)) return;
     const created = ctx.context.newSession;
     const user = created?.user as { email?: string; role?: string; tenantId?: string | null } | undefined;
     // Only a client's person (owner or office) with a tenant; never Forge Forward staff.
@@ -59,10 +69,11 @@ function signInHintHook(options: CreateAuthOptions) {
     try {
       const slug = await hint.slugForTenant(user.tenantId).catch(() => null);
       if (!maskEmailHint(user.email)) return;
+      const framed = FRAMED_HINT_PATHS.has(ctx.path);
       ctx.setCookie(SIGN_IN_HINT_COOKIE, encodeSignInHint({ slug, email: user.email }), {
         httpOnly: true,
-        secure,
-        sameSite: "lax",
+        secure: framed ? true : secure,
+        sameSite: framed ? "none" : "lax",
         path: "/",
         maxAge: SIGN_IN_HINT_MAX_AGE_SECONDS,
       });

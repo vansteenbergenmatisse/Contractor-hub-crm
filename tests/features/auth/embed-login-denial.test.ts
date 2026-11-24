@@ -42,6 +42,11 @@ describe("embedDenialCode", () => {
     ["provision_failed", undefined, "other"],
     ["no_match", undefined, "other"],
     ["origin", undefined, "other"],
+    ["role_not_allowed", undefined, "other"],
+    ["role_not_allowed", { type: "agency" }, "other"],
+    ["company_mismatch", undefined, "other"],
+    ["company_mismatch", { type: "agency" }, "other"],
+    ["lookup_failed", undefined, "other"],
   ] as const)("%s (%o) -> %s", (reason, who, code) => {
     expect(embedDenialCode(reason, who)).toBe(code);
   });

@@ -70,6 +70,24 @@ After the template copy, Forge Forward sets the client's own values and locks th
 - **Owner asks to change:** the owner tells Forge Forward which value; an admin opens Edit values, changes it, saves, and leaves it locked (or unlocks it for the owner).
 - **Data:** table `CustomValueLock` (tenant, key, who locked it, when; one row per tenant and key; removed with the tenant). Migration `prisma/migrations/20261124120000_custom_value_lock` (new table only, NOT applied). Until it is applied, the owner's Settings save cannot read locks and saves nothing ("did not save, try again"), and the admin values page shows "Could not read this client's values": apply it before deploying this change. Deploy order: apply it on a Neon branch of production first, then staging, then production, and only then deploy the code. Rollback: reverting the code leaves an unused table; dropping it needs its own migration.
 
+## Sign-in and the hint cookie
+- **Who gets in from inside HighLevel:** only the sub-account's own HighLevel users (sub-account admin = `owner`, any other user = `office`). Agency logins never. HighLevel's user list for the location decides, not the `type` in HighLevel's user data (unreliable): a person on the list with role type `agency` is refused; a person Forge Forward already provisioned as a business user keeps getting in until HighLevel removes them. Pinned in `tests/features/auth/embed-access-authority.test.ts`.
+- **Refusals:** `/api/auth/embed-login` answers 403 with a public code in the `x-embed-denied` header (no email, no id); `/embed` shows the text for that code (`src/features/embed/api/denial.ts`) plus a **Try again** button that loads `/embed` again. No Forge Forward contact is shown (none is configured in the repo).
+
+  | Code | Text |
+  |---|---|
+  | `agency_user` | You are signed in with an agency login. This CRM only opens for this business's own team. Ask the business owner to add you as a team member with a different email, then sign in to HighLevel with that login. |
+  | `not_in_location` | Your HighLevel user is not part of this business yet. Ask the business owner to add you as a team member in HighLevel, then open CRM again. |
+  | `login_off` | This CRM is turned off for this business. Ask Forge Forward to turn it on. |
+  | `not_connected` | This business is not connected to the CRM yet. Ask Forge Forward to connect it. |
+  | `user_off` | Your access to this CRM is turned off. Ask Forge Forward to turn it back on. |
+  | `account_conflict` | Ask Forge Forward to fix this: your email is already linked to another CRM. |
+  | `other` | We could not sign you in. Tap Try again. If it keeps happening, ask Forge Forward. |
+
+- **Hint cookie** `crm_sign_in_hint`: set for an owner or office user (never an admin) on password sign-in, the device sign-in (full-screen handoff, pairing) and a successful `/embed` sign-in. It holds the client's personal-link slug and a masked email (`j•••@gmail.com`: first character, then the whole domain; an email whose top-level label is not plain ASCII gives no cookie). HttpOnly, 400 days (the browser maximum); SameSite=Lax, except from `/embed-login` where it is SameSite=None; Secure because it is set inside HighLevel's frame. It grants nothing. An explicit sign-out clears it (shared devices); otherwise it expires.
+- **/sign-in with a hint:** "Sign in again with HighLevel. Use j•••@gmail.com." (screen readers hear "email starting with j at gmail.com"), the HighLevel button goes straight to that client's CRM page while the client is connected and its login is on, and under it: "Forgot that password? Reset it on the HighLevel login screen." The CRM's own email and password form stays below.
+- **Signed out inside the frame:** a page under `(app)` without a session, loaded in a frame, shows "Your sign-in ended." / "Tap below to sign in again." with **Sign in again** (loads `/embed` in the same frame, which runs the in-frame sign-in again) and a secondary "Open the CRM full screen". Not verified on a real HighLevel account in Safari or Chrome.
+
 ## Known gaps
 - **Daily mail cap:** at most 50 set-password mails per tenant per UTC day (`MAX_SET_PASSWORD_MAILS_PER_TENANT_PER_DAY`, a proposal), counted in `TenantSyncState`, on the webhook, callback, cron and visit paths. A user over the cap still gets an account but is NOT mailed later: nothing retries it, so that person must use "forgot password". The count of skipped mails is in the log. If the table is missing, these mails are skipped too.
 - **The embed sign-in path is not under the daily cap:** it calls `provisionGhlUser` from `src/features/auth/api/instance.ts` with the uncapped sender.

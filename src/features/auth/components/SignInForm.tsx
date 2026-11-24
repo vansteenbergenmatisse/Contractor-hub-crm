@@ -6,13 +6,14 @@ import { useState, type FormEvent } from "react";
 import { AuthCard } from "./AuthCard";
 import { Field } from "./Field";
 import { clientHref } from "./client-href";
+import { MaskedEmail } from "./MaskedEmail";
 import type { SignInBrand } from "@/features/brand";
 import type { HighLevelSignIn } from "../api/highlevel-sign-in";
 
 // With `highLevel`, "Sign in with HighLevel" is the main action (user decision 2026-11-24: one login,
 // the HighLevel one) and email and password stay as the second way in.
 // `hint` (a masked email from the sign-in hint cookie): this browser was signed in before, so the page
-// says the sign-in ended, which HighLevel login to use, and how to reset that password.
+// says which HighLevel login to use and where to reset that password.
 export function SignInForm({
   brand,
   highLevel,
@@ -58,11 +59,24 @@ export function SignInForm({
     setBusy(false);
   }
 
+  // With a hint the HighLevel path is the one to take, and the subtitle names the login to use. The
+  // wording is true after an expiry and after a sign-out alike.
+  const subtitle = highLevel ? (
+    hint ? (
+      <>
+        Sign in again with HighLevel. Use <MaskedEmail email={hint.email} />.
+      </>
+    ) : (
+      "Use your HighLevel login."
+    )
+  ) : (
+    "Use the email and password for your account."
+  );
+
   return (
-    <AuthCard title="Sign in" subtitle={highLevel ? "Use your HighLevel login." : "Use the email and password for your account."} brand={brand}>
+    <AuthCard title="Sign in" subtitle={subtitle} brand={brand}>
       {highLevel ? (
         <div className="fd-lhl">
-          {hint ? <p className="fd-lsub" role="status">Your sign-in has ended. Sign in again through HighLevel with {hint.email}.</p> : null}
           <a className="fd-btn is-fill fd-lgo" href={highLevel.href} rel="noopener noreferrer" aria-describedby="fd-lhl-hint">Sign in with HighLevel</a>
           <p className="fd-lsub" id="fd-lhl-hint">
             {highLevel.direct
@@ -70,7 +84,7 @@ export function SignInForm({
               : "Sign in to HighLevel if it asks, open your business, then tap CRM in the left menu."}
           </p>
           {hint ? (
-            <p className="fd-lsub">Forgot your HighLevel password? On the HighLevel login screen, choose Forgot password and use {hint.email}.</p>
+            <p className="fd-lsub">Forgot that password? Reset it on the HighLevel login screen.</p>
           ) : null}
           <p className="fd-lor">Or use your email and password</p>
         </div>

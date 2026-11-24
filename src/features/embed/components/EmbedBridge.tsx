@@ -7,7 +7,10 @@ import { EMBED_DENIAL_MESSAGES, type EmbedDenialCode } from "../api/denial";
 
 // "no_access" says why when the handshake knows (it always does in the browser: the server's code,
 // or "other"). The plain text below is only left for a refusal that came with no reason.
-const MESSAGES: Record<Exclude<HandshakeResult, "signed_in">, string> = {
+// The page HighLevel opens; loading it again runs the in-frame sign-in again.
+const EMBED_PATH = "/embed";
+
+const MESSAGES:Record<Exclude<HandshakeResult, "signed_in">, string> = {
   no_access: "Ask Forge Forward for access.",
   no_data: "HighLevel did not answer. Reload this page, or open it from the HighLevel menu.",
   not_embedded: "Open this page from inside HighLevel.",
@@ -94,8 +97,11 @@ export function EmbedBridge({
     );
   }
 
+  // A refusal or no answer from HighLevel: one obvious action, run the sign-in again (a fresh /embed
+  // load repeats the handshake). Not when the page is not inside HighLevel: a reload cannot fix that.
+  const canRetry = result === "no_access" || result === "no_data";
   return (
-    <main style={{ padding: 24, fontFamily: "system-ui, sans-serif" }}>
+    <main style={{ padding: 24, fontFamily: "system-ui, sans-serif", display: "grid", gap: 12, maxWidth: 420 }}>
       <p role="status">
         {result === null || result === "signed_in"
           ? "Signing you in…"
@@ -103,6 +109,11 @@ export function EmbedBridge({
             ? EMBED_DENIAL_MESSAGES[denial]
             : MESSAGES[result]}
       </p>
+      {canRetry ? (
+        <button type="button" onClick={() => goTo(EMBED_PATH)} style={{ padding: "12px 16px", minHeight: 44, borderRadius: 8, border: "none", background: "CanvasText", color: "Canvas" }}>
+          Try again
+        </button>
+      ) : null}
     </main>
   );
 }

@@ -5,19 +5,26 @@ import { startHandshake, type HandshakeDeps } from "../../../src/features/embed/
 import { EMBED_DENIAL_CODES, EMBED_DENIAL_HEADER, EMBED_DENIAL_MESSAGES, type EmbedDenialCode } from "../../../src/features/embed/api/denial";
 
 // Every refused sign-in inside HighLevel says why, with its own next step.
-const EXPECTED: Record<EmbedDenialCode, RegExp> = {
-  agency_user: /agency login.*Settings > My Staff/,
-  not_in_location: /not part of this business yet.*business owner.*Settings > My Staff/,
-  login_off: /turned off for this business\. Ask Forge Forward to turn it on\./,
-  not_connected: /turned off for this business\. Ask Forge Forward to turn it on\./,
-  user_off: /Your access to this CRM is turned off\. Ask Forge Forward/,
-  account_conflict: /already used for another business's CRM/,
-  other: /We could not sign you in\. Reload this page\. If it keeps happening, ask Forge Forward\./,
+const EXPECTED: Record<EmbedDenialCode, string> = {
+  agency_user:
+    "You are signed in with an agency login. This CRM only opens for this business's own team. Ask the business owner to add you as a team member with a different email, then sign in to HighLevel with that login.",
+  not_in_location:
+    "Your HighLevel user is not part of this business yet. Ask the business owner to add you as a team member in HighLevel, then open CRM again.",
+  login_off: "This CRM is turned off for this business. Ask Forge Forward to turn it on.",
+  not_connected: "This business is not connected to the CRM yet. Ask Forge Forward to connect it.",
+  user_off: "Your access to this CRM is turned off. Ask Forge Forward to turn it back on.",
+  account_conflict: "Ask Forge Forward to fix this: your email is already linked to another CRM.",
+  other: "We could not sign you in. Tap Try again. If it keeps happening, ask Forge Forward.",
 };
 
 describe("denial messages", () => {
   it.each(EMBED_DENIAL_CODES)("%s has its own clear message", (code) => {
-    expect(EMBED_DENIAL_MESSAGES[code]).toMatch(EXPECTED[code]);
+    expect(EMBED_DENIAL_MESSAGES[code]).toBe(EXPECTED[code]);
+  });
+
+  it("every code has its own text and none names an unverified HighLevel menu path", () => {
+    expect(new Set(Object.values(EMBED_DENIAL_MESSAGES)).size).toBe(EMBED_DENIAL_CODES.length);
+    for (const message of Object.values(EMBED_DENIAL_MESSAGES)) expect(message).not.toMatch(/Settings >|My Staff/);
   });
 
   it("only sends people to Forge Forward where Forge Forward is the fix", () => {
@@ -90,6 +97,9 @@ describe("EmbedBridge shows the message for the code", () => {
     act(() => captured[0].onResult("no_access", code));
     expect(screen.getByRole("status")).toHaveTextContent(EMBED_DENIAL_MESSAGES[code]);
     expect(goTo).not.toHaveBeenCalled();
+    // One obvious action on every refusal: Try again runs the /embed sign-in again.
+    act(() => screen.getByRole("button", { name: "Try again" }).click());
+    expect(goTo).toHaveBeenCalledWith("/embed");
     unmount();
     vi.doUnmock("../../../src/features/embed/api/handshake");
   });

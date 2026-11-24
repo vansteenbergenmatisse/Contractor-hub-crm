@@ -38,12 +38,18 @@ describe("isFramedRequest", () => {
 });
 
 describe("signed out inside the frame", () => {
-  it("renders the framable page with the full-screen button instead of redirecting to /sign-in", async () => {
+  it("renders the framable page whose main action runs the in-frame sign-in again, instead of redirecting to /sign-in", async () => {
     requestHeaders.value = new Headers({ "sec-fetch-dest": "iframe" });
     const html = renderToStaticMarkup((await AppLayout({ children: "SECRET PAGE" })) as React.ReactElement);
     expect(redirect).not.toHaveBeenCalled();
-    expect(html).toContain("Open the CRM full screen");
-    expect(html).toMatch(/<a[^>]*href="\/"[^>]*target="_top"/);
+    // Main action: /embed in this same frame (no target), never "/" (which lands on /sign-in and loops).
+    const links = [...html.matchAll(/<a([^>]*)>([^<]*)<\/a>/g)].map((m) => ({ attrs: m[1], text: m[2] }));
+    expect(links[0].text).toBe("Sign in again");
+    expect(links[0].attrs).toContain('href="/embed"');
+    expect(links[0].attrs).not.toContain("target=");
+    expect(links[1].text).toBe("Open the CRM full screen");
+    expect(links[1].attrs).toMatch(/href="\/"[^>]*target="_top"/);
+    expect(links).toHaveLength(2);
     expect(html).not.toContain("SECRET PAGE");
     expect(html).not.toContain("/sign-in");
   });
@@ -53,8 +59,10 @@ describe("signed out inside the frame", () => {
     await expect(AppLayout({ children: null })).rejects.toThrow("NEXT_REDIRECT /sign-in");
   });
 
-  it("the page offers a new tab as a second way", () => {
+  it("says plainly what happened, as a heading and text (static content, no live region)", () => {
     const html = renderToStaticMarkup(<FramedSignedOut />);
-    expect(html).toMatch(/<a[^>]*href="\/"[^>]*target="_blank"[^>]*rel="noopener noreferrer"/);
+    expect(html).toMatch(/<h1[^>]*>Your sign-in ended\.<\/h1>/);
+    expect(html).toContain("Tap below to sign in again.");
+    expect(html).not.toContain('role="status"');
   });
 });
