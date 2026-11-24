@@ -8,6 +8,8 @@ import { MAX_IMAGE_BYTES } from "./webp-check";
 // Change image REPLACES the file: the new one takes the old file's exact name and folder, the custom
 // value moves to its URL, and only after a read-back confirms that does the old file go to the trash.
 // The public API has no in-place replace. Until the read-back the old value and old file stay live.
+// A different format (SVG to photo, photo to SVG, ...) cannot keep the name: it becomes a new file in
+// the same folder named after the old one with the new extension (see changeFormat).
 const UPLOAD_CUTOFF_MS = 15_000;
 // The save after this reads, PUTs and reads again at 10 seconds each: 25 + 30 stays inside the route's 60.
 const PUT_CUTOFF_MS = 25_000;
@@ -289,6 +291,8 @@ async function run(input: Input, deps: MediaDeps): Promise<Run> {
   const wanted = formatOfFile(old);
   const sending = FORMAT_OF_TYPE[input.file.contentType];
   if (wanted && wanted !== sending) {
+    // Another format cannot take the old name: it becomes a new file next to the old one.
+    if (add) return changeFormat(input, old, started, add);
     return { answer: wanted === "other" ? { status: "format_mismatch" } : { status: "format_mismatch", format: wanted }, keepLease: false };
   }
 
@@ -309,6 +313,11 @@ async function run(input: Input, deps: MediaDeps): Promise<Run> {
     if (!("file" in uploaded)) return uploaded;
     target = uploaded;
   }
+  return moveTo(input, old, target, started, deps);
+}
+
+// The value moves from the old file to the target, then the old file may go (see removeOld).
+async function moveTo(input: Input, old: MediaFile, target: Target, started: number, deps: MediaDeps): Promise<Run> {
   // HighLevel answering with the old file would make the last step remove the live image.
   if (target.file.id === old.id || target.file.url === old.url) return stopped("unknown");
   // Never widened automatically: a host not on the list stops here, before the value changes.
@@ -453,6 +462,55 @@ async function addImage(input: Input, started: number, oldFile: "none" | "outsid
   const saved = await pointValueAt(input, target.file.url, started, deps);
   if (saved.answer.status !== "saved") return failAfterUpload(input, saved, target, started, deps);
   return { answer: { ...saved.answer, oldFile }, keepLease: false };
+}
+
+// Tried in order for a format change: logo.webp, then logo-2.webp up to logo-8.webp.
+const MAX_NEW_NAMES = 8;
+
+// The old name without its image extension. A name with none (or a dot that is no format) stays whole.
+function baseName(name: string): string {
+  return extensionFormat(name) ? name.replace(/\.[a-z0-9]+$/i, "") : name;
+}
+
+function newNames(old: MediaFile, extension: string): string[] {
+  const base = baseName(old.name);
+  return Array.from({ length: MAX_NEW_NAMES }, (_, n) => (n === 0 ? `${base}.${extension}` : `${base}-${n + 1}.${extension}`));
+}
+
+// A new format cannot take the old file's name, so it becomes a new file in the old file's folder,
+// named after it with the new extension. A file there with that name and the same bytes (an earlier
+// try) is reused; one with other bytes is someone else's and is left alone: the next name is tried.
+// Then the same steps as a replace: save with read-back, and the old file goes only if unused.
+async function changeFormat(input: Input, old: MediaFile, started: number, deps: AddDeps): Promise<Run> {
+  const currentIs = await compareCurrent(input, old, deps);
+  if (currentIs === "same") return { answer: { status: "saved", url: old.url, oldFile: "same" }, keepLease: false };
+  const library = await readLibrary(input.tenantId, deps);
+  if (!library.ok) return stopped(LIBRARY_STOPS[library.reason]);
+  let target: Target | null = null;
+  let name: string | null = null;
+  for (const candidate of newNames(old, input.file.extension)) {
+    const same = library.files.filter((file) => file.id !== old.id && file.name === candidate && file.parentId === old.parentId);
+    if (same.length === 0) {
+      name = candidate;
+      break;
+    }
+    const match = await matchSibling(input, same, deps);
+    if (match && "stop" in match) return stopped(match.stop);
+    if (match) {
+      // The copy may be the live image itself: moving to it could trash a file for no change.
+      if (currentIs === "unknown") return stopped("retry");
+      target = { file: match, uploadedNow: false };
+      break;
+    }
+  }
+  if (!target) {
+    if (!name) return stopped("ambiguous");
+    if (deps.now() - started > UPLOAD_CUTOFF_MS) return stopped("retry");
+    const uploaded = await uploadInto(input, name, old.parentId, library.files, deps);
+    if (!("file" in uploaded)) return uploaded;
+    target = uploaded;
+  }
+  return moveTo(input, old, target, started, deps);
 }
 
 export async function replaceImage(input: Input, deps: MediaDeps): Promise<ImageAnswer> {
