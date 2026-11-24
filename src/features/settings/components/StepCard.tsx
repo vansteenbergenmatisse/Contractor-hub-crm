@@ -79,9 +79,9 @@ function StepCardView({ step, number, total, keys, shownKeys, values, draft, err
       <footer className="ga-foot">
         <div className="ga-fn-wrap">
           {savedHere && !dirty ? (
-            <p className="fd-okl" role="status"><span>{live ? "Saved to your account." : "Changed for this visit only. Not saved to your account yet."}</span></p>
+            <p className="fd-okl" role="status" tabIndex={-1}><span>{live ? "Saved to your account." : "Changed for this visit only. Not saved to your account yet."}</span></p>
           ) : null}
-          {problem ? <p className="ga-fe" role="alert">{problem}</p> : null}
+          {problem ? <p className="ga-fe" role="alert" tabIndex={-1}>{problem}</p> : null}
           <p className={`ga-fn${dirty ? " is-dirty" : ""}`} role="status">{hint}</p>
         </div>
         {readOnly ? null : (

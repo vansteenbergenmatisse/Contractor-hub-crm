@@ -7,6 +7,7 @@
   --shadow:0 1px 2px color-mix(in srgb,var(--sub-color) 5%,transparent),0 10px 30px color-mix(in srgb,var(--sub-color) 6%,transparent);
   --ring:0 0 0 3px color-mix(in srgb,var(--main-color) 28%,transparent);
   --t-press:100ms;--t-small:180ms;--t-mid:220ms;--t-panel:260ms;--e-out:cubic-bezier(0,0,.2,1);--e-std:cubic-bezier(.4,0,.2,1);
+  --ga-scroll-top:16px;
   position:relative;min-width:0;color:var(--ink)}
 .sv-app *,.sv-app *::before,.sv-app *::after{box-sizing:border-box}
 :where(.sv-app) :where(button,input,textarea){font:inherit;letter-spacing:inherit;color:inherit}
@@ -27,7 +28,7 @@
 .ga-handoff summary{min-height:32px;color:var(--main-hover-color);font-weight:600;cursor:pointer}
 .ga-handoff ol{margin-top:4px;padding-left:18px;list-style:decimal}
 .sv-crl{display:flex;flex-direction:column}
-.ga-card .ga-rv{display:flex;margin-top:18px;scroll-margin-top:16px}
+.ga-card .ga-rv{display:flex;margin-top:18px;scroll-margin-top:var(--ga-scroll-top)}
 .sv-app .fd-cvf{display:flex;flex-direction:column;gap:6px;min-width:0}
 .sv-app .fd-cvf.is-wide{grid-column:1 / -1}
 .sv-app .fd-ll{font-size:0.9375rem;font-weight:600;line-height:1.25rem}
@@ -120,7 +121,7 @@
 .ga-pchip{display:inline-flex;align-items:center;gap:5px;padding:3px 10px 3px 8px;border-radius:999px;background:var(--error-color);color:#fff;font-size:0.8125rem;font-weight:600;line-height:1.125rem;white-space:nowrap}
 .ga-opts{display:flex;flex-direction:column;padding:8px 16px}
 .ga-stack{display:flex;flex-direction:column;gap:20px;min-width:0}
-.ga-card{min-width:0;padding:28px 32px 0;scroll-margin-top:16px;border:1px solid var(--line);border-radius:20px;background:var(--card);box-shadow:var(--shadow);transition:border-color var(--t-small) var(--e-std),box-shadow var(--t-small) var(--e-std)}
+.ga-card{min-width:0;padding:28px 32px 0;scroll-margin-top:var(--ga-scroll-top);border:1px solid var(--line);border-radius:20px;background:var(--card);box-shadow:var(--shadow);transition:border-color var(--t-small) var(--e-std),box-shadow var(--t-small) var(--e-std)}
 .ga-card.is-cur{border-color:color-mix(in srgb,var(--main-color) 35%,var(--border-color))}
 .ga-card.is-dirty{border-color:color-mix(in srgb,var(--highlight-color) 60%,var(--border-color))}
 @media (min-width: 1024px){ .ga-card{container:svf / inline-size} }
@@ -150,7 +151,7 @@
 .ga-pv{display:flex;flex-direction:column;gap:8px;margin-top:22px;padding-top:20px;border-top:1px solid var(--hair)}
 .ga-prt{color:var(--mut);font-size:0.8125rem;font-weight:600;letter-spacing:0.02em;text-transform:uppercase}
 /* protected folders */
-.ga-prot{padding:26px 28px 28px;scroll-margin-top:16px;border:1px solid color-mix(in srgb,var(--error-color) 26%,var(--border-color));border-radius:20px;background:linear-gradient(180deg,var(--bad-bg),var(--card) 160px);box-shadow:var(--shadow)}
+.ga-prot{padding:26px 28px 28px;scroll-margin-top:var(--ga-scroll-top);border:1px solid color-mix(in srgb,var(--error-color) 26%,var(--border-color));border-radius:20px;background:linear-gradient(180deg,var(--bad-bg),var(--card) 160px);box-shadow:var(--shadow)}
 .ga-ph{display:flex;align-items:flex-start;gap:16px}
 .ga-phi{display:grid;place-items:center;flex:none;width:52px;height:52px;border-radius:15px;background:var(--error-color);color:#fff}
 .ga-phr{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px}
@@ -158,7 +159,7 @@
 .ga-how{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 6px}
 .ga-how > li{display:inline-flex;align-items:center;gap:8px;padding:6px 12px 6px 6px;border-radius:999px;background:var(--card);border:1px solid var(--line);font-size:0.875rem;font-weight:600}
 .ga-how > li > span{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--sub-color);color:#fff;font-size:0.8125rem;font-weight:700}
-.ga-pf{margin-top:16px;padding:18px 20px;scroll-margin-top:16px;border:1px solid var(--line);border-radius:18px;background:var(--card);transition:border-color var(--t-small) var(--e-std),box-shadow var(--t-small) var(--e-std)}
+.ga-pf{margin-top:16px;padding:18px 20px;scroll-margin-top:var(--ga-scroll-top);border:1px solid var(--line);border-radius:18px;background:var(--card);transition:border-color var(--t-small) var(--e-std),box-shadow var(--t-small) var(--e-std)}
 .ga-pf.is-edit,.ga-pf.is-review{border-color:var(--highlight-color);box-shadow:0 0 0 3px color-mix(in srgb,var(--highlight-color) 22%,transparent)}
 .ga-pfh{display:flex;align-items:center;flex-wrap:wrap;gap:10px 14px}
 .ga-pft{flex:1 1 240px;min-width:0}
@@ -254,7 +255,8 @@
   .ga-lb.is-on{transform:none}
   .ga-xsec{padding:16px}
   .ga-xt{font-size:1.375rem;line-height:1.75rem}
-  .sv-app{padding-bottom:200px}
+  /* The shell's sticky phone top bar is 64px tall. */
+  .sv-app{--ga-scroll-top:80px;padding-bottom:200px}
   .ga-acc,.ga-sbar{position:fixed;left:12px;right:12px;bottom:calc(max(12px,env(safe-area-inset-bottom)) + 72px);z-index:39;display:flex;align-items:center;gap:8px;padding:6px;border:1px solid var(--line);border-radius:18px;background:var(--card);box-shadow:0 12px 34px color-mix(in srgb,var(--sub-color) 20%,transparent)}
   .ga-acc.sv-hid,.ga-sbar.sv-hid{display:none}
   .ga-accs{display:flex;align-items:center;gap:10px;flex:1;min-width:0;min-height:48px;padding:0 10px;border:0;border-radius:12px;background:none;text-align:left}

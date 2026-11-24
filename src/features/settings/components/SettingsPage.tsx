@@ -5,7 +5,7 @@ import { COLOR_GROUPS, ESSENTIAL_KEYS } from "../api/fields";
 import { imageKindOf } from "../api/image-keys";
 import type { AccountLayout } from "../api/load-values";
 import { prepareImageFile } from "../api/prepare-image";
-import { dirtyKeysOf, type SettingsState } from "../api/state";
+import { dirtyKeysOf, prepareSave, type SettingsState } from "../api/state";
 import { PROTECTED_STEPS, STEPS, clearedKeys, keysByStep, type ProtectedId } from "../api/steps";
 import { UNKNOWN_CONNECTIONS } from "../api/connections";
 import { isClearableKey } from "../api/validate";
@@ -67,6 +67,10 @@ export function SettingsPage({ initial, initialValues, initialSection, account, 
   const [reviewShown, setReviewShown] = useState<{ id: string } | null>(null);
   const reviewOpener = useRef<HTMLButtonElement | null>(null);
   const [folder, setFolder] = useState<{ id: ProtectedId; mode: FolderMode } | null>(null);
+  // The folder whose last save finished. Cleared as soon as that folder is opened again.
+  const [folderSaved, setFolderSaved] = useState<ProtectedId | null>(null);
+  // A new object per save from the phone bar, whose result can sit off-screen.
+  const [reveal, setReveal] = useState<{ id: string } | null>(null);
   const { values, draft, err } = state;
   const tab = tabOf(state.sec);
   const dirtyKeys = dirtyKeysOf(values, draft);
@@ -83,13 +87,14 @@ export function SettingsPage({ initial, initialValues, initialSection, account, 
   useEffect(() => { latest.current = { state, keys, live, remote }; });
 
   const runSave = useCallback(async (id: string, allowClear: boolean) => {
-    const { keys: all, live: isLive, remote: saver } = latest.current;
+    const { state: now, keys: all, live: isLive, remote: saver } = latest.current;
     const stepKeys = all[id as keyof typeof all] ?? [];
     reviewOpener.current = null;
     setReviewStep(null);
     if (isLive) return saver.save({ step: id, keys: stepKeys, allowClear });
+    const bad = prepareSave(now, stepKeys).problem;
     dispatch({ type: "save", keys: stepKeys, step: id });
-    return true;
+    return !bad;
   }, [dispatch]);
 
   const requestSave = useCallback((id: string) => {
@@ -101,9 +106,9 @@ export function SettingsPage({ initial, initialValues, initialSection, account, 
       if (document.activeElement instanceof HTMLButtonElement) reviewOpener.current = document.activeElement;
       setReviewStep(id);
       setReviewShown({ id });
-      return;
+      return null;
     }
-    void runSave(id, false);
+    return runSave(id, false);
   }, [runSave]);
 
   const revert = useCallback((id: string) => {
@@ -114,7 +119,10 @@ export function SettingsPage({ initial, initialValues, initialSection, account, 
   }, [dispatch]);
 
   const onEdit = useCallback((key: string, value: string) => dispatch({ type: "edit", key, value }), [dispatch]);
-  const onConfirmClear = useCallback((id: string) => { void runSave(id, true); }, [runSave]);
+  const onConfirmClear = useCallback((id: string) => {
+    const fromBar = !!reviewOpener.current?.closest(".ga-sbar");
+    void runSave(id, true).then(() => { if (fromBar) setReveal({ id }); });
+  }, [runSave]);
   // Focus moves before the panel closes, so it is never lost with the Go back button.
   const onKeep = useCallback((id: string) => {
     const opener = reviewOpener.current;
@@ -123,10 +131,18 @@ export function SettingsPage({ initial, initialValues, initialSection, account, 
     target?.focus();
     setReviewStep(null);
   }, []);
-  const onFolderMode = useCallback((id: ProtectedId, mode: FolderMode) => setFolder(mode === "locked" ? null : { id, mode }), []);
+  const onFolderMode = useCallback((id: ProtectedId, mode: FolderMode) => {
+    if (mode !== "locked") setFolderSaved((done) => (done === id ? null : done));
+    setFolder(mode === "locked" ? null : { id, mode });
+  }, []);
   const onFolderLock = useCallback((id: ProtectedId) => { revert(id); setFolder(null); }, [revert]);
   const onFolderSave = useCallback((id: ProtectedId) => {
-    void runSave(id, true).then((ok) => { if (ok) setFolder(null); else setFolder({ id, mode: "edit" }); });
+    const { state: now, keys: all } = latest.current;
+    // Only a save that really had something to write may report success.
+    const hasChanges = prepareSave(now, all[id] ?? []).changedKeys.length > 0;
+    void runSave(id, true).then((ok) => {
+      if (ok) { setFolderSaved(hasChanges ? id : null); setFolder(null); } else setFolder({ id, mode: "edit" });
+    });
   }, [runSave]);
   const jump = useCallback((id: string) => { setSheetOpen(false); setJumpTo({ id }); scrollToCard(id); }, []);
   const closeSheet = useCallback(() => setSheetOpen(false), []);
@@ -146,6 +162,14 @@ export function SettingsPage({ initial, initialValues, initialSection, account, 
     heading?.focus({ preventScroll: true });
     heading?.closest(".ga-rv")?.scrollIntoView?.({ behavior: "smooth", block: "start" });
   }, [reviewShown]);
+
+  // The save result sits in the card footer, which can be off-screen behind the phone bar.
+  useEffect(() => {
+    if (!reveal) return;
+    const message = document.querySelector<HTMLElement>(`#s-card-${reveal.id} .ga-foot :is(.ga-fe, .fd-okl)`);
+    message?.focus({ preventScroll: true });
+    message?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+  }, [reveal]);
 
   const imageControl = useCallback((f: Field, saved: string, dirty: boolean) => {
     const kind = imageKindOf(f.key);
@@ -231,10 +255,10 @@ export function SettingsPage({ initial, initialValues, initialSection, account, 
               <header className="ga-ph">
                 <div className="ga-hdt">
                   <div className="ga-phr"><h2 className="ga-t" id="s-t-prot">Services and areas</h2><span className="ga-pchip">Protected</span></div>
-                  <p className="ga-line">These names build the service and area pages of your website. Each folder unlocks one at a time and you check every change before it saves.</p>
+                  <p className="ga-line">These names build the service and area pages of your website. Each folder unlocks one at a time and you check every change before it {live || readOnly ? "saves" : "applies"}.</p>
                 </div>
               </header>
-              <ol className="ga-how"><li><span>1</span>Unlock one folder</li><li><span>2</span>Make your change</li><li><span>3</span>Check it and save. It locks again.</li></ol>
+              <ol className="ga-how"><li><span>1</span>Unlock one folder</li><li><span>2</span>Make your change</li><li><span>3</span>Check it and {live || readOnly ? "save" : "apply"}. It locks again.</li></ol>
               {shownProtected.map((step) => (
                 <ProtectedFolder
                   key={step.id}
@@ -245,6 +269,8 @@ export function SettingsPage({ initial, initialValues, initialSection, account, 
                   mode={folder?.id === step.id ? folder.mode : "locked"}
                   error={errorFor(keys[step.id])}
                   problem={!state.saving && state.saveStep === step.id ? state.saveProblem : null}
+                  live={live}
+                  saved={folderSaved === step.id}
                   readOnly={readOnly}
                   blocked={live && loadFailed}
                   saving={state.saving && state.saveStep === step.id}
@@ -271,10 +297,16 @@ export function SettingsPage({ initial, initialValues, initialSection, account, 
             dirtyTitle={mobileTitle}
             currentTitle={titleOf(current)}
             saving={state.saving}
+            savingHere={state.saving && state.saveStep === dirtyStep?.id}
+            failed={!state.saving && !!state.saveProblem && state.saveStep === dirtyStep?.id}
             blocked={live && loadFailed}
             readOnly={readOnly}
             onOpenSheet={() => setSheetOpen(true)}
-            onSave={() => { if (dirtyStep) requestSave(dirtyStep.id); }}
+            onSave={() => {
+              if (!dirtyStep) return;
+              const { id } = dirtyStep;
+              void requestSave(id)?.then(() => setReveal({ id }));
+            }}
             onCancel={() => { if (dirtyStep) revert(dirtyStep.id); }}
           />
         </>
